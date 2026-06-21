@@ -105,3 +105,19 @@ body {
     animation: none !important;
   }
 }
+
+/* Streamer "rec" indicator: a deliberate full-opacity blink. Kept even under
+   prefers-reduced-motion (it's a functional recording/live cue), so the !important
+   here intentionally outranks the reduce rule above. */
+@keyframes recBlink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+.rec-blink {
+  animation: recBlink 1.5s ease-in-out infinite !important;
+}

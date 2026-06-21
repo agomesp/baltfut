@@ -174,6 +174,7 @@ export function ModoStreamer() {
       {on ? (
         <span
           aria-hidden
+          className="rec-blink"
           style={{
             width: 9,
             height: 9,
@@ -181,7 +182,6 @@ export function ModoStreamer() {
             background: "#e5484d",
             display: "inline-block",
             flex: "0 0 auto",
-            animation: "livePulse 1.6s ease-in-out infinite",
           }}
         />
       ) : (
