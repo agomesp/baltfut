@@ -1,6 +1,5 @@
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
-import { palpiteDeadline } from "@/lib/palpite";
 
 export interface SubRank {
   username: string;
@@ -10,9 +9,9 @@ export interface SubRank {
 
 /**
  * Wins/losses per nickname across finished matches. A win is an exact final-score
- * prediction; anything else on a finished match is a loss. Palpites placed after
- * a match's deadline (kickoff + 5min) are ignored, so a late/bypassed submission
- * can't inflate the ranking. Sorted by wins desc, then fewest losses, then name.
+ * prediction; anything else on a finished match is a loss. Every palpite on a
+ * finished match counts (the kickoff+5min form lock already prevents late ones).
+ * Sorted by wins desc, then fewest losses, then name.
  */
 export function rankSubs(
   entries: VoteEntry[],
@@ -24,11 +23,6 @@ export function rankSubs(
     const m = matchesById[e.matchId];
     if (!m || m.state !== "post" || m.homeScore == null || m.awayScore == null) {
       continue;
-    }
-    const deadline = palpiteDeadline(m.startsAt);
-    const created = Date.parse(e.createdAt);
-    if (!Number.isNaN(deadline) && !Number.isNaN(created) && created > deadline) {
-      continue; // placed too late to count
     }
     const t = tally.get(e.username) ?? { wins: 0, losses: 0 };
     if (e.predHome === m.homeScore && e.predAway === m.awayScore) t.wins += 1;

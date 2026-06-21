@@ -20,7 +20,7 @@ export function RankingView({ entries, matches }: RankingViewProps) {
           Ranking dos Subs · vitórias &amp; derrotas
         </span>
         <span style={{ fontSize: 14, color: "var(--ink-3)" }}>
-          Acertar o placar exato vale vitória. Conta só o que foi palpitado até 5min do início.
+          Acertar o placar exato vale vitória; o resto, derrota. Soma todas as partidas encerradas.
         </span>
       </div>
 

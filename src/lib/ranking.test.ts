@@ -43,14 +43,12 @@ describe("rankSubs", () => {
     expect(rankSubs([entry("ana", "mLive", 1, 0)], matchesById)).toEqual([]);
   });
 
-  it("ignores late palpites (created after kickoff + 5min)", () => {
-    // m1 kickoff 16:00Z -> deadline 16:05Z; this palpite is at 16:30Z.
-    const late = entry("cheater", "m1", 2, 1, "2026-06-20T16:30:00Z");
-    expect(rankSubs([late], matchesById)).toEqual([]);
-  });
-
-  it("counts palpites within the grace window", () => {
-    const inGrace = entry("ana", "m1", 2, 1, "2026-06-20T16:04:00Z");
-    expect(rankSubs([inGrace], matchesById)).toEqual([{ username: "ana", wins: 1, losses: 0 }]);
+  it("counts every palpite on a finished match, regardless of when placed", () => {
+    // Placed mid-match (the form lock prevents this going forward, but historical
+    // live palpites should still count toward wins/losses).
+    const late = entry("Markler", "m1", 2, 1, "2026-06-20T16:30:00Z");
+    expect(rankSubs([late], matchesById)).toEqual([
+      { username: "Markler", wins: 1, losses: 0 },
+    ]);
   });
 });
