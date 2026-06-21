@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { UpdateBanner } from "@/components/update-banner";
 
 const display = Space_Grotesk({
   subsets: ["latin"],
@@ -40,7 +41,10 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body style={{ minHeight: "100vh" }}>{children}</body>
+      <body style={{ minHeight: "100vh" }}>
+        {children}
+        <UpdateBanner />
+      </body>
     </html>
   );
 }

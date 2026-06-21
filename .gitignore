@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# generated at build (prebuild stamps the build id)
+/public/version.json
+
 # production
 /build
 
