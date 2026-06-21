@@ -5,8 +5,6 @@ const validInput = {
   matchId: "1002",
   league: "fifa.world",
   username: "  Allan  ",
-  preferredSide: "home" as const,
-  preferredTeamAbbr: "FRA",
   predHome: 2,
   predAway: 1,
 };

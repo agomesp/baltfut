@@ -1,28 +1,24 @@
 import { describe, it, expect } from "vitest";
-import {
-  validateVote,
-  voteInputSchema,
-  USERNAME_MAX,
-  SCORE_MAX,
-} from "@shared/vote";
+import { validateVote, voteInputSchema, USERNAME_MAX, SCORE_MAX } from "@shared/vote";
 
 const valid = {
   matchId: "1002",
   league: "fifa.world",
   username: "  Allan  ",
-  preferredSide: "home" as const,
-  preferredTeamAbbr: "fra",
   predHome: 2,
   predAway: 1,
 };
 
 describe("validateVote", () => {
-  it("accepts a well-formed vote and trims text fields", () => {
+  it("accepts a well-formed prediction and trims the name", () => {
     const result = validateVote(valid);
     expect(result.success).toBe(true);
     expect(result.data?.username).toBe("Allan");
-    expect(result.data?.preferredTeamAbbr).toBe("fra");
     expect(result.errors).toBeUndefined();
+  });
+
+  it("allows a draw prediction (e.g. 1-1)", () => {
+    expect(validateVote({ ...valid, predHome: 1, predAway: 1 }).success).toBe(true);
   });
 
   it("rejects a whitespace-only username", () => {
@@ -41,12 +37,6 @@ describe("validateVote", () => {
     const result = validateVote({ ...valid, username: "<script>" });
     expect(result.success).toBe(false);
     expect(result.errors).toHaveProperty("username");
-  });
-
-  it("rejects an unknown preferred side", () => {
-    const result = validateVote({ ...valid, preferredSide: "draw" });
-    expect(result.success).toBe(false);
-    expect(result.errors).toHaveProperty("preferredSide");
   });
 
   it("rejects non-integer, negative, or out-of-range scores", () => {

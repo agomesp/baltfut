@@ -1,24 +1,24 @@
 \set ON_ERROR_STOP on
 
--- A) service_role can insert valid votes ------------------------------------
+-- A) service_role can insert valid predictions ------------------------------
 do $$
 begin
   set local role service_role;
-  insert into public.votes (match_id, league, username, preferred_side, preferred_team_abbr, pred_home, pred_away, ip_hash)
+  insert into public.votes (match_id, league, username, pred_home, pred_away, ip_hash)
   values
-    ('1002','fifa.world','Allan','home','FRA',2,1, repeat('a',64)),
-    ('1002','fifa.world','Bea',  'away','GER',1,2, repeat('b',64)),
-    ('1003','fifa.world','Cid',  'home','ESP',3,1, repeat('c',64));
-  raise notice 'PASS A: service_role inserted 3 valid votes';
+    ('1002','fifa.world','Allan', 2,1, repeat('a',64)),
+    ('1002','fifa.world','Bea',   1,1, repeat('b',64)),
+    ('1003','fifa.world','Cid',   3,1, repeat('c',64));
+  raise notice 'PASS A: service_role inserted 3 valid predictions';
 end $$;
 
--- B) one vote per IP per match (duplicate match_id+ip_hash) ------------------
+-- B) one prediction per IP per match (duplicate match_id+ip_hash) ------------
 do $$
 begin
   set local role service_role;
   begin
-    insert into public.votes (match_id, league, username, preferred_side, preferred_team_abbr, pred_home, pred_away, ip_hash)
-    values ('1002','fifa.world','Allan2','home','FRA',0,0, repeat('a',64));
+    insert into public.votes (match_id, league, username, pred_home, pred_away, ip_hash)
+    values ('1002','fifa.world','Allan2',0,0, repeat('a',64));
     raise exception 'FAIL B: duplicate (match_id, ip_hash) was allowed';
   exception when unique_violation then
     raise notice 'PASS B: duplicate IP per match rejected (unique_violation)';
@@ -29,26 +29,17 @@ end $$;
 do $$
 begin
   set local role service_role;
-  -- out-of-range score
   begin
-    insert into public.votes (match_id, league, username, preferred_side, preferred_team_abbr, pred_home, pred_away, ip_hash)
-    values ('1099','fifa.world','X','home','FRA',99,0, repeat('d',64));
+    insert into public.votes (match_id, league, username, pred_home, pred_away, ip_hash)
+    values ('1099','fifa.world','X',99,0, repeat('d',64));
     raise exception 'FAIL C1: pred_home=99 accepted';
   exception when check_violation then raise notice 'PASS C1: out-of-range score rejected';
   end;
-  -- invalid preferred_side
   begin
-    insert into public.votes (match_id, league, username, preferred_side, preferred_team_abbr, pred_home, pred_away, ip_hash)
-    values ('1099','fifa.world','X','draw','FRA',0,0, repeat('e',64));
-    raise exception 'FAIL C2: preferred_side=draw accepted';
-  exception when check_violation then raise notice 'PASS C2: invalid side rejected';
-  end;
-  -- markup in username
-  begin
-    insert into public.votes (match_id, league, username, preferred_side, preferred_team_abbr, pred_home, pred_away, ip_hash)
-    values ('1099','fifa.world','<script>','home','FRA',0,0, repeat('f',64));
-    raise exception 'FAIL C3: angle-bracket username accepted';
-  exception when check_violation then raise notice 'PASS C3: markup username rejected';
+    insert into public.votes (match_id, league, username, pred_home, pred_away, ip_hash)
+    values ('1099','fifa.world','<script>',0,0, repeat('f',64));
+    raise exception 'FAIL C2: angle-bracket username accepted';
+  exception when check_violation then raise notice 'PASS C2: markup username rejected';
   end;
 end $$;
 
@@ -68,28 +59,21 @@ begin
   end;
 end $$;
 
--- E) anon CAN read the public columns and the views -------------------------
+-- E) anon CAN read the public columns and the feed --------------------------
 do $$
-declare
-  n int;
-  home_v int;
-  away_v int;
+declare n int;
 begin
   set local role anon;
   select count(*) into n from (select match_id from public.votes) s;
   if n <> 3 then raise exception 'FAIL E1: expected 3 public rows, got %', n; end if;
   raise notice 'PASS E1: anon read % public vote rows', n;
 
-  select home_votes, away_votes into home_v, away_v from public.vote_results where match_id = '1002';
-  if home_v <> 1 or away_v <> 1 then raise exception 'FAIL E2: bad aggregate home=% away=%', home_v, away_v; end if;
-  raise notice 'PASS E2: vote_results aggregate correct (home=1, away=1)';
-
   select count(*) into n from public.vote_entries;
-  if n <> 3 then raise exception 'FAIL E3: vote_entries returned %', n; end if;
-  raise notice 'PASS E3: anon read vote_entries (% rows)', n;
+  if n <> 3 then raise exception 'FAIL E2: vote_entries returned %', n; end if;
+  raise notice 'PASS E2: anon read vote_entries (% rows)', n;
 end $$;
 
--- F) vote_entries / vote_results never expose ip_hash -----------------------
+-- F) vote_entries never exposes ip_hash -------------------------------------
 do $$
 begin
   set local role anon;
@@ -105,8 +89,8 @@ do $$
 begin
   set local role anon;
   begin
-    insert into public.votes (match_id, league, username, preferred_side, preferred_team_abbr, pred_home, pred_away, ip_hash)
-    values ('1002','fifa.world','Hacker','home','FRA',0,0, repeat('z',64));
+    insert into public.votes (match_id, league, username, pred_home, pred_away, ip_hash)
+    values ('1002','fifa.world','Hacker',0,0, repeat('z',64));
     raise exception 'FAIL G1: anon inserted a vote';
   exception when insufficient_privilege then raise notice 'PASS G1: anon insert denied';
   end;

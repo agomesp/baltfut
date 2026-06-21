@@ -85,8 +85,6 @@ Deno.serve(async (req: Request) => {
     match_id: vote.matchId,
     league: vote.league,
     username: vote.username,
-    preferred_side: vote.preferredSide,
-    preferred_team_abbr: vote.preferredTeamAbbr,
     pred_home: vote.predHome,
     pred_away: vote.predAway,
     ip_hash: ipHash,
