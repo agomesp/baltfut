@@ -1,11 +1,9 @@
 import type { CSSProperties } from "react";
 import type { Match, MatchLineups, TeamLineup } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
-import { teamNamePt } from "@/lib/team-names";
 import { MONO, DISPLAY, cardStyle, PulseDot } from "@/components/primitives";
 import { PredictionPanel } from "@/components/prediction-panel";
-
-const teamLabel = (code: string, name: string) => teamNamePt(code, name);
+import { teamLabel } from "@/components/match-meta";
 
 function groupLabel(m: Match, groupByTeam: Record<string, string>): string {
   const g = groupByTeam[m.home.abbreviation] ?? groupByTeam[m.away.abbreviation];

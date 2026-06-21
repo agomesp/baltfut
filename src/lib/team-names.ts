@@ -79,3 +79,43 @@ const PT_BR: Record<string, string> = {
 export function teamNamePt(code: string, fallback: string): string {
   return PT_BR[code] ?? fallback;
 }
+
+// FIFA 3-letter code -> ISO 3166-1 alpha-2 (for regional-indicator flag emoji).
+const FIFA_TO_ISO2: Record<string, string> = {
+  USA: "US", CAN: "CA", MEX: "MX",
+  FRA: "FR", ESP: "ES", POR: "PT", NED: "NL", BEL: "BE", CRO: "HR", ITA: "IT",
+  GER: "DE", SUI: "CH", DEN: "DK", AUT: "AT", NOR: "NO", SRB: "RS", UKR: "UA",
+  TUR: "TR", CZE: "CZ", BIH: "BA", SWE: "SE", POL: "PL", GRE: "GR", IRL: "IE",
+  ARG: "AR", BRA: "BR", URU: "UY", COL: "CO", ECU: "EC", PAR: "PY", PER: "PE", CHI: "CL",
+  MAR: "MA", SEN: "SN", EGY: "EG", CIV: "CI", NGA: "NG", ALG: "DZ", TUN: "TN",
+  GHA: "GH", CMR: "CM", RSA: "ZA", CPV: "CV", CUW: "CW", HAI: "HT",
+  JPN: "JP", KOR: "KR", IRN: "IR", AUS: "AU", KSA: "SA", QAT: "QA", UZB: "UZ",
+  JOR: "JO", IRQ: "IQ", PAN: "PA", CRC: "CR", JAM: "JM", HON: "HN", NZL: "NZ", COD: "CD",
+};
+
+// England/Scotland/Wales use ISO subdivision tag-sequence flags (no plain ISO2).
+const SUBDIVISION: Record<string, string> = { ENG: "gbeng", SCO: "gbsct", WAL: "gbwls" };
+
+function regionalIndicators(iso2: string): string {
+  return String.fromCodePoint(
+    ...[...iso2.toUpperCase()].map((c) => 0x1f1e6 + (c.charCodeAt(0) - 65)),
+  );
+}
+
+function subdivisionFlag(sub: string): string {
+  const BLACK_FLAG = 0x1f3f4;
+  const CANCEL_TAG = 0xe007f;
+  const tags = [...sub].map((c) => String.fromCodePoint(0xe0061 + (c.charCodeAt(0) - 97)));
+  return String.fromCodePoint(BLACK_FLAG) + tags.join("") + String.fromCodePoint(CANCEL_TAG);
+}
+
+/**
+ * Flag emoji for a FIFA code, or "" if unknown. Regional-indicator flags render
+ * on Apple/Android; Windows shows the 2-letter code instead (known platform
+ * limitation). The home-nation flags use subdivision tag sequences.
+ */
+export function flagEmoji(code: string): string {
+  if (SUBDIVISION[code]) return subdivisionFlag(SUBDIVISION[code]);
+  const iso2 = FIFA_TO_ISO2[code];
+  return iso2 ? regionalIndicators(iso2) : "";
+}

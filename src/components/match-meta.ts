@@ -1,7 +1,12 @@
 import type { Match } from "@/lib/espn";
-import { teamNamePt } from "@/lib/team-names";
+import { teamNamePt, flagEmoji } from "@/lib/team-names";
 
-export const teamLabel = (code: string, name: string) => teamNamePt(code, name);
+/** Flag + localized name, e.g. "🇧🇷 Brasil" (flag omitted if unknown). */
+export const teamLabel = (code: string, name: string) => {
+  const flag = flagEmoji(code);
+  const localized = teamNamePt(code, name);
+  return flag ? `${flag} ${localized}` : localized;
+};
 
 export function groupLabelFor(m: Match, groupByTeam: Record<string, string>): string {
   const g = groupByTeam[m.home.abbreviation] ?? groupByTeam[m.away.abbreviation];
