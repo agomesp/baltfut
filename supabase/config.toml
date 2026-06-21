@@ -385,6 +385,12 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+[functions.cast-vote]
+# Require the project's anon key (a signed JWT) as a baseline gate. The static
+# site sends it automatically via supabase.functions.invoke; this just turns
+# away keyless bots. The function still does its own validation + IP dedup.
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
