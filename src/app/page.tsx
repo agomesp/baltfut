@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchScoreboard,
   fetchStandings,
@@ -20,6 +20,7 @@ import {
   type VoteEntry,
 } from "@/lib/votes";
 import { buildChipGames, defaultChipId } from "@/lib/chips";
+import { releasedMatchIds } from "@/lib/palpite";
 import { teamNamePt } from "@/lib/team-names";
 import { Header, type ViewKey } from "@/components/header";
 import { LiveView } from "@/components/live-view";
@@ -144,12 +145,15 @@ export default function Home() {
     [groups],
   );
   const chips = useMemo(() => buildChipGames(matches, voteCounts), [matches, voteCounts]);
+  const releasedIds = useMemo(() => releasedMatchIds(matches), [matches]);
 
   // Keep the selection valid as chips change; default to a live game.
   const activeId =
     selectedId && chips.some((c) => c.match.id === selectedId)
       ? selectedId
       : defaultChipId(chips);
+  const activeMatch = chips.find((c) => c.match.id === activeId)?.match ?? null;
+  const prevActive = useRef<{ id?: string; state?: string }>({});
 
   // ---- votes + lineups for the selected chip ------------------------------
   const loadEntries = useCallback(async (matchId: string) => {
@@ -203,6 +207,20 @@ export default function Home() {
     const id = setInterval(() => void loadAllEntries(), REFRESH_MS);
     return () => clearInterval(id);
   }, [view, loadAllEntries]);
+
+  // When the match being watched flips live -> finished, auto-advance to the
+  // next frontier match (clear the manual selection). Only the same match's
+  // own transition triggers it, so viewing a finished match stays put.
+  useEffect(() => {
+    if (
+      prevActive.current.id === activeMatch?.id &&
+      prevActive.current.state === "in" &&
+      activeMatch?.state === "post"
+    ) {
+      setSelectedId(null);
+    }
+    prevActive.current = { id: activeMatch?.id, state: activeMatch?.state };
+  }, [activeMatch?.id, activeMatch?.state]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const followName = follow ? teamNamePt(follow, follow) : null;
@@ -243,6 +261,7 @@ export default function Home() {
             onVoted={onVoted}
             followCode={follow}
             groupByTeam={groupByTeam}
+            releasedIds={releasedIds}
           />
         )}
         {!loading && view === "matches" && (

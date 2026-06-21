@@ -22,6 +22,8 @@ export interface PredictionPanelProps {
   phase: ChipPhase;
   /** Deadline (ms) for submitting: kickoff + 5min. NaN = unknown. */
   closesAt: number;
+  /** False when this match is beyond the current+next window (not yet open). */
+  released: boolean;
   onVoted: () => void;
   /** Injectable for tests; defaults to the live Edge Function call. */
   transport?: CastVoteTransport;
@@ -70,6 +72,7 @@ export function PredictionPanel({
   current,
   phase,
   closesAt,
+  released,
   onVoted,
   transport = supabaseCastVote,
 }: PredictionPanelProps) {
@@ -86,17 +89,31 @@ export function PredictionPanel({
     return () => clearInterval(id);
   }, []);
 
+  // Remember the palpiteiro's name across matches and sessions.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("baltfut_name");
+      if (saved) setUser(saved);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   const open = isPalpiteOpen(closesAt, now);
   const remaining = closesAt - now;
   // Show every palpite for the match here (live standings). The deadline filter
   // for integrity lives in the Ranking (rankSubs), not in this display list.
   const ranked = rankPredictions(entries, current);
 
-  const title = open
-    ? "Palpite o placar"
-    : phase === "post"
-      ? "Vencedores dos palpites"
-      : "Palpites";
+  const title = !released
+    ? "Palpites"
+    : open
+      ? "Palpite o placar"
+      : phase === "post"
+        ? "Vencedores dos palpites"
+        : "Palpites";
   const emptyText =
     phase === "post"
       ? "Ninguém palpitou esta partida."
@@ -104,6 +121,12 @@ export function PredictionPanel({
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const name = user.trim();
+    // Name must be unique per match (instant check; the DB also enforces it).
+    if (name && entries.some((x) => x.username.trim().toLowerCase() === name.toLowerCase())) {
+      setOutcome({ ok: false, message: "Esse nome já foi usado nesta partida." });
+      return;
+    }
     setSubmitting(true);
     setOutcome(null);
     const result = await submitVote(
@@ -119,6 +142,11 @@ export function PredictionPanel({
     setOutcome(result);
     setSubmitting(false);
     if (result.ok) {
+      try {
+        localStorage.setItem("baltfut_name", name);
+      } catch {
+        /* ignore */
+      }
       setHome("");
       setAway("");
       onVoted();
@@ -134,7 +162,16 @@ export function PredictionPanel({
         <span style={{ fontFamily: MONO, fontSize: 11, color: "var(--ink-3)" }}>{ranked.length ? `${ranked.length} palpites` : ""}</span>
       </div>
 
-      {open ? (
+      {!released ? (
+        <div style={{ margin: "12px 18px 14px", padding: "12px 14px", borderRadius: 6, border: "1px solid var(--line-2)", background: "var(--bg)" }}>
+          <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "#e5a23b", marginBottom: 4 }}>
+            Palpites não liberados
+          </div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
+            Palpites não liberados ainda para essa partida, somente após a partida anterior à anterior completar.
+          </div>
+        </div>
+      ) : open ? (
         <form onSubmit={handleSubmit} style={{ padding: "12px 18px 16px", display: "flex", flexDirection: "column", gap: 12, borderBottom: "1px solid var(--line)" }}>
           <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.04em", color: remaining < 60_000 ? "#e5484d" : "var(--signal-strong)" }}>
             Palpites encerrando em {formatCountdown(remaining)}

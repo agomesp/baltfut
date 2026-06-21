@@ -41,15 +41,15 @@ export async function submitVote(
   if (res.status === 200 || res.status === 201) {
     return { ok: true };
   }
+  const body = (res.body ?? {}) as { error?: string; fields?: Record<string, string> };
   if (res.status === 409) {
     return {
       ok: false,
       status: 409,
-      message: "Você já palpitou nesta partida.",
+      message: body.error ?? "Você já palpitou nesta partida.",
     };
   }
 
-  const body = (res.body ?? {}) as { error?: string; fields?: Record<string, string> };
   if (res.status === 422) {
     return {
       ok: false,

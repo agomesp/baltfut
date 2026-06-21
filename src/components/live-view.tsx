@@ -1,11 +1,12 @@
 import type { Match, MatchLineups, TeamLineup } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
-import { fmtDayLabel, fmtTime } from "@/lib/format";
-import { palpiteDeadline } from "@/lib/palpite";
+import { fmtTime } from "@/lib/format";
+import { palpiteDeadline, formatCountdownLong } from "@/lib/palpite";
 import { MONO, DISPLAY, cardStyle, PulseDot } from "@/components/primitives";
 import { PredictionPanel } from "@/components/prediction-panel";
 import { ChipCarousel } from "@/components/chip-carousel";
+import { Countdown } from "@/components/countdown";
 import { teamLabel } from "@/components/match-meta";
 
 function groupLabel(m: Match, groupByTeam: Record<string, string>): string {
@@ -69,9 +70,19 @@ function StatusLine({ match, phase }: { match: Match; phase: ChipPhase }) {
       </span>
     );
   }
-  const text = phase === "post" ? "Encerrado" : `${fmtDayLabel(match.startsAt)} · ${fmtTime(match.startsAt)}`;
+  if (phase === "post") {
+    return (
+      <span style={{ fontFamily: MONO, fontSize: 12, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--ink-2)" }}>Encerrado</span>
+    );
+  }
+  // pre: count down to kickoff; flips to the live clock once it starts.
   return (
-    <span style={{ fontFamily: MONO, fontSize: 12, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--ink-2)" }}>{text}</span>
+    <span style={{ fontFamily: MONO, fontSize: 12, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--ink-2)" }}>
+      <Countdown
+        targetMs={Date.parse(match.startsAt)}
+        render={(r) => (r > 0 ? `Começa em ${formatCountdownLong(r)}` : "Prestes a começar")}
+      />
+    </span>
   );
 }
 
@@ -145,6 +156,7 @@ export interface LiveViewProps {
   onVoted: () => void;
   followCode: string | null;
   groupByTeam: Record<string, string>;
+  releasedIds: Set<string>;
 }
 
 export function LiveView({
@@ -158,6 +170,7 @@ export function LiveView({
   onVoted,
   followCode,
   groupByTeam,
+  releasedIds,
 }: LiveViewProps) {
   const selected = chips.find((c) => c.match.id === selectedId) ?? chips[0];
   const liveCount = chips.filter((c) => c.phase === "live").length;
@@ -206,6 +219,7 @@ export function LiveView({
                   current={{ home: selected.match.homeScore ?? 0, away: selected.match.awayScore ?? 0 }}
                   phase={selected.phase}
                   closesAt={palpiteDeadline(selected.match.startsAt)}
+                  released={releasedIds.has(selected.match.id)}
                   onVoted={onVoted}
                 />
               ) : (
