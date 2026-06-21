@@ -46,34 +46,34 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 204, headers: cors });
   }
   if (req.method !== "POST") {
-    return json({ error: "Method not allowed" }, 405, cors);
+    return json({ error: "Método não permitido." }, 405, cors);
   }
   // Refuse cross-origin requests from origins we don't trust.
   if (origin && !allowOrigin) {
-    return json({ error: "Origin not allowed" }, 403, cors);
+    return json({ error: "Origem não permitida." }, 403, cors);
   }
   // Fail closed if the server is missing its secrets.
   if (!IP_PEPPER || !SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    return json({ error: "Server is not configured" }, 500, cors);
+    return json({ error: "Servidor não configurado." }, 500, cors);
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return json({ error: "Invalid JSON body" }, 400, cors);
+    return json({ error: "Corpo da requisição inválido." }, 400, cors);
   }
 
   // The authoritative validation (the client's is only for UX).
   const result = validateVote(body);
   if (!result.success || !result.data) {
-    return json({ error: "Validation failed", fields: result.errors }, 422, cors);
+    return json({ error: "Falha na validação.", fields: result.errors }, 422, cors);
   }
   const vote = result.data;
 
   const ip = getClientIp(req.headers);
   if (!ip) {
-    return json({ error: "Could not determine client address" }, 400, cors);
+    return json({ error: "Não foi possível identificar o cliente." }, 400, cors);
   }
   const ipHash = await hashIp(ip, IP_PEPPER);
 
@@ -93,15 +93,11 @@ Deno.serve(async (req: Request) => {
   if (error) {
     // 23505 = unique_violation -> this IP already voted on this match.
     if (error.code === "23505") {
-      return json({ error: "You have already voted on this match." }, 409, cors);
+      return json({ error: "Você já palpitou nesta partida." }, 409, cors);
     }
-    // Don't leak DB internals to the client.
+    // Don't leak DB internals to the client; log server-side only.
     console.error("cast-vote insert failed:", error.code, error.message);
-    return json(
-      { error: "Could not record your vote", debug: { code: error.code, message: error.message, details: error.details, hint: error.hint } },
-      500,
-      cors,
-    );
+    return json({ error: "Não foi possível registrar seu palpite." }, 500, cors);
   }
 
   return json({ ok: true }, 201, cors);

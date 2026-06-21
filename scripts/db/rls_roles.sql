@@ -6,7 +6,7 @@ create role service_role  nologin noinherit bypassrls;
 
 grant usage on schema public to anon, authenticated, service_role;
 
--- Supabase grants service_role full table access; mirror that for tables created
--- after this point (i.e. by the migration, which runs as the bootstrap superuser).
-alter default privileges in schema public grant all on tables    to service_role;
-alter default privileges in schema public grant all on sequences to service_role;
+-- NOTE: we deliberately do NOT grant service_role via default privileges here.
+-- Production has "Automatically expose new tables" OFF, so new tables get no
+-- grants by default — not even to service_role. Migrations must grant
+-- service_role explicitly, and these assertions verify that.
