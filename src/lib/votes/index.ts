@@ -15,3 +15,18 @@ export {
   type VoteInput,
   type VoteValidationResult,
 } from "@shared/vote";
+
+export {
+  submitVote,
+  type CastVoteTransport,
+  type SubmitOutcome,
+} from "@/lib/votes/submit";
+export { supabaseCastVote } from "@/lib/votes/transport";
+export {
+  mapResultRow,
+  mapEntryRow,
+  fetchVoteResults,
+  fetchVoteEntries,
+  type VoteResult,
+  type VoteEntry,
+} from "@/lib/votes/results";
