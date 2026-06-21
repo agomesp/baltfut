@@ -118,6 +118,10 @@ export function Header({
           display: "flex",
           gap: 0,
           overflowX: "auto",
+          // overflow-x:auto forces overflow-y to compute to auto; the active-tab
+          // underline at bottom:-1px would then trigger a phantom vertical
+          // scrollbar. Pin it hidden.
+          overflowY: "hidden",
         }}
       >
         {TABS.map((t) => {
