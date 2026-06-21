@@ -224,6 +224,19 @@ export default function Home() {
   }, [activeMatch?.id, activeMatch?.state]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  // Catch up the moment the tab becomes visible again: refetch instead of waiting
+  // for the next (possibly throttled) poll, so a backgrounded tab isn't stale.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.hidden) return;
+      void loadAll();
+      if (activeId) void loadEntries(activeId);
+      if (view === "live" || view === "ranking") void loadAllEntries();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [loadAll, loadEntries, loadAllEntries, activeId, view]);
+
   const followName = follow ? teamNamePt(follow, follow) : null;
   const toggleFollow = (code: string) => setFollow((f) => (f === code ? null : code));
 

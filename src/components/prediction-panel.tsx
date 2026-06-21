@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import type { Match } from "@/lib/espn";
+import { useNow } from "@/lib/use-now";
 import {
   submitVote,
   supabaseCastVote,
@@ -81,13 +82,9 @@ export function PredictionPanel({
   const [away, setAway] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<SubmitOutcome | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-
-  // Tick once a second so the countdown updates and the form locks at the deadline.
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  // Ticks every second and re-syncs on tab focus, so the countdown stays accurate
+  // and the form locks at the deadline even after the tab was backgrounded.
+  const now = useNow(1000);
 
   // Remember the palpiteiro's name across matches and sessions.
   /* eslint-disable react-hooks/set-state-in-effect */

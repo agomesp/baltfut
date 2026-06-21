@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
+import { useNow } from "@/lib/use-now";
 
 /** Ticks once a second and renders the remaining ms via `render`. */
 export function Countdown({
@@ -10,10 +11,6 @@ export function Countdown({
   targetMs: number;
   render: (remainingMs: number) => ReactNode;
 }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useNow(1000);
   return <>{render(targetMs - now)}</>;
 }

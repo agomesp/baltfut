@@ -3,6 +3,7 @@ import { Space_Grotesk, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { UpdateBanner } from "@/components/update-banner";
+import { TabKeepAlive } from "@/components/tab-keepalive";
 
 // Flags-only webfont so country-flag emoji render on Windows/Edge (whose system
 // emoji font omits flags, showing the 2-letter code instead). Only flag glyphs
@@ -54,6 +55,7 @@ export default function RootLayout({
       <body style={{ minHeight: "100vh" }}>
         {children}
         <UpdateBanner />
+        <TabKeepAlive />
       </body>
     </html>
   );
