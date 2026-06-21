@@ -24,6 +24,8 @@ import { ResultsView } from "@/components/results-view";
 import { BracketView } from "@/components/bracket-view";
 
 const REFRESH_MS = 30_000;
+// The selected match's palpites poll faster so new ones appear near-live.
+const ENTRIES_REFRESH_MS = 12_000;
 const DEFAULT_LETTERS = "ABCDEFGHIJKL".split("");
 
 export default function Home() {
@@ -160,6 +162,9 @@ export default function Home() {
   useEffect(() => {
     if (view !== "live" || !activeId) return;
     void loadEntries(activeId);
+    // Poll so palpites others submit appear without a manual refresh.
+    const id = setInterval(() => void loadEntries(activeId), ENTRIES_REFRESH_MS);
+    return () => clearInterval(id);
   }, [view, activeId, loadEntries]);
 
   useEffect(() => {
