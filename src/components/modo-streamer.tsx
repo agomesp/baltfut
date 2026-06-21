@@ -33,6 +33,22 @@ function saveScroll() {
 }
 
 /**
+ * Reload bypassing the HTTP/CDN cache. GitHub Pages serves index.html with
+ * max-age=600, so a plain location.reload() can keep getting stale HTML that
+ * points to JS chunks deleted by a deploy → 404 → grey screen. A unique query
+ * forces a fresh document fetch (and thus the current chunk URLs).
+ */
+function reloadFresh() {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("r", String(Date.now()));
+    window.location.replace(url.toString());
+  } catch {
+    window.location.reload();
+  }
+}
+
+/**
  * Modo Streamer — keeps the page fresh for a capture/background window.
  *
  * While ON it simply reloads the page every RELOAD_SECS, regardless of whether the
@@ -64,7 +80,7 @@ export function ModoStreamer() {
     if (!onRef.current) return;
     timerRef.current = window.setTimeout(() => {
       saveScroll();
-      window.location.reload();
+      reloadFresh();
     }, RELOAD_SECS * 1000);
   }, [clearReload]);
 
@@ -117,11 +133,25 @@ export function ModoStreamer() {
     }
     /* eslint-enable react-hooks/set-state-in-effect */
 
+    // Safety net: if a JS chunk fails to load (typically right after a deploy,
+    // when stale HTML references deleted chunks), recover with a fresh reload.
+    const isChunkErr = (m: string) =>
+      /ChunkLoadError|Loading chunk|Importing a module script failed|error loading dynamically imported module/i.test(m);
+    const onErr = (e: ErrorEvent) => {
+      if (isChunkErr(String(e?.message || ""))) reloadFresh();
+    };
+    const onRej = (e: PromiseRejectionEvent) => {
+      const r = e?.reason as { message?: string } | string | undefined;
+      if (isChunkErr(String((r as { message?: string })?.message ?? r ?? ""))) reloadFresh();
+    };
+
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("focus", reset);
     window.addEventListener("pointerdown", reset);
     window.addEventListener("keydown", reset);
     window.addEventListener("pagehide", saveScroll);
+    window.addEventListener("error", onErr);
+    window.addEventListener("unhandledrejection", onRej);
     document.addEventListener("visibilitychange", onVis);
     return () => {
       window.clearTimeout(scrollT);
@@ -130,6 +160,8 @@ export function ModoStreamer() {
       window.removeEventListener("pointerdown", reset);
       window.removeEventListener("keydown", reset);
       window.removeEventListener("pagehide", saveScroll);
+      window.removeEventListener("error", onErr);
+      window.removeEventListener("unhandledrejection", onRej);
       document.removeEventListener("visibilitychange", onVis);
       clearReload();
     };
