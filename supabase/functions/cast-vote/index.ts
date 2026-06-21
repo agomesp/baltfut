@@ -97,7 +97,11 @@ Deno.serve(async (req: Request) => {
     }
     // Don't leak DB internals to the client.
     console.error("cast-vote insert failed:", error.code, error.message);
-    return json({ error: "Could not record your vote" }, 500, cors);
+    return json(
+      { error: "Could not record your vote", debug: { code: error.code, message: error.message, details: error.details, hint: error.hint } },
+      500,
+      cors,
+    );
   }
 
   return json({ ok: true }, 201, cors);
