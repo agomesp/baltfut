@@ -1,7 +1,17 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { UpdateBanner } from "@/components/update-banner";
+
+// Flags-only webfont so country-flag emoji render on Windows/Edge (whose system
+// emoji font omits flags, showing the 2-letter code instead). Only flag glyphs
+// come from here; everything else falls back to the body font.
+const flagFont = localFont({
+  src: "./fonts/TwemojiCountryFlags.woff2",
+  variable: "--font-flags",
+  display: "swap",
+});
 
 const display = Space_Grotesk({
   subsets: ["latin"],
@@ -35,7 +45,7 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       data-theme="dark"
-      className={`${display.variable} ${body.variable} ${mono.variable}`}
+      className={`${display.variable} ${body.variable} ${mono.variable} ${flagFont.variable}`}
       suppressHydrationWarning
     >
       <head>

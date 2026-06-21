@@ -45,6 +45,19 @@ export async function fetchVoteEntries(
   return (data as EntryRow[] | null)?.map(mapEntryRow) ?? [];
 }
 
+/** Fetch all predictions (for the ranking). Capped to keep the payload bounded. */
+export async function fetchAllEntries(
+  client: SupabaseClient,
+  limit = 2000,
+): Promise<VoteEntry[]> {
+  const { data, error } = await client
+    .from("vote_entries")
+    .select("*")
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data as EntryRow[] | null)?.map(mapEntryRow) ?? [];
+}
+
 /** Fetch prediction counts per match (which matches have palpites). */
 export async function fetchVoteCounts(
   client: SupabaseClient,

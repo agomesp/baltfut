@@ -1,6 +1,6 @@
 import { MONO, DISPLAY } from "@/components/primitives";
 
-export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket";
+export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket" | "ranking";
 
 const TABS: { key: ViewKey; idx: string; label: string }[] = [
   { key: "live", idx: "01", label: "Ao vivo" },
@@ -8,6 +8,7 @@ const TABS: { key: ViewKey; idx: string; label: string }[] = [
   { key: "groups", idx: "03", label: "Grupos" },
   { key: "results", idx: "04", label: "Resultados" },
   { key: "bracket", idx: "05", label: "Chaveamento" },
+  { key: "ranking", idx: "06", label: "Ranking dos Subs" },
 ];
 
 export interface HeaderProps {
@@ -126,6 +127,7 @@ export function Header({
       >
         {TABS.map((t) => {
           const active = t.key === view;
+          const isRank = t.key === "ranking";
           return (
             <button
               key={t.key}
@@ -143,14 +145,14 @@ export function Header({
                 cursor: "pointer",
               }}
             >
-              <span style={{ fontFamily: MONO, fontSize: 11, color: "var(--ink-3)" }}>{t.idx}</span>
+              <span style={{ fontFamily: MONO, fontSize: 11, color: isRank ? "var(--rank)" : "var(--ink-3)" }}>{t.idx}</span>
               <span
                 style={{
                   fontFamily: MONO,
                   fontSize: 13,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  color: active ? "var(--ink)" : "var(--ink-2)",
+                  color: isRank ? "var(--rank)" : active ? "var(--ink)" : "var(--ink-2)",
                 }}
               >
                 {t.label}
@@ -162,7 +164,7 @@ export function Header({
                   right: 18,
                   bottom: -1,
                   height: 2,
-                  background: active ? "var(--signal)" : "transparent",
+                  background: active ? (isRank ? "var(--rank)" : "var(--signal)") : "transparent",
                 }}
               />
             </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { Match } from "@/lib/espn";
 import {
   submitVote,
@@ -12,6 +12,7 @@ import {
   type PredictionStatus,
 } from "@/lib/votes";
 import type { ChipPhase } from "@/lib/chips";
+import { isPalpiteOpen, formatCountdown } from "@/lib/palpite";
 import { MONO } from "@/components/primitives";
 
 export interface PredictionPanelProps {
@@ -19,6 +20,8 @@ export interface PredictionPanelProps {
   entries: VoteEntry[];
   current: { home: number; away: number };
   phase: ChipPhase;
+  /** Deadline (ms) for submitting: kickoff + 5min. NaN = unknown. */
+  closesAt: number;
   onVoted: () => void;
   /** Injectable for tests; defaults to the live Edge Function call. */
   transport?: CastVoteTransport;
@@ -48,13 +51,7 @@ function rowDisplay(phase: ChipPhase, status: PredictionStatus) {
     };
   }
   if (phase === "pre") {
-    return {
-      label: "",
-      tagColor: "var(--ink-3)",
-      rowBg: "transparent",
-      nameColor: "var(--ink)",
-      numColor: "var(--ink-2)",
-    };
+    return { label: "", tagColor: "var(--ink-3)", rowBg: "transparent", nameColor: "var(--ink)", numColor: "var(--ink-2)" };
   }
   const win = status === "winning";
   const lose = status === "losing";
@@ -72,6 +69,7 @@ export function PredictionPanel({
   entries,
   current,
   phase,
+  closesAt,
   onVoted,
   transport = supabaseCastVote,
 }: PredictionPanelProps) {
@@ -80,10 +78,30 @@ export function PredictionPanel({
   const [away, setAway] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<SubmitOutcome | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
-  const ranked = rankPredictions(entries, current);
-  const open = phase !== "post"; // finished games are read-only (winners shown)
-  const title = phase === "post" ? "Vencedores dos palpites" : "Palpite o placar";
+  // Tick once a second so the countdown updates and the form locks at the deadline.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const open = isPalpiteOpen(closesAt, now);
+  const remaining = closesAt - now;
+  // Only count palpites placed before the deadline (drop any late/bypassed ones).
+  const validEntries = Number.isNaN(closesAt)
+    ? entries
+    : entries.filter((e) => {
+        const c = Date.parse(e.createdAt);
+        return Number.isNaN(c) || c <= closesAt;
+      });
+  const ranked = rankPredictions(validEntries, current);
+
+  const title = open
+    ? "Palpite o placar"
+    : phase === "post"
+      ? "Vencedores dos palpites"
+      : "Palpites";
   const emptyText =
     phase === "post"
       ? "Ninguém palpitou esta partida."
@@ -93,14 +111,16 @@ export function PredictionPanel({
     e.preventDefault();
     setSubmitting(true);
     setOutcome(null);
-    const input = {
-      matchId: match.id,
-      league: match.league,
-      username: user,
-      predHome: Number.parseInt(home, 10) || 0,
-      predAway: Number.parseInt(away, 10) || 0,
-    };
-    const result = await submitVote(input, transport);
+    const result = await submitVote(
+      {
+        matchId: match.id,
+        league: match.league,
+        username: user,
+        predHome: Number.parseInt(home, 10) || 0,
+        predAway: Number.parseInt(away, 10) || 0,
+      },
+      transport,
+    );
     setOutcome(result);
     setSubmitting(false);
     if (result.ok) {
@@ -115,16 +135,15 @@ export function PredictionPanel({
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "14px 18px 0" }}>
-        <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--ink-2)" }}>
-          {title}
-        </span>
-        <span style={{ fontFamily: MONO, fontSize: 11, color: "var(--ink-3)" }}>
-          {ranked.length ? `${ranked.length} palpites` : ""}
-        </span>
+        <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--ink-2)" }}>{title}</span>
+        <span style={{ fontFamily: MONO, fontSize: 11, color: "var(--ink-3)" }}>{ranked.length ? `${ranked.length} palpites` : ""}</span>
       </div>
 
       {open ? (
-        <form onSubmit={handleSubmit} style={{ padding: "14px 18px 16px", display: "flex", flexDirection: "column", gap: 12, borderBottom: "1px solid var(--line)" }}>
+        <form onSubmit={handleSubmit} style={{ padding: "12px 18px 16px", display: "flex", flexDirection: "column", gap: 12, borderBottom: "1px solid var(--line)" }}>
+          <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.04em", color: remaining < 60_000 ? "#e5484d" : "var(--signal-strong)" }}>
+            Palpites encerrando em {formatCountdown(remaining)}
+          </span>
           <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="Seu nome" maxLength={24} autoComplete="off" aria-label="Seu nome" style={inputStyle} />
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ flex: "0 0 auto", fontFamily: MONO, fontWeight: 500, fontSize: 15, color: "var(--ink)" }}>{match.home.abbreviation}</span>
@@ -136,14 +155,19 @@ export function PredictionPanel({
           <button type="submit" disabled={submitting} style={{ fontFamily: MONO, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--signal-ink)", background: "var(--signal)", border: "none", borderRadius: 4, padding: "10px 12px", cursor: "pointer", opacity: submitting ? 0.7 : 1 }}>
             {submitting ? "Enviando…" : "Enviar palpite"}
           </button>
-          {outcome && !outcome.ok ? (
-            <span role="alert" style={{ fontSize: 12, color: "#e5484d" }}>{outcome.message}</span>
-          ) : null}
-          {outcome?.ok ? (
-            <span style={{ fontSize: 12, color: "var(--signal-strong)" }}>Palpite enviado!</span>
-          ) : null}
+          {outcome && !outcome.ok ? <span role="alert" style={{ fontSize: 12, color: "#e5484d" }}>{outcome.message}</span> : null}
+          {outcome?.ok ? <span style={{ fontSize: 12, color: "var(--signal-strong)" }}>Palpite enviado!</span> : null}
         </form>
-      ) : null}
+      ) : (
+        <div style={{ margin: "12px 18px 14px", padding: "12px 14px", borderRadius: 6, border: "1px solid var(--line-2)", background: "var(--bg)" }}>
+          <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "#e5a23b", marginBottom: 4 }}>
+            Palpites encerrados
+          </div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
+            Palpites encerrados para esta partida. Palpite a próxima — até 5min do início da partida.
+          </div>
+        </div>
+      )}
 
       <div style={{ flex: "1 1 auto", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, overflowY: "auto", maxHeight: 420 }}>
         {ranked.length === 0 ? (
@@ -155,9 +179,7 @@ export function PredictionPanel({
               <div key={`${v.username}-${i}`} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "7px 8px 9px", borderRadius: 4, borderBottom: "1px solid var(--line)", background: d.rowBg }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                   <span style={{ fontSize: 13, color: d.nameColor }}>{v.username}</span>
-                  {d.label ? (
-                    <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: d.tagColor }}>{d.label}</span>
-                  ) : null}
+                  {d.label ? <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: d.tagColor }}>{d.label}</span> : null}
                 </div>
                 <span style={{ fontFamily: MONO, fontSize: 13, color: d.nameColor === "var(--ink-3)" ? "var(--ink-3)" : "var(--ink-2)" }}>
                   {match.home.abbreviation} [<span style={{ color: d.numColor }}>{v.predHome}</span>] x [<span style={{ color: d.numColor }}>{v.predAway}</span>] {match.away.abbreviation}

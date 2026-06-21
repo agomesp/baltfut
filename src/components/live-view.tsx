@@ -2,6 +2,7 @@ import type { Match, MatchLineups, TeamLineup } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
 import { fmtDayLabel, fmtTime } from "@/lib/format";
+import { palpiteDeadline } from "@/lib/palpite";
 import { MONO, DISPLAY, cardStyle, PulseDot } from "@/components/primitives";
 import { PredictionPanel } from "@/components/prediction-panel";
 import { ChipCarousel } from "@/components/chip-carousel";
@@ -204,6 +205,7 @@ export function LiveView({
                   entries={entries}
                   current={{ home: selected.match.homeScore ?? 0, away: selected.match.awayScore ?? 0 }}
                   phase={selected.phase}
+                  closesAt={palpiteDeadline(selected.match.startsAt)}
                   onVoted={onVoted}
                 />
               ) : (

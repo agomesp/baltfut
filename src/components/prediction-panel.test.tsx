@@ -39,6 +39,7 @@ describe("PredictionPanel — finished (post)", () => {
         entries={[entry("Bob", 0, 0), entry("Ana", 1, 2)]}
         current={{ home: 1, away: 2 }}
         phase="post"
+        closesAt={Date.now() - 1000}
         onVoted={vi.fn()}
         transport={vi.fn<CastVoteTransport>()}
       />,
@@ -58,6 +59,7 @@ describe("PredictionPanel — finished (post)", () => {
         entries={[]}
         current={{ home: 1, away: 2 }}
         phase="post"
+        closesAt={Date.now() - 1000}
         onVoted={vi.fn()}
         transport={vi.fn<CastVoteTransport>()}
       />,
@@ -74,6 +76,7 @@ describe("PredictionPanel — live/pre", () => {
         entries={[]}
         current={{ home: 1, away: 2 }}
         phase="live"
+        closesAt={Date.now() + 600_000}
         onVoted={vi.fn()}
         transport={vi.fn<CastVoteTransport>()}
       />,

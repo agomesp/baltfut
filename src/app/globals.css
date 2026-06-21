@@ -21,6 +21,8 @@
   --signal-strong: #62cb84;
   --signal-tint: rgba(67, 184, 106, 0.16);
   --signal-ink: #0e2117;
+
+  --rank: #facc15;
 }
 
 /* Light */
@@ -37,6 +39,8 @@
   --signal-strong: #1f7a36;
   --signal-tint: rgba(47, 158, 68, 0.12);
   --signal-ink: #ffffff;
+
+  --rank: #b7791f;
 }
 
 * {
@@ -44,7 +48,9 @@
 }
 
 html {
-  font-family: var(--font-body), system-ui, sans-serif;
+  /* --font-flags first so flag emoji render everywhere (incl. Windows/Edge);
+     non-flag glyphs fall through to the body font. */
+  font-family: var(--font-flags), var(--font-body), system-ui, sans-serif;
 }
 
 body {

@@ -23,6 +23,7 @@ export { supabaseCastVote } from "@/lib/votes/transport";
 export {
   mapEntryRow,
   fetchVoteEntries,
+  fetchAllEntries,
   fetchVoteCounts,
   type VoteEntry,
 } from "@/lib/votes/results";

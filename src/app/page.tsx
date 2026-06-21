@@ -13,7 +13,12 @@ import {
   type MatchLineups,
 } from "@/lib/espn";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { fetchVoteEntries, fetchVoteCounts, type VoteEntry } from "@/lib/votes";
+import {
+  fetchVoteEntries,
+  fetchAllEntries,
+  fetchVoteCounts,
+  type VoteEntry,
+} from "@/lib/votes";
 import { buildChipGames, defaultChipId } from "@/lib/chips";
 import { teamNamePt } from "@/lib/team-names";
 import { Header, type ViewKey } from "@/components/header";
@@ -22,6 +27,7 @@ import { FixturesView } from "@/components/fixtures-view";
 import { GroupsView } from "@/components/groups-view";
 import { ResultsView } from "@/components/results-view";
 import { BracketView } from "@/components/bracket-view";
+import { RankingView } from "@/components/ranking-view";
 
 const REFRESH_MS = 30_000;
 // The selected match's palpites poll faster so new ones appear near-live.
@@ -43,6 +49,7 @@ export default function Home() {
   const [panel, setPanel] = useState<"predict" | "lineup">("predict");
   const [lineups, setLineups] = useState<MatchLineups | null>(null);
   const [entries, setEntries] = useState<VoteEntry[]>([]);
+  const [allEntries, setAllEntries] = useState<VoteEntry[]>([]);
 
   // ---- theme + follow persistence -----------------------------------------
   // Read persisted prefs on mount. Lazy useState init can't be used: localStorage
@@ -158,6 +165,19 @@ export default function Home() {
     }
   }, []);
 
+  const loadAllEntries = useCallback(async () => {
+    const client = getSupabaseClient();
+    if (!client) {
+      setAllEntries([]);
+      return;
+    }
+    try {
+      setAllEntries(await fetchAllEntries(client));
+    } catch {
+      setAllEntries([]);
+    }
+  }, []);
+
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (view !== "live" || !activeId) return;
@@ -176,6 +196,13 @@ export default function Home() {
       .catch(() => setLineups(null));
     return () => controller.abort();
   }, [view, activeId]);
+
+  useEffect(() => {
+    if (view !== "ranking") return;
+    void loadAllEntries();
+    const id = setInterval(() => void loadAllEntries(), REFRESH_MS);
+    return () => clearInterval(id);
+  }, [view, loadAllEntries]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const followName = follow ? teamNamePt(follow, follow) : null;
@@ -228,6 +255,9 @@ export default function Home() {
           <ResultsView matches={results} followCode={follow} groupByTeam={groupByTeam} />
         )}
         {!loading && view === "bracket" && <BracketView columns={bracketColumns} />}
+        {!loading && view === "ranking" && (
+          <RankingView entries={allEntries} matches={matches} />
+        )}
       </main>
     </>
   );
