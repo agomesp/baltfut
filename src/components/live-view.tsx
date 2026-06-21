@@ -3,6 +3,7 @@ import type { VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
 import { fmtTime } from "@/lib/format";
 import { palpiteDeadline, formatCountdownLong } from "@/lib/palpite";
+import { rankSubs } from "@/lib/ranking";
 import { MONO, DISPLAY, cardStyle, PulseDot } from "@/components/primitives";
 import { PredictionPanel } from "@/components/prediction-panel";
 import { ChipCarousel } from "@/components/chip-carousel";
@@ -86,13 +87,22 @@ function StatusLine({ match, phase }: { match: Match; phase: ChipPhase }) {
   );
 }
 
-function BigDetail({ match, phase, followCode, groupByTeam }: { match: Match; phase: ChipPhase; followCode: string | null; groupByTeam: Record<string, string> }) {
+function BigDetail({ match, phase, followCode, groupByTeam, compact = false }: { match: Match; phase: ChipPhase; followCode: string | null; groupByTeam: Record<string, string>; compact?: boolean }) {
   const homeColor = match.home.abbreviation === followCode ? "var(--signal-strong)" : "var(--ink)";
   const awayColor = match.away.abbreviation === followCode ? "var(--signal-strong)" : "var(--ink)";
   const showScore = phase !== "pre";
   const homeGoals = match.goals.filter((g) => g.side === "home");
   const awayGoals = match.goals.filter((g) => g.side === "away");
   const meta = [groupLabel(match, groupByTeam), match.venue].filter(Boolean).join(" · ");
+  // Compact tuning lets the hero share a row with the palpites + ranking columns
+  // without the team abbreviations overflowing the narrower center column.
+  const teamFont = compact ? "clamp(30px,3.4vw,58px)" : "clamp(38px,6.5vw,96px)";
+  const labelFont = compact ? "clamp(12px,1.2vw,16px)" : "clamp(15px,2vw,22px)";
+  const scoreFont = compact ? "clamp(34px,4vw,66px)" : "clamp(44px,7.5vw,108px)";
+  const heroMax = compact ? 520 : 920;
+  const heroGap = compact ? "clamp(10px,2vw,24px)" : "clamp(16px,4vw,48px)";
+  const bodyMinH = compact ? "min(460px,54vh)" : "min(560px,62vh)";
+  const bodyPad = compact ? "clamp(28px,3.5vw,44px) 20px" : "clamp(36px,6vw,64px) 24px";
 
   return (
     <div style={{ ...cardStyle, flex: "2 1 440px" }}>
@@ -101,14 +111,14 @@ function BigDetail({ match, phase, followCode, groupByTeam }: { match: Match; ph
         <StatusLine match={match} phase={phase} />
         <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-2)" }}>{meta}</span>
       </div>
-      <div style={{ minHeight: "min(560px,62vh)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "clamp(36px,6vw,64px) 24px", gap: 40 }}>
-        <div style={{ width: "100%", maxWidth: 920, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: "clamp(16px,4vw,48px)" }}>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: "clamp(38px,6.5vw,96px)", letterSpacing: "-0.03em", lineHeight: 0.92, color: homeColor }}>{match.home.abbreviation}</div>
-            <div style={{ fontSize: "clamp(15px,2vw,22px)", color: "var(--ink-2)", marginTop: 8 }}>{teamLabel(match.home.abbreviation, match.home.name)}</div>
+      <div style={{ minHeight: bodyMinH, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: bodyPad, gap: 40 }}>
+        <div style={{ width: "100%", maxWidth: heroMax, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: heroGap }}>
+          <div style={{ textAlign: "right", minWidth: 0 }}>
+            <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: teamFont, letterSpacing: "-0.03em", lineHeight: 0.92, color: homeColor }}>{match.home.abbreviation}</div>
+            <div style={{ fontSize: labelFont, color: "var(--ink-2)", marginTop: 8 }}>{teamLabel(match.home.abbreviation, match.home.name)}</div>
           </div>
           {showScore ? (
-            <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: "clamp(44px,7.5vw,108px)", letterSpacing: "-0.02em", lineHeight: 0.9, whiteSpace: "nowrap", color: "var(--ink)", textAlign: "center" }}>
+            <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: scoreFont, letterSpacing: "-0.02em", lineHeight: 0.9, whiteSpace: "nowrap", color: "var(--ink)", textAlign: "center" }}>
               {match.homeScore ?? 0}–{match.awayScore ?? 0}
             </div>
           ) : (
@@ -117,13 +127,13 @@ function BigDetail({ match, phase, followCode, groupByTeam }: { match: Match; ph
               <div style={{ fontFamily: MONO, fontSize: 20, marginTop: 6, color: "var(--ink)" }}>{fmtTime(match.startsAt)}</div>
             </div>
           )}
-          <div style={{ textAlign: "left" }}>
-            <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: "clamp(38px,6.5vw,96px)", letterSpacing: "-0.03em", lineHeight: 0.92, color: awayColor }}>{match.away.abbreviation}</div>
-            <div style={{ fontSize: "clamp(15px,2vw,22px)", color: "var(--ink-2)", marginTop: 8 }}>{teamLabel(match.away.abbreviation, match.away.name)}</div>
+          <div style={{ textAlign: "left", minWidth: 0 }}>
+            <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: teamFont, letterSpacing: "-0.03em", lineHeight: 0.92, color: awayColor }}>{match.away.abbreviation}</div>
+            <div style={{ fontSize: labelFont, color: "var(--ink-2)", marginTop: 8 }}>{teamLabel(match.away.abbreviation, match.away.name)}</div>
           </div>
         </div>
         {showScore && match.goals.length > 0 ? (
-          <div style={{ width: "100%", maxWidth: 920, paddingTop: 28, borderTop: "1px solid var(--line)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+          <div style={{ width: "100%", maxWidth: heroMax, paddingTop: 28, borderTop: "1px solid var(--line)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {homeGoals.map((g, i) => (
                 <span key={i} style={{ fontFamily: MONO, fontSize: 15, color: "var(--ink)" }}>
@@ -145,6 +155,50 @@ function BigDetail({ match, phase, followCode, groupByTeam }: { match: Match; ph
   );
 }
 
+function RankingSidebar({ entries, matches }: { entries: VoteEntry[]; matches: Match[] }) {
+  const byId: Record<string, Match> = {};
+  for (const m of matches) byId[m.id] = m;
+  const ranks = rankSubs(entries, byId);
+
+  return (
+    <div style={{ ...cardStyle, flex: "1 1 240px", minWidth: 220, display: "flex", flexDirection: "column" }}>
+      <div style={{ height: 4, background: "var(--rank)" }} />
+      <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
+        <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--rank)" }}>Ranking dos Subs</div>
+        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>Vitórias &amp; derrotas · partidas encerradas</div>
+      </div>
+      {ranks.length === 0 ? (
+        <div style={{ padding: "28px 16px", fontSize: 13, color: "var(--ink-3)", textAlign: "center" }}>
+          Sem palpites avaliados ainda. Volte após o fim das partidas.
+        </div>
+      ) : (
+        <div style={{ overflowY: "auto", maxHeight: 580 }}>
+          {ranks.map((r, i) => (
+            <div
+              key={r.username}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "9px 16px",
+                borderBottom: "1px solid var(--line)",
+                background: i === 0 ? "rgba(250, 204, 21, 0.08)" : "transparent",
+              }}
+            >
+              <span style={{ flex: "0 0 20px", textAlign: "right", fontFamily: MONO, fontSize: 12, color: i < 3 ? "var(--rank)" : "var(--ink-3)" }}>{i + 1}</span>
+              <span style={{ flex: "1 1 auto", fontSize: 13, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.username}</span>
+              <span style={{ flex: "0 0 auto", fontFamily: MONO, fontSize: 13, letterSpacing: "0.02em" }}>
+                <span style={{ color: "var(--signal-strong)", fontWeight: 500 }}>{r.wins}</span>
+                <span style={{ color: "var(--ink-3)" }}>–{r.losses}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export interface LiveViewProps {
   chips: ChipGame[];
   selectedId: string | null;
@@ -153,6 +207,8 @@ export interface LiveViewProps {
   onPanel: (p: "predict" | "lineup") => void;
   lineups: MatchLineups | null;
   entries: VoteEntry[];
+  allEntries: VoteEntry[];
+  matches: Match[];
   onVoted: () => void;
   followCode: string | null;
   groupByTeam: Record<string, string>;
@@ -167,6 +223,8 @@ export function LiveView({
   onPanel,
   lineups,
   entries,
+  allEntries,
+  matches,
   onVoted,
   followCode,
   groupByTeam,
@@ -227,7 +285,9 @@ export function LiveView({
               )}
             </div>
 
-            <BigDetail match={selected.match} phase={selected.phase} followCode={followCode} groupByTeam={groupByTeam} />
+            <BigDetail match={selected.match} phase={selected.phase} followCode={followCode} groupByTeam={groupByTeam} compact />
+
+            <RankingSidebar entries={allEntries} matches={matches} />
           </div>
         </>
       )}

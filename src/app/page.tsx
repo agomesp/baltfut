@@ -202,7 +202,8 @@ export default function Home() {
   }, [view, activeId]);
 
   useEffect(() => {
-    if (view !== "ranking") return;
+    // The live tab shows a ranking sidebar too, so keep allEntries fresh there.
+    if (view !== "ranking" && view !== "live") return;
     void loadAllEntries();
     const id = setInterval(() => void loadAllEntries(), REFRESH_MS);
     return () => clearInterval(id);
@@ -258,6 +259,8 @@ export default function Home() {
             onPanel={setPanel}
             lineups={lineups}
             entries={entries}
+            allEntries={allEntries}
+            matches={matches}
             onVoted={onVoted}
             followCode={follow}
             groupByTeam={groupByTeam}
