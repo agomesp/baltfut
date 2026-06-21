@@ -91,9 +91,19 @@ Deno.serve(async (req: Request) => {
   });
 
   if (error) {
-    // 23505 = unique_violation -> this IP already voted on this match.
+    // 23505 = unique_violation: either one-per-IP or one-name-per-match.
     if (error.code === "23505") {
-      return json({ error: "Você já palpitou nesta partida." }, 409, cors);
+      const blob = `${error.message ?? ""} ${error.details ?? ""}`;
+      const nameTaken = blob.includes("one_name");
+      return json(
+        {
+          error: nameTaken
+            ? "Esse nome já foi usado nesta partida."
+            : "Você já palpitou nesta partida.",
+        },
+        409,
+        cors,
+      );
     }
     // Don't leak DB internals to the client; log server-side only.
     console.error("cast-vote insert failed:", error.code, error.message);

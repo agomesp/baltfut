@@ -111,4 +111,17 @@ begin
   end;
 end $$;
 
+-- H) one name per match, case-insensitive --------------------------------------
+do $$
+begin
+  set local role service_role;
+  begin
+    -- 'allan' vs existing 'Allan' on match 1002 (different IP), should be rejected.
+    insert into public.votes (match_id, league, username, pred_home, pred_away, ip_hash)
+    values ('1002','fifa.world','allan',0,0, repeat('h',64));
+    raise exception 'FAIL H: duplicate name on a match was allowed';
+  exception when unique_violation then raise notice 'PASS H: duplicate name per match rejected';
+  end;
+end $$;
+
 select 'ALL RLS CHECKS PASSED' as result;
