@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Tv } from "lucide-react";
 import { MONO } from "@/components/primitives";
 
-const RELOAD_SECS = 30; // background reload cadence (matches the scoreboard poll)
-const IDLE_STOP_MS = 2 * 60 * 60 * 1000; // stop auto-reload after 2h hidden
+const RELOAD_SECS = 30; // reload cadence while Modo Streamer is on
+const IDLE_OFF_MS = 2 * 60 * 60 * 1000; // auto-disable after 2h in the background
 const SCROLL_KEY = "baltfut_scroll";
 const ACTIVE_KEY = "baltfut_lastactive";
 const SCROLL_FRESH_MS = 120_000; // only restore a scroll position from a recent reload
@@ -33,52 +33,42 @@ function saveScroll() {
 }
 
 /**
- * Modo Streamer — keeps a backgrounded tab live, for free, for every visitor.
+ * Modo Streamer — keeps the page fresh for a capture/background window.
  *
- * The problem: when the tab is hidden (OBS capture, another window on top,
- * minimized), browsers throttle our in-page polls to ~once/min and can discard
- * the tab outright (the screen goes grey). The fix: while hidden, reload the page
- * on a timer via a native <meta http-equiv="refresh"> — a browser-scheduled
- * navigation that keeps firing when JS timers are throttled, and a tab that keeps
- * navigating is never put to sleep.
+ * While ON it simply reloads the page every RELOAD_SECS, regardless of whether the
+ * browser thinks the tab is visible — more reliable for OBS, where a captured
+ * window in the background may not be reported as hidden, yet its timers get
+ * throttled and the tab can be discarded (the screen goes grey/stale). Reloading
+ * on a short cadence keeps the tab active so it is never throttled or discarded.
  *
- * While the tab is VISIBLE we do nothing — the normal in-page polling already
- * updates the scores smoothly, with no reload flash and no interrupting someone
- * mid-palpite. Scroll position is preserved across reloads, and after 2h with the
- * tab hidden we stop reloading (so abandoned tabs don't hammer the APIs forever);
- * it resumes the moment the tab is looked at again.
- *
- * On by default; the floating button toggles it off for the current page load.
+ * Scroll position and the in-progress palpite are preserved across reloads. After
+ * 2h with the browser window unfocused it auto-disables (so an abandoned tab stops
+ * hitting the APIs); focusing the window resets that 2h counter. The floating
+ * button toggles it for the current page load (a manual refresh returns to ON).
  */
 export function ModoStreamer() {
   const [on, setOn] = useState(true);
   const onRef = useRef(true);
-  const metaRef = useRef<HTMLMetaElement | null>(null);
+  const timerRef = useRef<number | undefined>(undefined);
 
-  const removeMeta = useCallback(() => {
-    metaRef.current?.remove();
-    metaRef.current = null;
+  const clearReload = useCallback(() => {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = undefined;
+    }
   }, []);
 
-  const installMeta = useCallback(() => {
-    removeMeta();
-    const m = document.createElement("meta");
-    m.httpEquiv = "refresh";
-    m.content = String(RELOAD_SECS); // empty URL → reloads current URL
-    document.head.appendChild(m);
-    metaRef.current = m;
-  }, [removeMeta]);
-
-  // Decide whether a background reload should be scheduled right now.
+  // Reschedule the reload. Always on while enabled — not gated on visibility.
   const apply = useCallback(() => {
-    removeMeta();
-    if (!onRef.current) return; // user turned it off
-    if (!document.hidden) return; // visible → in-page polls handle updates
-    if (Date.now() - getLastActive() > IDLE_STOP_MS) return; // 2h idle → hard stop
-    installMeta();
-  }, [removeMeta, installMeta]);
+    clearReload();
+    if (!onRef.current) return;
+    timerRef.current = window.setTimeout(() => {
+      saveScroll();
+      window.location.reload();
+    }, RELOAD_SECS * 1000);
+  }, [clearReload]);
 
-  // Listeners + scroll restore (mount once).
+  // Mount: scroll restore + listeners + initial schedule / auto-disable.
   useEffect(() => {
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
@@ -108,30 +98,42 @@ export function ModoStreamer() {
       window.clearTimeout(scrollT);
       scrollT = window.setTimeout(saveScroll, 250);
     };
+    const reset = () => bumpActive(); // focus / interaction → reset the 2h counter
     const onVis = () => {
-      bumpActive(); // mark the moment of entering/leaving the foreground
-      if (!document.hidden) saveScroll();
-      apply();
+      if (!document.hidden) {
+        bumpActive();
+        saveScroll();
+      }
     };
 
-    if (!document.hidden) bumpActive();
-    apply();
+    if (document.hasFocus()) bumpActive();
+
+    // Auto-disable if the window has been unfocused past the limit; else schedule.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (!document.hasFocus() && Date.now() - getLastActive() > IDLE_OFF_MS) {
+      setOn(false);
+    } else {
+      apply();
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("pointerdown", bumpActive);
-    window.addEventListener("keydown", bumpActive);
+    window.addEventListener("focus", reset);
+    window.addEventListener("pointerdown", reset);
+    window.addEventListener("keydown", reset);
     window.addEventListener("pagehide", saveScroll);
     document.addEventListener("visibilitychange", onVis);
     return () => {
       window.clearTimeout(scrollT);
       window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("pointerdown", bumpActive);
-      window.removeEventListener("keydown", bumpActive);
+      window.removeEventListener("focus", reset);
+      window.removeEventListener("pointerdown", reset);
+      window.removeEventListener("keydown", reset);
       window.removeEventListener("pagehide", saveScroll);
       document.removeEventListener("visibilitychange", onVis);
-      removeMeta();
+      clearReload();
     };
-  }, [apply, removeMeta]);
+  }, [apply, clearReload]);
 
   // React to the toggle.
   useEffect(() => {
@@ -144,8 +146,8 @@ export function ModoStreamer() {
       onClick={() => setOn((v) => !v)}
       title={
         on
-          ? "Atualiza sozinho quando a aba fica em segundo plano (ex.: captura no OBS). Toque para desligar."
-          : "Atualização automática desligada. Toque para ligar."
+          ? `Recarrega a cada ${RELOAD_SECS}s para não congelar em segundo plano (ex.: OBS). Toque para desativar.`
+          : "Atualização automática desativada. Toque para ativar."
       }
       style={{
         position: "fixed",
@@ -164,24 +166,38 @@ export function ModoStreamer() {
         borderRadius: 999,
         cursor: "pointer",
         boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
-        background: on ? "var(--signal)" : "var(--surface)",
-        color: on ? "var(--signal-ink)" : "var(--ink-2)",
-        border: `1px solid ${on ? "transparent" : "var(--line-2)"}`,
+        background: on ? "var(--signal)" : "var(--rank)",
+        color: "var(--signal-ink)",
+        border: "1px solid transparent",
       }}
     >
-      <Tv size={15} />
+      {on ? (
+        <span
+          aria-hidden
+          style={{
+            width: 9,
+            height: 9,
+            borderRadius: 999,
+            background: "#e5484d",
+            display: "inline-block",
+            flex: "0 0 auto",
+            animation: "livePulse 1.6s ease-in-out infinite",
+          }}
+        />
+      ) : (
+        <Tv size={15} />
+      )}
       Modo Streamer
       <span
         style={{
           fontSize: 10,
           padding: "2px 7px",
           borderRadius: 999,
-          background: on ? "rgba(0,0,0,0.2)" : "transparent",
-          border: on ? "none" : "1px solid var(--line-2)",
-          color: on ? "var(--signal-ink)" : "var(--ink-3)",
+          background: "rgba(0,0,0,0.18)",
+          color: "var(--signal-ink)",
         }}
       >
-        {on ? "Ligado" : "Desligado"}
+        {on ? "Ativado" : "Desativado"}
       </span>
     </button>
   );
