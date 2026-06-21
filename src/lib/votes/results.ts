@@ -44,3 +44,16 @@ export async function fetchVoteEntries(
   if (error) throw new Error(error.message);
   return (data as EntryRow[] | null)?.map(mapEntryRow) ?? [];
 }
+
+/** Fetch prediction counts per match (which matches have palpites). */
+export async function fetchVoteCounts(
+  client: SupabaseClient,
+): Promise<Record<string, number>> {
+  const { data, error } = await client.from("vote_match_counts").select("*");
+  if (error) throw new Error(error.message);
+  const counts: Record<string, number> = {};
+  for (const row of (data as { match_id: string; votes: number }[] | null) ?? []) {
+    counts[row.match_id] = row.votes;
+  }
+  return counts;
+}

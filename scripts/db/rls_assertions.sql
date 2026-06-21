@@ -71,6 +71,11 @@ begin
   select count(*) into n from public.vote_entries;
   if n <> 3 then raise exception 'FAIL E2: vote_entries returned %', n; end if;
   raise notice 'PASS E2: anon read vote_entries (% rows)', n;
+
+  -- vote_match_counts aggregate (2 predictions on match 1002).
+  select votes into n from public.vote_match_counts where match_id = '1002';
+  if n <> 2 then raise exception 'FAIL E3: vote_match_counts(1002) = %', n; end if;
+  raise notice 'PASS E3: vote_match_counts shows 2 for match 1002';
 end $$;
 
 -- F) vote_entries never exposes ip_hash -------------------------------------

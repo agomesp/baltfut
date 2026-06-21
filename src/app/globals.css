@@ -54,6 +54,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Horizontal scrollers (e.g. the chip carousel) hide their scrollbar. */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
 ::-webkit-scrollbar {
   height: 10px;
   width: 10px;

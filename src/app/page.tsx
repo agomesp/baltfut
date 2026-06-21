@@ -13,7 +13,8 @@ import {
   type MatchLineups,
 } from "@/lib/espn";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { fetchVoteEntries, type VoteEntry } from "@/lib/votes";
+import { fetchVoteEntries, fetchVoteCounts, type VoteEntry } from "@/lib/votes";
+import { buildChipGames, defaultChipId } from "@/lib/chips";
 import { teamNamePt } from "@/lib/team-names";
 import { Header, type ViewKey } from "@/components/header";
 import { LiveView } from "@/components/live-view";
@@ -32,6 +33,7 @@ export default function Home() {
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,21 +72,35 @@ export default function Home() {
     }
   }, [follow]);
 
-  // ---- data: scoreboard (whole tournament) + standings --------------------
-  const loadAll = useCallback(async (signal?: AbortSignal) => {
-    const [sb, st] = await Promise.allSettled([
-      fetchScoreboard({ dates: FIFA_WORLD_DATE_RANGE, signal }),
-      fetchStandings({ signal }),
-    ]);
-    if (sb.status === "fulfilled") {
-      setMatches(sb.value);
-      setError(null);
-    } else if ((sb.reason as Error)?.name !== "AbortError") {
-      setError("Não foi possível carregar os jogos. Tentando de novo…");
+  // ---- data: scoreboard + standings + vote counts -------------------------
+  const loadCounts = useCallback(async () => {
+    const client = getSupabaseClient();
+    if (!client) return;
+    try {
+      setVoteCounts(await fetchVoteCounts(client));
+    } catch {
+      /* non-fatal */
     }
-    if (st.status === "fulfilled") setGroups(st.value);
-    setLoading(false);
   }, []);
+
+  const loadAll = useCallback(
+    async (signal?: AbortSignal) => {
+      const [sb, st] = await Promise.allSettled([
+        fetchScoreboard({ dates: FIFA_WORLD_DATE_RANGE, signal }),
+        fetchStandings({ signal }),
+      ]);
+      if (sb.status === "fulfilled") {
+        setMatches(sb.value);
+        setError(null);
+      } else if ((sb.reason as Error)?.name !== "AbortError") {
+        setError("Não foi possível carregar os jogos. Tentando de novo…");
+      }
+      if (st.status === "fulfilled") setGroups(st.value);
+      await loadCounts();
+      setLoading(false);
+    },
+    [loadCounts],
+  );
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -99,7 +115,6 @@ export default function Home() {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // ---- derived ------------------------------------------------------------
-  const liveMatches = useMemo(() => matches.filter((m) => m.isLive), [matches]);
   const upcoming = useMemo(
     () =>
       matches
@@ -119,15 +134,15 @@ export default function Home() {
     () => buildBracket(groups.length ? groups.map((g) => g.letter) : DEFAULT_LETTERS),
     [groups],
   );
+  const chips = useMemo(() => buildChipGames(matches, voteCounts), [matches, voteCounts]);
 
-  const selectedIndex = Math.max(
-    0,
-    liveMatches.findIndex((m) => m.id === selectedId),
-  );
-  const selectedMatch = liveMatches[selectedIndex] ?? liveMatches[0] ?? null;
-  const selectedMatchId = selectedMatch?.id ?? null;
+  // Keep the selection valid as chips change; default to a live game.
+  const activeId =
+    selectedId && chips.some((c) => c.match.id === selectedId)
+      ? selectedId
+      : defaultChipId(chips);
 
-  // ---- votes + lineups for the selected live match ------------------------
+  // ---- votes + lineups for the selected chip ------------------------------
   const loadEntries = useCallback(async (matchId: string) => {
     const client = getSupabaseClient();
     if (!client) {
@@ -143,26 +158,28 @@ export default function Home() {
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (view !== "live" || !selectedMatchId) return;
-    void loadEntries(selectedMatchId);
-  }, [view, selectedMatchId, loadEntries]);
+    if (view !== "live" || !activeId) return;
+    void loadEntries(activeId);
+  }, [view, activeId, loadEntries]);
 
   useEffect(() => {
-    if (view !== "live" || !selectedMatchId) {
-      return;
-    }
+    if (view !== "live" || !activeId) return;
     const controller = new AbortController();
     setLineups(null);
-    fetchLineups(selectedMatchId, { signal: controller.signal })
+    fetchLineups(activeId, { signal: controller.signal })
       .then((l) => setLineups(l))
       .catch(() => setLineups(null));
     return () => controller.abort();
-  }, [view, selectedMatchId]);
+  }, [view, activeId]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const followName = follow ? teamNamePt(follow, follow) : null;
-  const toggleFollow = (code: string) =>
-    setFollow((f) => (f === code ? null : code));
+  const toggleFollow = (code: string) => setFollow((f) => (f === code ? null : code));
+
+  const onVoted = () => {
+    if (activeId) void loadEntries(activeId);
+    void loadCounts();
+  };
 
   return (
     <>
@@ -184,14 +201,14 @@ export default function Home() {
 
         {!loading && view === "live" && (
           <LiveView
-            liveMatches={liveMatches}
-            selected={selectedIndex}
-            onSelect={(i) => setSelectedId(liveMatches[i]?.id ?? null)}
+            chips={chips}
+            selectedId={activeId}
+            onSelect={setSelectedId}
             panel={panel}
             onPanel={setPanel}
             lineups={lineups}
             entries={entries}
-            onVoted={() => selectedMatchId && loadEntries(selectedMatchId)}
+            onVoted={onVoted}
             followCode={follow}
             groupByTeam={groupByTeam}
           />

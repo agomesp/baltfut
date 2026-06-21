@@ -11,18 +11,14 @@ import {
   type VoteEntry,
   type PredictionStatus,
 } from "@/lib/votes";
+import type { ChipPhase } from "@/lib/chips";
 import { MONO } from "@/components/primitives";
-
-const STATUS_LABEL: Record<PredictionStatus, string> = {
-  winning: "Ganhando",
-  can: "Pode ganhar",
-  losing: "Perdendo",
-};
 
 export interface PredictionPanelProps {
   match: Match;
   entries: VoteEntry[];
   current: { home: number; away: number };
+  phase: ChipPhase;
   onVoted: () => void;
   /** Injectable for tests; defaults to the live Edge Function call. */
   transport?: CastVoteTransport;
@@ -40,10 +36,42 @@ const inputStyle = {
   width: "100%",
 } as const;
 
+function rowDisplay(phase: ChipPhase, status: PredictionStatus) {
+  if (phase === "post") {
+    const won = status === "winning";
+    return {
+      label: won ? "Acertou" : "Errou",
+      tagColor: won ? "var(--signal-strong)" : "var(--ink-3)",
+      rowBg: won ? "var(--signal-tint)" : "transparent",
+      nameColor: won ? "var(--ink)" : "var(--ink-3)",
+      numColor: won ? "var(--signal-strong)" : "var(--ink-3)",
+    };
+  }
+  if (phase === "pre") {
+    return {
+      label: "",
+      tagColor: "var(--ink-3)",
+      rowBg: "transparent",
+      nameColor: "var(--ink)",
+      numColor: "var(--ink-2)",
+    };
+  }
+  const win = status === "winning";
+  const lose = status === "losing";
+  return {
+    label: win ? "Ganhando" : lose ? "Perdendo" : "Pode ganhar",
+    tagColor: win ? "var(--signal-strong)" : "var(--ink-3)",
+    rowBg: win ? "var(--signal-tint)" : "transparent",
+    nameColor: lose ? "var(--ink-3)" : "var(--ink)",
+    numColor: lose ? "var(--ink-3)" : "var(--signal-strong)",
+  };
+}
+
 export function PredictionPanel({
   match,
   entries,
   current,
+  phase,
   onVoted,
   transport = supabaseCastVote,
 }: PredictionPanelProps) {
@@ -54,6 +82,12 @@ export function PredictionPanel({
   const [outcome, setOutcome] = useState<SubmitOutcome | null>(null);
 
   const ranked = rankPredictions(entries, current);
+  const open = phase !== "post"; // finished games are read-only (winners shown)
+  const title = phase === "post" ? "Vencedores dos palpites" : "Palpite o placar";
+  const emptyText =
+    phase === "post"
+      ? "Ninguém palpitou esta partida."
+      : "Nenhum palpite ainda. Seja o primeiro.";
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -82,63 +116,51 @@ export function PredictionPanel({
     <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "14px 18px 0" }}>
         <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--ink-2)" }}>
-          Palpite o placar
+          {title}
         </span>
         <span style={{ fontFamily: MONO, fontSize: 11, color: "var(--ink-3)" }}>
           {ranked.length ? `${ranked.length} palpites` : ""}
         </span>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ padding: "14px 18px 16px", display: "flex", flexDirection: "column", gap: 12, borderBottom: "1px solid var(--line)" }}>
-        <input
-          value={user}
-          onChange={(e) => setUser(e.target.value)}
-          placeholder="Seu nome"
-          maxLength={24}
-          autoComplete="off"
-          aria-label="Seu nome"
-          style={inputStyle}
-        />
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ flex: "0 0 auto", fontFamily: MONO, fontWeight: 500, fontSize: 15, color: "var(--ink)" }}>{match.home.abbreviation}</span>
-          <input value={home} onChange={(e) => setHome(digits(e.target.value))} inputMode="numeric" placeholder="0" aria-label={`Gols ${match.home.abbreviation}`} style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, textAlign: "center", fontFamily: MONO, fontSize: 16, padding: "9px 4px" }} />
-          <span style={{ flex: "0 0 auto", fontFamily: MONO, fontSize: 13, color: "var(--ink-3)" }}>x</span>
-          <input value={away} onChange={(e) => setAway(digits(e.target.value))} inputMode="numeric" placeholder="0" aria-label={`Gols ${match.away.abbreviation}`} style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, textAlign: "center", fontFamily: MONO, fontSize: 16, padding: "9px 4px" }} />
-          <span style={{ flex: "0 0 auto", fontFamily: MONO, fontWeight: 500, fontSize: 15, color: "var(--ink)" }}>{match.away.abbreviation}</span>
-        </div>
-        <button
-          type="submit"
-          disabled={submitting}
-          style={{ fontFamily: MONO, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--signal-ink)", background: "var(--signal)", border: "none", borderRadius: 4, padding: "10px 12px", cursor: "pointer", opacity: submitting ? 0.7 : 1 }}
-        >
-          {submitting ? "Enviando…" : "Enviar palpite"}
-        </button>
-        {outcome && !outcome.ok ? (
-          <span role="alert" style={{ fontSize: 12, color: "#e5484d" }}>{outcome.message}</span>
-        ) : null}
-        {outcome?.ok ? (
-          <span style={{ fontSize: 12, color: "var(--signal-strong)" }}>Palpite enviado!</span>
-        ) : null}
-      </form>
+      {open ? (
+        <form onSubmit={handleSubmit} style={{ padding: "14px 18px 16px", display: "flex", flexDirection: "column", gap: 12, borderBottom: "1px solid var(--line)" }}>
+          <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="Seu nome" maxLength={24} autoComplete="off" aria-label="Seu nome" style={inputStyle} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ flex: "0 0 auto", fontFamily: MONO, fontWeight: 500, fontSize: 15, color: "var(--ink)" }}>{match.home.abbreviation}</span>
+            <input value={home} onChange={(e) => setHome(digits(e.target.value))} inputMode="numeric" placeholder="0" aria-label={`Gols ${match.home.abbreviation}`} style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, textAlign: "center", fontFamily: MONO, fontSize: 16, padding: "9px 4px" }} />
+            <span style={{ flex: "0 0 auto", fontFamily: MONO, fontSize: 13, color: "var(--ink-3)" }}>x</span>
+            <input value={away} onChange={(e) => setAway(digits(e.target.value))} inputMode="numeric" placeholder="0" aria-label={`Gols ${match.away.abbreviation}`} style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, textAlign: "center", fontFamily: MONO, fontSize: 16, padding: "9px 4px" }} />
+            <span style={{ flex: "0 0 auto", fontFamily: MONO, fontWeight: 500, fontSize: 15, color: "var(--ink)" }}>{match.away.abbreviation}</span>
+          </div>
+          <button type="submit" disabled={submitting} style={{ fontFamily: MONO, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--signal-ink)", background: "var(--signal)", border: "none", borderRadius: 4, padding: "10px 12px", cursor: "pointer", opacity: submitting ? 0.7 : 1 }}>
+            {submitting ? "Enviando…" : "Enviar palpite"}
+          </button>
+          {outcome && !outcome.ok ? (
+            <span role="alert" style={{ fontSize: 12, color: "#e5484d" }}>{outcome.message}</span>
+          ) : null}
+          {outcome?.ok ? (
+            <span style={{ fontSize: 12, color: "var(--signal-strong)" }}>Palpite enviado!</span>
+          ) : null}
+        </form>
+      ) : null}
 
       <div style={{ flex: "1 1 auto", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10, overflowY: "auto", maxHeight: 420 }}>
         {ranked.length === 0 ? (
-          <span style={{ fontSize: 13, color: "var(--ink-3)" }}>Nenhum palpite ainda. Seja o primeiro.</span>
+          <span style={{ fontSize: 13, color: "var(--ink-3)" }}>{emptyText}</span>
         ) : (
           ranked.map((v, i) => {
-            const win = v.status === "winning";
-            const lose = v.status === "losing";
-            const numColor = lose ? "var(--ink-3)" : "var(--signal-strong)";
+            const d = rowDisplay(phase, v.status);
             return (
-              <div key={`${v.username}-${i}`} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "7px 8px 9px", borderRadius: 4, borderBottom: "1px solid var(--line)", background: win ? "var(--signal-tint)" : "transparent" }}>
+              <div key={`${v.username}-${i}`} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "7px 8px 9px", borderRadius: 4, borderBottom: "1px solid var(--line)", background: d.rowBg }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <span style={{ fontSize: 13, color: lose ? "var(--ink-3)" : "var(--ink)" }}>{v.username}</span>
-                  <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: win ? "var(--signal-strong)" : "var(--ink-3)" }}>
-                    {STATUS_LABEL[v.status]}
-                  </span>
+                  <span style={{ fontSize: 13, color: d.nameColor }}>{v.username}</span>
+                  {d.label ? (
+                    <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: d.tagColor }}>{d.label}</span>
+                  ) : null}
                 </div>
-                <span style={{ fontFamily: MONO, fontSize: 13, color: lose ? "var(--ink-3)" : "var(--ink-2)" }}>
-                  {match.home.abbreviation} [<span style={{ color: numColor }}>{v.predHome}</span>] x [<span style={{ color: numColor }}>{v.predAway}</span>] {match.away.abbreviation}
+                <span style={{ fontFamily: MONO, fontSize: 13, color: d.nameColor === "var(--ink-3)" ? "var(--ink-3)" : "var(--ink-2)" }}>
+                  {match.home.abbreviation} [<span style={{ color: d.numColor }}>{v.predHome}</span>] x [<span style={{ color: d.numColor }}>{v.predAway}</span>] {match.away.abbreviation}
                 </span>
               </div>
             );
