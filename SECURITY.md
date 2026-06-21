@@ -9,7 +9,7 @@ control and the only write path is server-side and rate-limited.
 
 | Actor | Can do | Cannot do |
 | --- | --- | --- |
-| Anonymous visitor (browser, anon key) | Read live scores from ESPN; read **public** vote columns + `vote_results` / `vote_entries` views | Read `id` or `ip_hash`; insert / update / delete votes directly |
+| Anonymous visitor (browser, anon key) | Read scores/standings/lineups from ESPN; read **public** vote columns + the `vote_entries` view | Read `id` or `ip_hash`; insert / update / delete votes directly |
 | `cast-vote` Edge Function (service_role) | Insert validated votes; derive + store the IP hash | — |
 | `service_role` key | Full DB access | Never shipped to the browser; lives only in the function + CI secrets |
 
@@ -29,13 +29,13 @@ Defined in `supabase/migrations/*_create_votes.sql`:
 
 - RLS is **enabled and forced** on `public.votes`.
 - `anon`/`authenticated` get **column-level** `SELECT` on public columns only
-  (`match_id, league, username, preferred_side, preferred_team_abbr, pred_home,
-  pred_away, created_at`) — **never** `id` or `ip_hash` — plus a read policy.
+  (`match_id, league, username, pred_home, pred_away, created_at`) — **never**
+  `id` or `ip_hash` — plus a read policy.
 - **No** insert/update/delete grant or policy for `anon` → all writes are
   impossible except through the Edge Function (service_role, which bypasses RLS).
-- `vote_results` and `vote_entries` are `security_invoker = true` views, so they
-  run with the caller's grants and physically cannot return `ip_hash`. (No
-  `SECURITY DEFINER` views, which would bypass RLS.)
+- `vote_entries` is a `security_invoker = true` view, so it runs with the
+  caller's grants and physically cannot return `ip_hash`. (No `SECURITY DEFINER`
+  views, which would bypass RLS.)
 - CHECK constraints (score range, side enum, safe username, slug/id formats) are
   DB-level defense-in-depth, duplicating the app/function validation.
 - `UNIQUE(match_id, ip_hash)` enforces one vote per IP per match.

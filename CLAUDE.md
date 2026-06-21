@@ -25,19 +25,26 @@ gate.
 
 ## Architecture map
 
-- `src/lib/espn/` — ESPN client + zod-validated parser → normalized `Match`.
-  Keyless, CORS-open; fetched directly from the browser.
-- `supabase/functions/_shared/vote.ts` — **canonical** vote zod schema +
-  `validateVote`. Imported by the client (`@shared/*` alias) AND the Deno
-  function. One source of truth; don't fork it.
+- `src/lib/espn/` — zod-validated ESPN data (keyless, CORS-open, browser-direct):
+  `client` (scoreboard, `dates` range), `parse` (Match + venue + goal scorers),
+  `standings` (12 groups + teamGroupMap), `lineups` (summary → XI), `bracket`
+  (schematic). All TDD'd against fixtures.
+- `supabase/functions/_shared/vote.ts` — **canonical** prediction zod schema
+  (name + predicted score) + `validateVote`. Imported by the client (`@shared/*`)
+  AND the Deno function. One source of truth; don't fork it.
 - `supabase/functions/_shared/{ip,cors}.ts` — server-side IP hashing + CORS
   allow-list (pure, unit-tested in Node).
 - `supabase/functions/cast-vote/index.ts` — Deno handler; the ONLY writer to
   `votes` (service_role). Excluded from app `tsc`; checked via `deno check`.
 - `src/lib/supabase/client.ts` — browser client (anon key; null when unconfigured).
-- `src/lib/votes/` — `submitVote` (injectable transport), result mappers,
-  fetchers, and the app re-export barrel.
-- `src/components/` — `MatchCard`, `VoteForm`. `src/app/page.tsx` wires them.
+- `src/lib/votes/` — `submitVote` (injectable transport), `fetchVoteEntries`
+  (predictions feed), `classifyPrediction`/`rankPredictions` (live winning/
+  can-win/losing), barrel.
+- `src/lib/format.ts` — pt-BR date/time + day grouping in BRT (`America/Sao_Paulo`).
+- `src/lib/team-names.ts` — pt-BR country names by FIFA code (English fallback).
+- `src/components/` — `header` + the 5 views (`live-view`, `fixtures-view`,
+  `groups-view`, `results-view`, `bracket-view`) + `prediction-panel`,
+  `primitives`, `match-meta`. `src/app/page.tsx` orchestrates state + fetching.
 - `supabase/migrations/*_create_votes.sql` — schema + RLS.
 
 ## Security invariants — do NOT break
@@ -66,10 +73,12 @@ Changes to any of these: re-run `scripts/db/` assertions (CI `database` job does
 
 ## Pending / next
 
-- **A custom HTML design is incoming** — current UI (`MatchCard`/`VoteForm`/
-  page) is a functional placeholder to be restyled. Keep the data layer + the
-  security model; swap the presentation.
+- The 5-tab design handoff is **applied** (pt-BR, Allan Gomes design system,
+  dark/light, follow-team). UI is custom inline-styled (no shadcn).
 - Vote integrity is the **basic** tier. Strong tier (Cloudflare Turnstile +
   trusted IP) is the planned hardening; write path already routes through the
   function so it's additive.
 - ESPN league is `fifa.world` by default; multi-league is a small extension.
+- Bracket is schematic (placeholders) per the design — wire to a real bracket
+  endpoint once the group stage resolves. Goal scorers come from the scoreboard
+  `details`; lineups from the summary endpoint (may be absent pre-match).
