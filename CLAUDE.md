@@ -71,6 +71,22 @@ Changes to any of these: re-run `scripts/db/` assertions (CI `database` job does
 - `postcss` is pinned via `overrides` (>=8.5.10) to keep `npm audit` clean
   without downgrading Next.
 
+## Deployment (LIVE)
+
+- Repo: https://github.com/agomesp/baltfut (public). Site:
+  https://agomesp.github.io/baltfut/ (Pages, source = GitHub Actions).
+- Push to `main` → CI runs and Pages auto-deploys (anon Supabase env from repo
+  secrets; basePath `/baltfut`).
+- Supabase project is linked; the `votes` migration is **applied to prod** and
+  `cast-vote` is deployed. Verified on prod: anon reads `vote_entries`, is denied
+  `ip_hash` + direct writes; function gateway accepts the `sb_publishable_…` key
+  with `verify_jwt=true`; CORS locked to the Pages origin.
+- **The initial migration is now deployed — treat it as immutable.** Schema
+  changes go in NEW `supabase/migrations/*.sql` files; then run the **Deploy
+  Supabase** workflow (`gh workflow run deploy-supabase.yml`, manual).
+- Repo secrets set: NEXT_PUBLIC_SUPABASE_URL/ANON_KEY, SUPABASE_PROJECT_REF/
+  ACCESS_TOKEN/DB_PASSWORD, VOTE_IP_PEPPER, ALLOWED_ORIGINS.
+
 ## Pending / next
 
 - The 5-tab design handoff is **applied** (pt-BR, Allan Gomes design system,
