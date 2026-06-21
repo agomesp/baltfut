@@ -93,8 +93,10 @@ Deno.serve(async (req: Request) => {
   if (error) {
     // 23505 = unique_violation: either one-per-IP or one-name-per-match.
     if (error.code === "23505") {
+      // PostgREST puts the violated columns in `details` (e.g. "lower(username)")
+      // and may omit the index name, so match on the column too.
       const blob = `${error.message ?? ""} ${error.details ?? ""}`;
-      const nameTaken = blob.includes("one_name");
+      const nameTaken = blob.includes("one_name") || blob.includes("username");
       return json(
         {
           error: nameTaken
