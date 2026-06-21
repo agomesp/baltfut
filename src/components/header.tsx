@@ -54,7 +54,7 @@ export function Header({
         <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
             <span style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 25, letterSpacing: "-0.025em", lineHeight: 1 }}>
-              Copa&nbsp;do&nbsp;Mundo
+              BaltFut&nbsp;-&nbsp;Copa&nbsp;do&nbsp;Mundo
             </span>
             <span style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 25, letterSpacing: "-0.025em", lineHeight: 1, color: "var(--signal)" }}>
               26.

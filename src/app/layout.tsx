@@ -20,7 +20,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Copa do Mundo 26 — placar ao vivo & palpites",
+  title: "BaltFut - Copa do Mundo 26 · placar ao vivo & palpites",
   description:
     "Placares ao vivo da Copa do Mundo, tabelas dos grupos, jogos, resultados, chaveamento — e palpite o placar das partidas.",
 };

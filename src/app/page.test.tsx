@@ -24,7 +24,7 @@ describe("Home page", () => {
 
   it("renders the header wordmark and tab nav", async () => {
     render(<Home />);
-    expect(await screen.findByText("Copa do Mundo")).toBeInTheDocument();
+    expect(await screen.findByText("BaltFut - Copa do Mundo")).toBeInTheDocument();
     expect(screen.getByText("Ao vivo")).toBeInTheDocument();
     expect(screen.getByText("Chaveamento")).toBeInTheDocument();
   });
