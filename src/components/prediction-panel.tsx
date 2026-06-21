@@ -88,14 +88,9 @@ export function PredictionPanel({
 
   const open = isPalpiteOpen(closesAt, now);
   const remaining = closesAt - now;
-  // Only count palpites placed before the deadline (drop any late/bypassed ones).
-  const validEntries = Number.isNaN(closesAt)
-    ? entries
-    : entries.filter((e) => {
-        const c = Date.parse(e.createdAt);
-        return Number.isNaN(c) || c <= closesAt;
-      });
-  const ranked = rankPredictions(validEntries, current);
+  // Show every palpite for the match here (live standings). The deadline filter
+  // for integrity lives in the Ranking (rankSubs), not in this display list.
+  const ranked = rankPredictions(entries, current);
 
   const title = open
     ? "Palpite o placar"
