@@ -86,7 +86,10 @@ export function PredictionPanel({
   // and the form locks at the deadline even after the tab was backgrounded.
   const now = useNow(1000);
 
-  // Remember the palpiteiro's name across matches and sessions.
+  const draftKey = `baltfut_draft:${match.id}`;
+
+  // Restore the saved name (global) and any in-progress score draft for THIS match
+  // so a reload (auto-refresh / Modo Streamer) mid-typing doesn't lose the input.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     try {
@@ -95,8 +98,37 @@ export function PredictionPanel({
     } catch {
       /* ignore */
     }
-  }, []);
+    let h = "";
+    let a = "";
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (typeof d.home === "string") h = d.home;
+        if (typeof d.away === "string") a = d.away;
+      }
+    } catch {
+      /* ignore */
+    }
+    setHome(h);
+    setAway(a);
+  }, [draftKey]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Persist the draft a beat after typing stops.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      try {
+        const name = user.trim();
+        if (name) localStorage.setItem("baltfut_name", name);
+        if (home || away) localStorage.setItem(draftKey, JSON.stringify({ home, away }));
+        else localStorage.removeItem(draftKey);
+      } catch {
+        /* ignore */
+      }
+    }, 600);
+    return () => window.clearTimeout(id);
+  }, [user, home, away, draftKey]);
 
   const open = isPalpiteOpen(closesAt, now);
   const remaining = closesAt - now;
@@ -141,6 +173,7 @@ export function PredictionPanel({
     if (result.ok) {
       try {
         localStorage.setItem("baltfut_name", name);
+        localStorage.removeItem(draftKey);
       } catch {
         /* ignore */
       }

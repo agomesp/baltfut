@@ -4,7 +4,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { UpdateBanner } from "@/components/update-banner";
 import { TabKeepAlive } from "@/components/tab-keepalive";
-import { KioskReload } from "@/components/kiosk-reload";
+import { ModoStreamer } from "@/components/modo-streamer";
 
 // Flags-only webfont so country-flag emoji render on Windows/Edge (whose system
 // emoji font omits flags, showing the 2-letter code instead). Only flag glyphs
@@ -57,7 +57,7 @@ export default function RootLayout({
         {children}
         <UpdateBanner />
         <TabKeepAlive />
-        <KioskReload />
+        <ModoStreamer />
       </body>
     </html>
   );
