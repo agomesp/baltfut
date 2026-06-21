@@ -28,6 +28,10 @@ const PT_BR: Record<string, string> = {
   BIH: "Bósnia e Herzegovina",
   SCO: "Escócia",
   WAL: "País de Gales",
+  SWE: "Suécia",
+  POL: "Polônia",
+  GRE: "Grécia",
+  IRL: "Irlanda",
   // CONMEBOL
   ARG: "Argentina",
   BRA: "Brasil",
@@ -48,6 +52,9 @@ const PT_BR: Record<string, string> = {
   GHA: "Gana",
   CMR: "Camarões",
   RSA: "África do Sul",
+  CPV: "Cabo Verde",
+  CUW: "Curaçao",
+  HAI: "Haiti",
   // AFC
   JPN: "Japão",
   KOR: "Coreia do Sul",

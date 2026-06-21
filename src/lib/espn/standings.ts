@@ -55,19 +55,43 @@ export function parseStandings(raw: unknown): Group[] {
   const root = rootSchema.safeParse(raw);
   if (!root.success) return [];
 
-  return root.data.children.map((g) => ({
-    letter: letterFromName(g.name),
-    name: g.name,
-    rows: g.standings.entries.map((e, i) => ({
-      rank: i + 1,
-      code: e.team.abbreviation,
-      name: e.team.displayName,
-      played: Number.parseInt(statValue(e.stats, "gamesPlayed"), 10) || 0,
-      gd: statValue(e.stats, "pointDifferential") || "0",
-      points: Number.parseInt(statValue(e.stats, "points"), 10) || 0,
-      advanced: /advanc/i.test(e.note?.description ?? "") || i < 2,
-    })),
-  }));
+  return root.data.children.map((g) => {
+    // ESPN does not return entries in standings order — sort by points, then
+    // goal difference, then code, and assign rank from that.
+    const ranked = g.standings.entries
+      .map((e) => {
+        const gd = statValue(e.stats, "pointDifferential") || "0";
+        return {
+          code: e.team.abbreviation,
+          name: e.team.displayName,
+          played: Number.parseInt(statValue(e.stats, "gamesPlayed"), 10) || 0,
+          gd,
+          gdNum: Number(gd) || 0,
+          points: Number.parseInt(statValue(e.stats, "points"), 10) || 0,
+          noteAdvanced: /advanc/i.test(e.note?.description ?? ""),
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.points - a.points ||
+          b.gdNum - a.gdNum ||
+          a.code.localeCompare(b.code),
+      );
+
+    return {
+      letter: letterFromName(g.name),
+      name: g.name,
+      rows: ranked.map((r, i) => ({
+        rank: i + 1,
+        code: r.code,
+        name: r.name,
+        played: r.played,
+        gd: r.gd,
+        points: r.points,
+        advanced: r.noteAdvanced || i < 2,
+      })),
+    };
+  });
 }
 
 /** code -> group letter, for highlighting a followed team and labelling matches. */

@@ -21,6 +21,25 @@ describe("parseStandings", () => {
     expect(a.rows.map((r) => r.advanced)).toEqual([true, true, false, false]);
   });
 
+  it("sorts rows by points then goal difference (ESPN order is unsorted)", () => {
+    const groups = parseStandings({
+      children: [
+        {
+          name: "Group Z",
+          standings: {
+            entries: [
+              { team: { abbreviation: "LOW", displayName: "Low" }, stats: [{ name: "points", displayValue: "1" }, { name: "pointDifferential", displayValue: "-2" }] },
+              { team: { abbreviation: "TOP", displayName: "Top" }, stats: [{ name: "points", displayValue: "6" }, { name: "pointDifferential", displayValue: "+4" }] },
+              { team: { abbreviation: "MID", displayName: "Mid" }, stats: [{ name: "points", displayValue: "3" }, { name: "pointDifferential", displayValue: "0" }] },
+            ],
+          },
+        },
+      ],
+    });
+    expect(groups[0].rows.map((r) => r.code)).toEqual(["TOP", "MID", "LOW"]);
+    expect(groups[0].rows.map((r) => r.rank)).toEqual([1, 2, 3]);
+  });
+
   it("returns [] for non-conforming input", () => {
     expect(parseStandings(null)).toEqual([]);
     expect(parseStandings({})).toEqual([]);
