@@ -1,0 +1,158 @@
+{
+  "leagues": [
+    {
+      "id": "606",
+      "name": "FIFA World Cup",
+      "abbreviation": "FIFA World Cup",
+      "slug": "fifa.world"
+    }
+  ],
+  "events": [
+    {
+      "id": "1001",
+      "date": "2026-06-22T18:00Z",
+      "name": "Brazil at Argentina",
+      "shortName": "BRA @ ARG",
+      "status": {
+        "type": {
+          "state": "pre",
+          "completed": false,
+          "detail": "Mon, June 22nd at 6:00 PM",
+          "shortDetail": "6/22 - 6:00 PM"
+        }
+      },
+      "competitions": [
+        {
+          "id": "1001",
+          "competitors": [
+            {
+              "homeAway": "home",
+              "score": "0",
+              "team": {
+                "id": "202",
+                "displayName": "Argentina",
+                "abbreviation": "ARG",
+                "logo": "https://a.espncdn.com/i/teamlogos/countries/500/arg.png"
+              }
+            },
+            {
+              "homeAway": "away",
+              "score": "0",
+              "team": {
+                "id": "205",
+                "displayName": "Brazil",
+                "abbreviation": "BRA",
+                "logo": "https://a.espncdn.com/i/teamlogos/countries/500/bra.png"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1002",
+      "date": "2026-06-21T16:00Z",
+      "name": "Germany at France",
+      "shortName": "GER @ FRA",
+      "status": {
+        "displayClock": "62'",
+        "period": 2,
+        "type": {
+          "state": "in",
+          "completed": false,
+          "detail": "62'",
+          "shortDetail": "62'"
+        }
+      },
+      "competitions": [
+        {
+          "id": "1002",
+          "competitors": [
+            {
+              "homeAway": "away",
+              "score": "2",
+              "team": {
+                "id": "503",
+                "displayName": "Germany",
+                "abbreviation": "GER",
+                "logo": "https://a.espncdn.com/i/teamlogos/countries/500/ger.png"
+              }
+            },
+            {
+              "homeAway": "home",
+              "score": "1",
+              "team": {
+                "id": "478",
+                "displayName": "France",
+                "abbreviation": "FRA",
+                "logo": "https://a.espncdn.com/i/teamlogos/countries/500/fra.png"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1003",
+      "date": "2026-06-21T04:00Z",
+      "name": "Italy at Spain",
+      "shortName": "ITA @ ESP",
+      "status": {
+        "type": {
+          "state": "post",
+          "completed": true,
+          "detail": "Full Time",
+          "shortDetail": "FT"
+        }
+      },
+      "competitions": [
+        {
+          "id": "1003",
+          "competitors": [
+            {
+              "homeAway": "home",
+              "score": "3",
+              "winner": true,
+              "team": {
+                "id": "164",
+                "displayName": "Spain",
+                "abbreviation": "ESP",
+                "logo": "https://a.espncdn.com/i/teamlogos/countries/500/esp.png"
+              }
+            },
+            {
+              "homeAway": "away",
+              "score": "1",
+              "winner": false,
+              "team": {
+                "id": "162",
+                "displayName": "Italy",
+                "abbreviation": "ITA",
+                "logo": "https://a.espncdn.com/i/teamlogos/countries/500/ita.png"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1004",
+      "date": "2026-06-23T18:00Z",
+      "name": "Malformed Fixture",
+      "shortName": "BAD",
+      "status": { "type": { "state": "pre", "completed": false, "shortDetail": "TBD" } },
+      "competitions": [
+        {
+          "id": "1004",
+          "competitors": [
+            {
+              "homeAway": "home",
+              "score": "0",
+              "team": { "id": "999", "displayName": "Only One Team", "abbreviation": "ONE" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
