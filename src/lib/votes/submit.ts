@@ -26,7 +26,7 @@ export async function submitVote(
   if (!validated.success || !validated.data) {
     return {
       ok: false,
-      message: "Please fix the highlighted fields.",
+      message: "Corrija os campos destacados.",
       fields: validated.errors,
     };
   }
@@ -35,7 +35,7 @@ export async function submitVote(
   try {
     res = await transport(validated.data);
   } catch {
-    return { ok: false, message: "Network error — please try again." };
+    return { ok: false, message: "Erro de rede — tente novamente." };
   }
 
   if (res.status === 200 || res.status === 201) {
@@ -45,7 +45,7 @@ export async function submitVote(
     return {
       ok: false,
       status: 409,
-      message: "You have already voted on this match.",
+      message: "Você já palpitou nesta partida.",
     };
   }
 
@@ -54,13 +54,13 @@ export async function submitVote(
     return {
       ok: false,
       status: 422,
-      message: body.error ?? "Validation failed.",
+      message: body.error ?? "Falha na validação.",
       fields: body.fields,
     };
   }
   return {
     ok: false,
     status: res.status,
-    message: body.error ?? "Could not record your vote. Please try again.",
+    message: body.error ?? "Não foi possível registrar seu palpite. Tente novamente.",
   };
 }

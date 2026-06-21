@@ -12,7 +12,7 @@ import type { CastVoteTransport } from "@/lib/votes/submit";
 export const supabaseCastVote: CastVoteTransport = async (body) => {
   const client = getSupabaseClient();
   if (!client) {
-    return { status: 0, body: { error: "Voting is not configured." } };
+    return { status: 0, body: { error: "Votação não configurada." } };
   }
 
   const { data, error } = await client.functions.invoke("cast-vote", { body });

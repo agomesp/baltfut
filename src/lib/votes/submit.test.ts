@@ -32,7 +32,7 @@ describe("submitVote", () => {
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) {
       expect(outcome.status).toBe(409);
-      expect(outcome.message).toMatch(/already voted/i);
+      expect(outcome.message).toMatch(/já palpitou/i);
     }
   });
 
@@ -52,6 +52,6 @@ describe("submitVote", () => {
     });
     const outcome = await submitVote(validInput, transport);
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.message).toMatch(/network/i);
+    if (!outcome.ok) expect(outcome.message).toMatch(/rede/i);
   });
 });
