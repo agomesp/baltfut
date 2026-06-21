@@ -74,10 +74,16 @@ export function ModoStreamer() {
     }
   }, []);
 
-  // Reschedule the reload. Always on while enabled — not gated on visibility.
+  // Reschedule the reload — but ONLY while the window is visible. Reloading a
+  // window that's covered (another app fullscreen / fully occluded) blanks the
+  // OBS capture to grey, because the browser won't paint the freshly-loaded
+  // document while it's hidden. So when hidden we keep the last painted frame
+  // (like a page that never reloads) and resume reloading — picking up new
+  // builds + fresh data — the moment it's visible again.
   const apply = useCallback(() => {
     clearReload();
     if (!onRef.current) return;
+    if (document.hidden) return;
     timerRef.current = window.setTimeout(() => {
       saveScroll();
       reloadFresh();
@@ -120,6 +126,7 @@ export function ModoStreamer() {
         bumpActive();
         saveScroll();
       }
+      apply(); // schedule the reload when visible, cancel it when covered/hidden
     };
 
     if (document.hasFocus()) bumpActive();
