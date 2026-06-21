@@ -203,7 +203,7 @@ export function LiveView({
         </div>
       ) : (
         <>
-          <ChipCarousel chips={chips} selectedId={selected.match.id} onSelect={onSelect} />
+          <ChipCarousel chips={chips} selectedId={selected.match.id} onSelect={onSelect} releasedIds={releasedIds} />
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "stretch" }}>
             <div style={{ ...cardStyle, flex: "1 1 280px", minWidth: 260, display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", gap: 8, padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>

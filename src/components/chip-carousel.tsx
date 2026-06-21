@@ -9,6 +9,8 @@ export interface ChipCarouselProps {
   chips: ChipGame[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  /** Matches currently open for palpites (current + next group). */
+  releasedIds: Set<string>;
 }
 
 const chevronStyle: CSSProperties = {
@@ -33,7 +35,7 @@ function chipLabel(chip: ChipGame): string {
   return `${m.home.abbreviation} ${m.homeScore ?? 0}–${m.awayScore ?? 0} ${m.away.abbreviation}`;
 }
 
-export function ChipCarousel({ chips, selectedId, onSelect }: ChipCarouselProps) {
+export function ChipCarousel({ chips, selectedId, onSelect, releasedIds }: ChipCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scroll = (dir: number) =>
@@ -66,6 +68,13 @@ export function ChipCarousel({ chips, selectedId, onSelect }: ChipCarouselProps)
         {chips.map((chip) => {
           const active = chip.match.id === selectedId;
           const isPost = chip.phase === "post";
+          // Highlight the live match (solid green) and the next/open matches
+          // (dotted green) when they aren't the selected chip.
+          const isLiveChip = chip.phase === "live";
+          const isNextChip = chip.phase === "pre" && releasedIds.has(chip.match.id);
+          const borderColor =
+            active || isLiveChip || isNextChip ? "var(--signal)" : "var(--line-2)";
+          const borderStyle = !active && isNextChip ? "dotted" : "solid";
           return (
             <button
               key={chip.match.id}
@@ -85,7 +94,7 @@ export function ChipCarousel({ chips, selectedId, onSelect }: ChipCarouselProps)
                   : isPost
                     ? "var(--ink-3)"
                     : "var(--ink-2)",
-                border: `1px solid ${active ? "var(--signal)" : "var(--line-2)"}`,
+                border: `1px ${borderStyle} ${borderColor}`,
                 borderRadius: 999,
                 padding: "8px 14px",
                 cursor: "pointer",
