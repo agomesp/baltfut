@@ -70,6 +70,13 @@ Changes to any of these: re-run `scripts/db/` assertions (CI `database` job does
   `mock.calls`.
 - `postcss` is pinned via `overrides` (>=8.5.10) to keep `npm audit` clean
   without downgrading Next.
+- **Grants gotcha (bit us once):** the Supabase project has "Automatically
+  expose new tables" OFF, so a NEW table gets ZERO grants by default — not even
+  to `service_role`. `BYPASSRLS` skips RLS *policies*, NOT table-level GRANTs, so
+  the Edge Function (service_role) needs an explicit `grant ... on <table> to
+  service_role`, and anon needs explicit column grants. Every new table/migration
+  must grant both. `scripts/db/rls_roles.sql` intentionally does NOT pre-grant
+  service_role so the assertions mirror prod and catch a missing grant.
 
 ## Deployment (LIVE)
 
