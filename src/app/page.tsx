@@ -82,6 +82,53 @@ export default function Home() {
     }
   }, [follow]);
 
+  // ---- seamless reload: restore the tab, selected match, and last data --------
+  // Modo Streamer reloads the page periodically; hydrating from a sessionStorage
+  // snapshot means it comes back on the same tab/match with content already shown
+  // (no "Carregando…" flash, no jump to AO VIVO) before the fresh fetch lands.
+  const VIEW_KEYS: ViewKey[] = ["live", "matches", "groups", "results", "bracket", "ranking"];
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    try {
+      const v = sessionStorage.getItem("baltfut_view");
+      if (v && (VIEW_KEYS as string[]).includes(v)) setView(v as ViewKey);
+      const sel = sessionStorage.getItem("baltfut_selected");
+      if (sel) setSelectedId(sel);
+      const raw = sessionStorage.getItem("baltfut_cache");
+      if (raw) {
+        const c = JSON.parse(raw);
+        if (Array.isArray(c.matches) && c.matches.length) {
+          setMatches(c.matches);
+          setGroups(Array.isArray(c.groups) ? c.groups : []);
+          setVoteCounts(c.voteCounts ?? {});
+          setEntries(Array.isArray(c.entries) ? c.entries : []);
+          setAllEntries(Array.isArray(c.allEntries) ? c.allEntries : []);
+          setLoading(false); // show cached content instantly; fresh data updates in place
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("baltfut_view", view);
+    } catch {
+      /* ignore */
+    }
+  }, [view]);
+  useEffect(() => {
+    try {
+      if (selectedId) sessionStorage.setItem("baltfut_selected", selectedId);
+      else sessionStorage.removeItem("baltfut_selected");
+    } catch {
+      /* ignore */
+    }
+  }, [selectedId]);
+
   // ---- data: scoreboard + standings + vote counts -------------------------
   const loadCounts = useCallback(async () => {
     const client = getSupabaseClient();
@@ -123,6 +170,20 @@ export default function Home() {
     };
   }, [loadAll]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Snapshot the latest data so the next (Modo Streamer) reload can paint it
+  // instantly instead of the empty loading state.
+  useEffect(() => {
+    if (loading) return;
+    try {
+      sessionStorage.setItem(
+        "baltfut_cache",
+        JSON.stringify({ matches, groups, voteCounts, entries, allEntries }),
+      );
+    } catch {
+      /* quota / serialization — non-fatal */
+    }
+  }, [loading, matches, groups, voteCounts, entries, allEntries]);
 
   // ---- derived ------------------------------------------------------------
   const upcoming = useMemo(
