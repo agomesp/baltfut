@@ -1,34 +1,46 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Space_Grotesk, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const display = Space_Grotesk({
   subsets: ["latin"],
+  weight: ["500"],
+  variable: "--font-display",
 });
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const body = IBM_Plex_Sans({
   subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-body",
+});
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
 });
 
 export const metadata: Metadata = {
-  title: "baltfut — live soccer scores & crowd predictions",
+  title: "Copa do Mundo 26 — placar ao vivo & palpites",
   description:
-    "Live soccer scores with community win predictions. Vote your pick and score.",
+    "Placares ao vivo da Copa do Mundo, tabelas dos grupos, jogos, resultados, chaveamento — e palpite o placar das partidas.",
 };
+
+// Apply the saved theme before paint to avoid a flash. Dark is the default.
+const themeScript = `try{var t=localStorage.getItem('baltfut_theme');document.documentElement.setAttribute('data-theme', t==='light'?'light':'dark');}catch(e){}`;
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      lang="pt-BR"
+      data-theme="dark"
+      className={`${display.variable} ${body.variable} ${mono.variable}`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body style={{ minHeight: "100vh" }}>{children}</body>
     </html>
   );
 }

@@ -51,6 +51,28 @@ describe("parseScoreboard", () => {
     expect(done.home.abbreviation).toBe("ESP");
   });
 
+  it("extracts the venue city", () => {
+    const live = parseScoreboard(fixture, LEAGUE).find((m) => m.id === "1002")!;
+    expect(live.venue).toBe("New York");
+  });
+
+  it("extracts goals (incl. penalties), maps scorer side, and skips cards", () => {
+    const live = parseScoreboard(fixture, LEAGUE).find((m) => m.id === "1002")!;
+    // 3 goals, the yellow card excluded.
+    expect(live.goals).toHaveLength(3);
+    const home = live.goals.filter((g) => g.side === "home");
+    const away = live.goals.filter((g) => g.side === "away");
+    expect(home).toHaveLength(1); // France penalty
+    expect(away).toHaveLength(2); // Germany x2
+    expect(home[0]).toMatchObject({ clock: "41'", scorer: "Mbappé" });
+    expect(away.map((g) => g.scorer)).toEqual(["Havertz", "Wirtz"]);
+  });
+
+  it("has no goals for matches without scoring details", () => {
+    const pre = parseScoreboard(fixture, LEAGUE).find((m) => m.id === "1001")!;
+    expect(pre.goals).toEqual([]);
+  });
+
   it("returns an empty array for non-conforming input instead of throwing", () => {
     expect(parseScoreboard(null, LEAGUE)).toEqual([]);
     expect(parseScoreboard({}, LEAGUE)).toEqual([]);

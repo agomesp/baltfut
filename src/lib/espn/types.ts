@@ -6,6 +6,17 @@
 
 export type MatchState = "pre" | "in" | "post";
 
+export type Side = "home" | "away";
+
+export interface MatchGoal {
+  side: Side;
+  /** e.g. "12'", "90'+2'". */
+  clock: string;
+  scorer: string;
+  /** ESPN label, e.g. "Goal", "Goal - Header", "Penalty - Scored". */
+  type: string;
+}
+
 export interface Team {
   /** ESPN team id (stable). */
   id: string;
@@ -36,10 +47,14 @@ export interface Match {
   statusDetail: string;
   /** Live game clock, e.g. "62'", else null. */
   displayClock: string | null;
+  /** Venue city, e.g. "Mexico City"; null when ESPN omits it. */
+  venue: string | null;
   home: Team;
   away: Team;
   /** Home goals; null before kickoff. */
   homeScore: number | null;
   /** Away goals; null before kickoff. */
   awayScore: number | null;
+  /** Goal events (scorers) for the live/finished detail view; [] when none. */
+  goals: MatchGoal[];
 }

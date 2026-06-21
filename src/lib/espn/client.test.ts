@@ -20,6 +20,12 @@ describe("scoreboardUrl", () => {
   it("encodes the league to prevent path injection", () => {
     expect(scoreboardUrl("../../secret")).not.toContain("../");
   });
+
+  it("appends a dates range when provided", () => {
+    expect(scoreboardUrl("fifa.world", "20260611-20260719")).toBe(
+      "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719",
+    );
+  });
 });
 
 describe("fetchScoreboard", () => {

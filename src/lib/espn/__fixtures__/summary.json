@@ -1,0 +1,24 @@
+{
+  "rosters": [
+    {
+      "homeAway": "home",
+      "formation": "4-3-3",
+      "team": { "abbreviation": "FRA" },
+      "roster": [
+        { "starter": true, "jersey": "1", "formationPlace": "1", "position": { "abbreviation": "G" }, "athlete": { "displayName": "M. Maignan" } },
+        { "starter": true, "jersey": "10", "formationPlace": "10", "position": { "abbreviation": "F" }, "athlete": { "displayName": "K. Mbappé" } },
+        { "starter": true, "jersey": "8", "formationPlace": "8", "position": { "abbreviation": "M" }, "athlete": { "displayName": "A. Tchouaméni" } },
+        { "starter": false, "jersey": "23", "position": { "abbreviation": "G" }, "athlete": { "displayName": "B. Samba" } }
+      ]
+    },
+    {
+      "homeAway": "away",
+      "formation": "4-2-3-1",
+      "team": { "abbreviation": "GER" },
+      "roster": [
+        { "starter": true, "jersey": "1", "formationPlace": "1", "position": { "abbreviation": "G" }, "athlete": { "displayName": "M. ter Stegen" } },
+        { "starter": true, "jersey": "7", "formationPlace": "9", "position": { "abbreviation": "F" }, "athlete": { "displayName": "K. Havertz" } }
+      ]
+    }
+  ]
+}

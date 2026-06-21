@@ -1,0 +1,67 @@
+{
+  "children": [
+    {
+      "name": "Group A",
+      "standings": {
+        "entries": [
+          {
+            "team": { "abbreviation": "MEX", "displayName": "Mexico" },
+            "note": { "description": "Advance to Round of 32" },
+            "stats": [
+              { "name": "gamesPlayed", "displayValue": "2" },
+              { "name": "points", "displayValue": "6" },
+              { "name": "pointDifferential", "displayValue": "+3" }
+            ]
+          },
+          {
+            "team": { "abbreviation": "CRO", "displayName": "Croatia" },
+            "stats": [
+              { "name": "gamesPlayed", "displayValue": "2" },
+              { "name": "points", "displayValue": "4" },
+              { "name": "pointDifferential", "displayValue": "+1" }
+            ]
+          },
+          {
+            "team": { "abbreviation": "ECU", "displayName": "Ecuador" },
+            "stats": [
+              { "name": "gamesPlayed", "displayValue": "2" },
+              { "name": "points", "displayValue": "1" },
+              { "name": "pointDifferential", "displayValue": "-1" }
+            ]
+          },
+          {
+            "team": { "abbreviation": "QAT", "displayName": "Qatar" },
+            "stats": [
+              { "name": "gamesPlayed", "displayValue": "2" },
+              { "name": "points", "displayValue": "0" },
+              { "name": "pointDifferential", "displayValue": "-3" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Group B",
+      "standings": {
+        "entries": [
+          {
+            "team": { "abbreviation": "CAN", "displayName": "Canada" },
+            "stats": [
+              { "name": "gamesPlayed", "displayValue": "1" },
+              { "name": "points", "displayValue": "3" },
+              { "name": "pointDifferential", "displayValue": "+2" }
+            ]
+          },
+          {
+            "team": { "abbreviation": "URU", "displayName": "Uruguay" },
+            "stats": [
+              { "name": "gamesPlayed", "displayValue": "1" },
+              { "name": "points", "displayValue": "0" },
+              { "name": "pointDifferential", "displayValue": "-2" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
