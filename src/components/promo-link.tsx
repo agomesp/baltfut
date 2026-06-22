@@ -22,10 +22,9 @@ export function PromoLink() {
       setOpen(true);
       hold = window.setTimeout(() => setOpen(false), HOLD_MS);
     };
-    const first = window.setTimeout(expand, 4000); // first peek shortly after load
+    expand(); // unroll right away on first load, then cycle
     const id = window.setInterval(expand, PERIOD_MS);
     return () => {
-      window.clearTimeout(first);
       if (hold) window.clearTimeout(hold);
       window.clearInterval(id);
     };
@@ -47,7 +46,7 @@ export function PromoLink() {
         alignItems: "center",
         gap: 8,
         height: 34,
-        maxWidth: open ? 260 : 34,
+        maxWidth: open ? 300 : 34,
         paddingLeft: 8,
         paddingRight: open ? 14 : 8,
         overflow: "hidden",
@@ -73,7 +72,7 @@ export function PromoLink() {
           transition: "opacity .4s ease .15s",
         }}
       >
-        Grupos de promoções
+        RBSTORE - Grupo de promoções
       </span>
     </a>
   );

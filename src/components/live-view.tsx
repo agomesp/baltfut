@@ -209,7 +209,7 @@ function FeedRow({ item, align }: { item: FeedItem; align: "left" | "right" }) {
  *   - a dim, full-bleed pitch glow behind the score (live);
  *   - the followed team's flag (vendored SVG, real artwork), dim, with a sweeping
  *     shine overlay (shown whenever that team is in this match);
- *   - an "Ao vivo" lower-third with a breathing dot (live).
+ *   - an always-shown "Ao vivo on [Kick]" lower-third (links to the stream).
  * `?fx` in the URL forces the live ambience on for a demo. pointer-events
  * disabled; the score content sits above (z-index 1).
  */
@@ -236,12 +236,21 @@ function HeroFx({ match, phase, followCode }: { match: Match; phase: ChipPhase; 
           <LoopVideo srcs={["flag-shine.mp4"]} blend style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 }} />
         </div>
       ) : null}
-      {live ? (
-        <div style={{ position: "absolute", left: 16, bottom: 14, zIndex: 2, display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 999, background: "rgba(0,0,0,0.4)", pointerEvents: "none" }}>
-          <LoopVideo srcs={["live-dot.mp4"]} blend style={{ width: 16, height: 16, borderRadius: 999 }} />
-          <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#fff" }}>Ao vivo</span>
-        </div>
-      ) : null}
+      {/* "AO VIVO ON [Kick]" — always shown (it's the streamer's Kick, not the
+          match), links to the live stream in a new tab. */}
+      <a
+        href="https://kick.com/locobaltar"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Assistir ao vivo na Kick"
+        style={{ position: "absolute", left: 16, bottom: 14, zIndex: 2, display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 999, background: "rgba(0,0,0,0.45)", textDecoration: "none", color: "#fff" }}
+      >
+        <LoopVideo srcs={["live-dot.mp4"]} blend style={{ width: 16, height: 16, borderRadius: 999 }} />
+        <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#fff" }}>Ao vivo on</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden style={{ flex: "0 0 auto" }}>
+          <path fill="#53FC18" d="M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z" />
+        </svg>
+      </a>
     </>
   );
 }
