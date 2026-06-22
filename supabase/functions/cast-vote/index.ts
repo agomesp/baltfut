@@ -12,7 +12,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { validateVote } from "../_shared/vote.ts";
 import { matchTimingFromSummary, palpitesClosed } from "../_shared/deadline.ts";
-import { decideClaim } from "../_shared/name-claim.ts";
+import { decideClaim, isReservedName } from "../_shared/name-claim.ts";
 import { getClientIp, hashIp, hashToken } from "../_shared/ip.ts";
 import {
   buildCorsHeaders,
@@ -72,6 +72,12 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Falha na validação.", fields: result.errors }, 422, cors);
   }
   const vote = result.data;
+
+  // Reserved names (e.g. "ChatGPT", the house bot) belong to the app — its
+  // palpites are seeded server-side. Nobody may palpite under them.
+  if (isReservedName(vote.username)) {
+    return json({ error: "Esse nome é reservado. Escolha outro." }, 403, cors);
+  }
 
   // Server-side cutoff: reject palpites for matches that have finished or are past
   // kickoff + 5min, using ESPN as the trusted clock. This enforces the deadline

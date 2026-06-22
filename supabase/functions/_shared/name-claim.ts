@@ -4,6 +4,23 @@
 /** A name is reclaimable after this long with no palpite from its owner. */
 export const CLAIM_STALE_MS = 24 * 60 * 60 * 1000; // 24h
 
+/**
+ * Names nobody may palpite under — they belong to the app itself. "ChatGPT" is
+ * the house bot whose palpites are seeded server-side; reserving it stops anyone
+ * from impersonating it. Stored already-normalized (see {@link isReservedName}).
+ */
+const RESERVED_NAMES = new Set(["chatgpt"]);
+
+/**
+ * Whether `name` is reserved for the app. Match is robust to casing and to the
+ * spacing/separators the username charset allows (space _ . -), so "Chat GPT",
+ * "Chat-GPT", "chat.gpt" etc. are all caught — not just the exact "ChatGPT".
+ */
+export function isReservedName(name: string): boolean {
+  const normalized = name.toLowerCase().replace(/[\s_.\-]/g, "");
+  return RESERVED_NAMES.has(normalized);
+}
+
 export interface NameClaim {
   token_hash: string;
   last_used_at: string; // ISO timestamp

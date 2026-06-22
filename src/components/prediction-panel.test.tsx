@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { PredictionPanel } from "@/components/prediction-panel";
 import type { Match } from "@/lib/espn";
 import type { VoteEntry, CastVoteTransport } from "@/lib/votes";
@@ -67,6 +67,46 @@ describe("PredictionPanel — finished (post)", () => {
       />,
     );
     expect(screen.getByText(/ninguém palpitou/i)).toBeInTheDocument();
+  });
+});
+
+describe("PredictionPanel — reserved ChatGPT name", () => {
+  it("paints the ChatGPT palpite name with a rainbow gradient", () => {
+    render(
+      <PredictionPanel
+        match={match}
+        entries={[entry("ChatGPT", 1, 2)]}
+        current={{ home: 1, away: 2 }}
+        phase="post"
+        closesAt={Date.now() - 1000}
+        released={true}
+        onVoted={vi.fn()}
+        transport={vi.fn<CastVoteTransport>()}
+      />,
+    );
+    const name = screen.getByText("ChatGPT");
+    expect(name.style.backgroundImage).toContain("linear-gradient");
+    expect(name.style.webkitTextFillColor).toBe("transparent");
+  });
+
+  it("blocks submitting under a reserved name without calling the transport", () => {
+    const transport = vi.fn<CastVoteTransport>();
+    render(
+      <PredictionPanel
+        match={{ ...match, state: "in", isLive: true }}
+        entries={[]}
+        current={{ home: 1, away: 2 }}
+        phase="live"
+        closesAt={Date.now() + 600_000}
+        released={true}
+        onVoted={vi.fn()}
+        transport={transport}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Seu nome"), { target: { value: "Chat GPT" } });
+    fireEvent.click(screen.getByRole("button", { name: /enviar palpite/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/reservado/i);
+    expect(transport).not.toHaveBeenCalled();
   });
 });
 

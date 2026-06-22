@@ -14,7 +14,20 @@ import {
 } from "@/lib/votes";
 import type { ChipPhase } from "@/lib/chips";
 import { isPalpiteOpen, formatCountdown } from "@/lib/palpite";
+import { isReservedName } from "@shared/name-claim";
 import { MONO } from "@/components/primitives";
+
+// The house bot's palpites render with a rainbow-gradient name so they read as
+// "official", not a regular user. background-clip: text paints the gradient
+// through the glyphs; the literal color is a fallback for browsers without it.
+const rainbowNameStyle = {
+  background: "linear-gradient(90deg, #ff3b30, #ff9500, #ffcc00, #34c759, #00c7be, #0a84ff, #bf5af2)",
+  WebkitBackgroundClip: "text",
+  backgroundClip: "text",
+  WebkitTextFillColor: "transparent",
+  color: "#0a84ff",
+  fontWeight: 600,
+} as const;
 
 export interface PredictionPanelProps {
   match: Match;
@@ -184,6 +197,12 @@ export function PredictionPanel({
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const name = user.trim();
+    // Reserved names belong to the app (e.g. the ChatGPT bot); the function
+    // rejects them too — this is just instant feedback.
+    if (isReservedName(name)) {
+      setOutcome({ ok: false, message: "Esse nome é reservado. Escolha outro." });
+      return;
+    }
     // Name must be unique per match (instant check; the DB also enforces it).
     if (name && entries.some((x) => x.username.trim().toLowerCase() === name.toLowerCase())) {
       setOutcome({ ok: false, message: "Esse nome já foi usado nesta partida." });
@@ -284,7 +303,7 @@ export function PredictionPanel({
             return (
               <div key={`${v.username}-${i}`} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "7px 8px 9px", borderRadius: 4, borderBottom: "1px solid var(--line)", background: d.rowBg }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <span style={{ fontSize: 13, color: d.nameColor }}>{v.username}</span>
+                  <span style={{ fontSize: 13, ...(isReservedName(v.username) ? rainbowNameStyle : { color: d.nameColor }) }}>{v.username}</span>
                   {d.label ? <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: d.tagColor }}>{d.label}</span> : null}
                 </div>
                 <span style={{ fontFamily: MONO, fontSize: 13, color: d.nameColor === "var(--ink-3)" ? "var(--ink-3)" : "var(--ink-2)" }}>
