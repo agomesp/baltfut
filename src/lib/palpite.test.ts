@@ -58,7 +58,7 @@ describe("releasedMatchIds", () => {
     isLive: state === "in", statusDetail: "", displayClock: null, venue: null,
     home: { id: "h", name: "H", abbreviation: "H", logo: null },
     away: { id: "a", name: "A", abbreviation: "A", logo: null },
-    homeScore: null, awayScore: null, goals: [],
+    homeScore: null, awayScore: null, goals: [], cards: [],
   });
 
   it("releases the current + next kickoff-hour group, grouping same-hour matches", () => {

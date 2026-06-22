@@ -19,6 +19,7 @@ function m(id: string, state: MatchState, startsAt: string, isLive = false): Mat
     homeScore: state === "pre" ? null : 1,
     awayScore: state === "pre" ? null : 0,
     goals: [],
+    cards: [],
   };
 }
 

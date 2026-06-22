@@ -23,6 +23,9 @@
   --signal-ink: #0e2117;
 
   --rank: #facc15;
+
+  --card-yellow: #f5c84a;
+  --card-red: #e5484d;
 }
 
 /* Light */
@@ -41,6 +44,9 @@
   --signal-ink: #ffffff;
 
   --rank: #b7791f;
+
+  --card-yellow: #e0a800;
+  --card-red: #d3343a;
 }
 
 * {

@@ -24,6 +24,23 @@ describe("parseLineups", () => {
     expect(parseLineups({ rosters: [] })).toBeNull();
     expect(parseLineups(null)).toBeNull();
   });
+
+  it("parses substitutions (in/out + side) from keyEvents, ignoring non-subs", () => {
+    const subs = parseLineups(fixture)!.subs;
+    expect(subs).toHaveLength(2);
+    expect(subs[0]).toEqual({ side: "home", clock: "62'", playerIn: "O. Dembélé", playerOut: "K. Mbappé" });
+    expect(subs[1]).toEqual({ side: "away", clock: "75'", playerIn: "T. Müller", playerOut: "K. Havertz" });
+  });
+
+  it("returns no subs when keyEvents is absent", () => {
+    const subs = parseLineups({
+      rosters: [
+        { homeAway: "home", team: { abbreviation: "FRA" }, roster: [{ starter: true, athlete: { displayName: "X" } }] },
+        { homeAway: "away", team: { abbreviation: "GER" }, roster: [{ starter: true, athlete: { displayName: "Y" } }] },
+      ],
+    })!;
+    expect(subs.subs).toEqual([]);
+  });
 });
 
 describe("summaryUrl", () => {

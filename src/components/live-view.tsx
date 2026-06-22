@@ -1,4 +1,4 @@
-import type { Match, MatchLineups, TeamLineup } from "@/lib/espn";
+import type { Match, MatchCard, MatchGoal, MatchLineups, MatchSub, Side, TeamLineup } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
 import { fmtTime } from "@/lib/format";
@@ -50,6 +50,26 @@ function LineupBlock({ team, followCode }: { team: TeamLineup; followCode: strin
   );
 }
 
+function SubsBlock({ subs, homeCode, awayCode }: { subs: MatchSub[]; homeCode: string; awayCode: string }) {
+  if (subs.length === 0) return null;
+  const codeFor = (s: MatchSub) => (s.side === "home" ? homeCode : awayCode);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 2 }}>Substituições</div>
+      {subs.map((s, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", borderBottom: "1px solid var(--line)" }}>
+          <span style={{ flex: "0 0 34px", fontFamily: MONO, fontSize: 12, color: "var(--signal-strong)" }}>{s.clock}</span>
+          <span style={{ flex: "0 0 30px", fontFamily: MONO, fontSize: 10, letterSpacing: "0.04em", color: "var(--ink-3)" }}>{codeFor(s)}</span>
+          <span style={{ flex: "1 1 auto", fontSize: 13, color: "var(--ink)" }}>
+            <span style={{ color: "var(--signal-strong)" }}>▲</span> {s.playerIn}
+            <span style={{ color: "var(--ink-3)" }}> ▼ {s.playerOut}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function LineupPanel({ lineups, followCode }: { lineups: MatchLineups | null; followCode: string | null }) {
   if (!lineups) {
     return <div style={{ padding: "20px 18px", fontSize: 13, color: "var(--ink-3)" }}>Escalações ainda não divulgadas.</div>;
@@ -58,6 +78,7 @@ function LineupPanel({ lineups, followCode }: { lineups: MatchLineups | null; fo
     <div style={{ flex: "1 1 auto", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 20, overflowY: "auto", maxHeight: 580 }}>
       <LineupBlock team={lineups.home} followCode={followCode} />
       <LineupBlock team={lineups.away} followCode={followCode} />
+      <SubsBlock subs={lineups.subs} homeCode={lineups.home.code} awayCode={lineups.away.code} />
     </div>
   );
 }
@@ -87,12 +108,85 @@ function StatusLine({ match, phase }: { match: Match; phase: ChipPhase }) {
   );
 }
 
+/** Minute used only for ordering; "45'+2'" sorts just after "45'". */
+function clockOrder(clock: string): number {
+  const m = clock.match(/(\d+)(?:'?\s*\+\s*(\d+))?/);
+  if (!m) return 9999;
+  return Number(m[1]) + (m[2] ? Number(m[2]) / 100 : 0);
+}
+
+/** A small colored booking rectangle (yellow / red). */
+function CardChip({ kind }: { kind: "yellow" | "red" }) {
+  return (
+    <span
+      aria-label={kind === "red" ? "Cartão vermelho" : "Cartão amarelo"}
+      style={{
+        display: "inline-block",
+        width: 9,
+        height: 12,
+        borderRadius: 2,
+        verticalAlign: "-1px",
+        background: kind === "red" ? "var(--card-red)" : "var(--card-yellow)",
+      }}
+    />
+  );
+}
+
+type FeedItem =
+  | { kind: "goal"; side: Side; clock: string; order: number; goal: MatchGoal }
+  | { kind: "card"; side: Side; clock: string; order: number; card: MatchCard };
+
+/** Merge goals + cards for one side into a single chronological feed. */
+function sideFeed(side: Side, goals: MatchGoal[], cards: MatchCard[]): FeedItem[] {
+  const items: FeedItem[] = [
+    ...goals.filter((g) => g.side === side).map((goal): FeedItem => ({ kind: "goal", side, clock: goal.clock, order: clockOrder(goal.clock), goal })),
+    ...cards.filter((c) => c.side === side).map((card): FeedItem => ({ kind: "card", side, clock: card.clock, order: clockOrder(card.clock), card })),
+  ];
+  return items.sort((a, b) => a.order - b.order);
+}
+
+/** pt-BR suffix for special goals. */
+function goalTag(g: MatchGoal): string {
+  if (g.ownGoal) return " (contra)";
+  if (g.penalty) return " (pênalti)";
+  return "";
+}
+
+function FeedRow({ item, align }: { item: FeedItem; align: "left" | "right" }) {
+  const clockEl = <span style={{ color: "var(--signal-strong)" }}>{item.clock}</span>;
+  const body =
+    item.kind === "goal" ? (
+      <>
+        ⚽ {item.goal.scorer}
+        <span style={{ color: "var(--ink-3)" }}>{goalTag(item.goal)}</span>
+      </>
+    ) : (
+      <>
+        <CardChip kind={item.card.kind} /> {item.card.player}
+      </>
+    );
+  return (
+    <span style={{ fontFamily: MONO, fontSize: 15, color: "var(--ink)", display: "flex", gap: 8, justifyContent: align === "right" ? "flex-end" : "flex-start", alignItems: "center" }}>
+      {align === "left" ? (
+        <>
+          {clockEl} <span>{body}</span>
+        </>
+      ) : (
+        <>
+          <span>{body}</span> {clockEl}
+        </>
+      )}
+    </span>
+  );
+}
+
 function BigDetail({ match, phase, followCode, groupByTeam, compact = false }: { match: Match; phase: ChipPhase; followCode: string | null; groupByTeam: Record<string, string>; compact?: boolean }) {
   const homeColor = match.home.abbreviation === followCode ? "var(--signal-strong)" : "var(--ink)";
   const awayColor = match.away.abbreviation === followCode ? "var(--signal-strong)" : "var(--ink)";
   const showScore = phase !== "pre";
-  const homeGoals = match.goals.filter((g) => g.side === "home");
-  const awayGoals = match.goals.filter((g) => g.side === "away");
+  const homeFeed = sideFeed("home", match.goals, match.cards);
+  const awayFeed = sideFeed("away", match.goals, match.cards);
+  const hasFeed = homeFeed.length > 0 || awayFeed.length > 0;
   const meta = [groupLabel(match, groupByTeam), match.venue].filter(Boolean).join(" · ");
   // Compact tuning lets the hero share a row with the palpites + ranking columns
   // without the team abbreviations overflowing the narrower center column.
@@ -132,20 +226,16 @@ function BigDetail({ match, phase, followCode, groupByTeam, compact = false }: {
             <div style={{ fontSize: labelFont, color: "var(--ink-2)", marginTop: 8 }}>{teamLabel(match.away.abbreviation, match.away.name)}</div>
           </div>
         </div>
-        {showScore && match.goals.length > 0 ? (
+        {showScore && hasFeed ? (
           <div style={{ width: "100%", maxWidth: heroMax, paddingTop: 28, borderTop: "1px solid var(--line)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {homeGoals.map((g, i) => (
-                <span key={i} style={{ fontFamily: MONO, fontSize: 15, color: "var(--ink)" }}>
-                  <span style={{ color: "var(--signal-strong)" }}>{g.clock}</span> {g.scorer}
-                </span>
+              {homeFeed.map((item, i) => (
+                <FeedRow key={i} item={item} align="left" />
               ))}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, textAlign: "right" }}>
-              {awayGoals.map((g, i) => (
-                <span key={i} style={{ fontFamily: MONO, fontSize: 15, color: "var(--ink)" }}>
-                  {g.scorer} <span style={{ color: "var(--signal-strong)" }}>{g.clock}</span>
-                </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {awayFeed.map((item, i) => (
+                <FeedRow key={i} item={item} align="right" />
               ))}
             </div>
           </div>

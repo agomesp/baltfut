@@ -15,6 +15,19 @@ export interface MatchGoal {
   scorer: string;
   /** ESPN label, e.g. "Goal", "Goal - Header", "Penalty - Scored". */
   type: string;
+  /** Goal scored against own team — credited to the opponent's side. */
+  ownGoal: boolean;
+  /** Scored from a penalty kick. */
+  penalty: boolean;
+}
+
+export interface MatchCard {
+  side: Side;
+  /** e.g. "45'+2'". */
+  clock: string;
+  player: string;
+  /** Yellow or (straight/second-yellow) red. */
+  kind: "yellow" | "red";
 }
 
 export interface Team {
@@ -57,4 +70,6 @@ export interface Match {
   awayScore: number | null;
   /** Goal events (scorers) for the live/finished detail view; [] when none. */
   goals: MatchGoal[];
+  /** Booking events (yellow/red) for the detail view; [] when none. */
+  cards: MatchCard[];
 }

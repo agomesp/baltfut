@@ -20,6 +20,7 @@ const match: Match = {
   homeScore: 1,
   awayScore: 2,
   goals: [],
+  cards: [],
 };
 
 const entry = (username: string, predHome: number, predAway: number): VoteEntry => ({

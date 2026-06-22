@@ -2,6 +2,7 @@ export type {
   Match,
   MatchState,
   MatchGoal,
+  MatchCard,
   Side,
   Team,
 } from "@/lib/espn/types";
@@ -27,6 +28,7 @@ export {
   parseLineups,
   summaryUrl,
   type MatchLineups,
+  type MatchSub,
   type TeamLineup,
   type LineupPlayer,
   type FetchLineupsOptions,

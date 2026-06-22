@@ -18,6 +18,7 @@ const m = (id: string, startsAt: string, hs: number | null = null, as: number | 
   homeScore: hs,
   awayScore: as,
   goals: [],
+  cards: [],
 });
 
 describe("dayKey", () => {

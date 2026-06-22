@@ -16,9 +16,19 @@ export interface TeamLineup {
   players: LineupPlayer[];
 }
 
+export interface MatchSub {
+  side: Side;
+  /** e.g. "62'". */
+  clock: string;
+  playerIn: string;
+  playerOut: string;
+}
+
 export interface MatchLineups {
   home: TeamLineup;
   away: TeamLineup;
+  /** Substitutions in chronological order; [] when none / unavailable. */
+  subs: MatchSub[];
 }
 
 const playerSchema = z.object({
@@ -34,11 +44,25 @@ const playerSchema = z.object({
 const rosterSchema = z.object({
   homeAway: z.enum(["home", "away"]).optional(),
   formation: z.string().optional(),
-  team: z.object({ abbreviation: z.string().optional() }).optional(),
+  team: z
+    .object({ id: z.string().optional(), abbreviation: z.string().optional() })
+    .optional(),
   roster: z.array(playerSchema).optional(),
 });
 
-const summarySchema = z.object({ rosters: z.array(rosterSchema).optional() });
+const keyEventSchema = z.object({
+  type: z.object({ type: z.string().optional(), text: z.string().optional() }).optional(),
+  clock: z.object({ displayValue: z.string().optional() }).optional(),
+  team: z.object({ id: z.string().optional() }).optional(),
+  participants: z
+    .array(z.object({ athlete: z.object({ displayName: z.string().optional() }).optional() }))
+    .nullish(),
+});
+
+const summarySchema = z.object({
+  rosters: z.array(rosterSchema).optional(),
+  keyEvents: z.array(keyEventSchema).nullish(),
+});
 
 const POS_MAP: Record<string, string> = { G: "GK", D: "DF", M: "MF", F: "FW" };
 
@@ -71,6 +95,31 @@ function toLineup(
   };
 }
 
+/**
+ * Substitutions come from the summary's chronological `keyEvents` feed. ESPN
+ * lists the incoming player first and the replaced player second.
+ */
+function toSubs(
+  events: z.infer<typeof keyEventSchema>[] | null | undefined,
+  sideByTeamId: Map<string, Side>,
+): MatchSub[] {
+  if (!events) return [];
+  return events
+    .filter((e) => e.type?.type === "substitution" || e.type?.text === "Substitution")
+    .map((e): MatchSub | null => {
+      const id = e.team?.id;
+      const side = id ? sideByTeamId.get(id) : undefined;
+      if (!side) return null;
+      return {
+        side,
+        clock: e.clock?.displayValue ?? "",
+        playerIn: e.participants?.[0]?.athlete?.displayName ?? "",
+        playerOut: e.participants?.[1]?.athlete?.displayName ?? "",
+      };
+    })
+    .filter((s): s is MatchSub => s !== null);
+}
+
 /** Parse a summary payload into home/away lineups, or null when unavailable. */
 export function parseLineups(raw: unknown): MatchLineups | null {
   const parsed = summarySchema.safeParse(raw);
@@ -84,7 +133,14 @@ export function parseLineups(raw: unknown): MatchLineups | null {
   const awayLineup = toLineup(away, "away");
   // No starters on either side → treat as unavailable (e.g. not yet announced).
   if (!homeLineup.players.length && !awayLineup.players.length) return null;
-  return { home: homeLineup, away: awayLineup };
+  const sideByTeamId = new Map<string, Side>();
+  if (home.team?.id) sideByTeamId.set(home.team.id, "home");
+  if (away.team?.id) sideByTeamId.set(away.team.id, "away");
+  return {
+    home: homeLineup,
+    away: awayLineup,
+    subs: toSubs(parsed.data.keyEvents, sideByTeamId),
+  };
 }
 
 export function summaryUrl(eventId: string, league: string): string {

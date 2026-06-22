@@ -58,19 +58,40 @@ describe("parseScoreboard", () => {
 
   it("extracts goals (incl. penalties), maps scorer side, and skips cards", () => {
     const live = parseScoreboard(fixture, LEAGUE).find((m) => m.id === "1002")!;
-    // 3 goals, the yellow card excluded.
-    expect(live.goals).toHaveLength(3);
+    // 4 goals (incl. an own goal); the yellow/red cards are excluded.
+    expect(live.goals).toHaveLength(4);
     const home = live.goals.filter((g) => g.side === "home");
     const away = live.goals.filter((g) => g.side === "away");
     expect(home).toHaveLength(1); // France penalty
-    expect(away).toHaveLength(2); // Germany x2
+    expect(away).toHaveLength(3); // Germany x2 + an own goal credited to Germany
     expect(home[0]).toMatchObject({ clock: "41'", scorer: "Mbappé" });
-    expect(away.map((g) => g.scorer)).toEqual(["Havertz", "Wirtz"]);
+    expect(away.map((g) => g.scorer)).toEqual(["Havertz", "Wirtz", "Upamecano"]);
   });
 
-  it("has no goals for matches without scoring details", () => {
+  it("flags penalty and own-goal scoring plays", () => {
+    const live = parseScoreboard(fixture, LEAGUE).find((m) => m.id === "1002")!;
+    const pen = live.goals.find((g) => g.scorer === "Mbappé")!;
+    expect(pen).toMatchObject({ penalty: true, ownGoal: false });
+    // Own goal is credited to the benefiting side (Germany), not flipped.
+    const og = live.goals.find((g) => g.scorer === "Upamecano")!;
+    expect(og).toMatchObject({ ownGoal: true, side: "away" });
+    const open = live.goals.find((g) => g.scorer === "Havertz")!;
+    expect(open).toMatchObject({ penalty: false, ownGoal: false });
+  });
+
+  it("extracts yellow and red cards with side and player", () => {
+    const live = parseScoreboard(fixture, LEAGUE).find((m) => m.id === "1002")!;
+    expect(live.cards).toHaveLength(2);
+    const yellow = live.cards.find((c) => c.kind === "yellow")!;
+    expect(yellow).toMatchObject({ side: "home", clock: "70'", player: "Tchouaméni" });
+    const red = live.cards.find((c) => c.kind === "red")!;
+    expect(red).toMatchObject({ side: "away", clock: "82'", player: "Rüdiger" });
+  });
+
+  it("has no goals or cards for matches without scoring details", () => {
     const pre = parseScoreboard(fixture, LEAGUE).find((m) => m.id === "1001")!;
     expect(pre.goals).toEqual([]);
+    expect(pre.cards).toEqual([]);
   });
 
   it("returns an empty array for non-conforming input instead of throwing", () => {

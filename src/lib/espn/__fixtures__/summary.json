@@ -3,7 +3,7 @@
     {
       "homeAway": "home",
       "formation": "4-3-3",
-      "team": { "abbreviation": "FRA" },
+      "team": { "id": "478", "abbreviation": "FRA" },
       "roster": [
         { "starter": true, "jersey": "1", "formationPlace": "1", "position": { "abbreviation": "G" }, "athlete": { "displayName": "M. Maignan" } },
         { "starter": true, "jersey": "10", "formationPlace": "10", "position": { "abbreviation": "F" }, "athlete": { "displayName": "K. Mbappé" } },
@@ -14,11 +14,36 @@
     {
       "homeAway": "away",
       "formation": "4-2-3-1",
-      "team": { "abbreviation": "GER" },
+      "team": { "id": "503", "abbreviation": "GER" },
       "roster": [
         { "starter": true, "jersey": "1", "formationPlace": "1", "position": { "abbreviation": "G" }, "athlete": { "displayName": "M. ter Stegen" } },
         { "starter": true, "jersey": "7", "formationPlace": "9", "position": { "abbreviation": "F" }, "athlete": { "displayName": "K. Havertz" } }
       ]
+    }
+  ],
+  "keyEvents": [
+    {
+      "type": { "type": "substitution", "text": "Substitution" },
+      "clock": { "displayValue": "62'" },
+      "team": { "id": "478" },
+      "participants": [
+        { "athlete": { "displayName": "O. Dembélé" } },
+        { "athlete": { "displayName": "K. Mbappé" } }
+      ]
+    },
+    {
+      "type": { "type": "substitution", "text": "Substitution" },
+      "clock": { "displayValue": "75'" },
+      "team": { "id": "503" },
+      "participants": [
+        { "athlete": { "displayName": "T. Müller" } },
+        { "athlete": { "displayName": "K. Havertz" } }
+      ]
+    },
+    {
+      "type": { "type": "goal", "text": "Goal" },
+      "clock": { "displayValue": "23'" },
+      "team": { "id": "503" }
     }
   ]
 }

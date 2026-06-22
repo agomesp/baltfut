@@ -9,7 +9,7 @@ function match(id: string, state: Match["state"], hs: number | null, as: number 
     isLive: state === "in", statusDetail: "", displayClock: null, venue: null,
     home: { id: "h", name: "H", abbreviation: "H", logo: null },
     away: { id: "a", name: "A", abbreviation: "A", logo: null },
-    homeScore: hs, awayScore: as, goals: [],
+    homeScore: hs, awayScore: as, goals: [], cards: [],
   };
 }
 function entry(username: string, matchId: string, predHome: number, predAway: number, createdAt = "2026-06-20T15:00:00Z"): VoteEntry {

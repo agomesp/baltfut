@@ -1,5 +1,12 @@
 import { z } from "zod";
-import type { Match, MatchGoal, MatchState, Side, Team } from "@/lib/espn/types";
+import type {
+  Match,
+  MatchCard,
+  MatchGoal,
+  MatchState,
+  Side,
+  Team,
+} from "@/lib/espn/types";
 
 /**
  * Runtime validation for the slice of ESPN's scoreboard response we rely on.
@@ -22,6 +29,10 @@ const rawCompetitorSchema = z.object({
 
 const rawDetailSchema = z.object({
   scoringPlay: z.boolean().optional(),
+  yellowCard: z.boolean().optional(),
+  redCard: z.boolean().optional(),
+  ownGoal: z.boolean().optional(),
+  penaltyKick: z.boolean().optional(),
   clock: z.object({ displayValue: z.string().optional() }).optional(),
   type: z.object({ text: z.string().optional() }).optional(),
   team: z.object({ id: z.string() }).optional(),
@@ -81,19 +92,50 @@ function toGoals(
 ): MatchGoal[] {
   if (!details) return [];
   // scoringPlay === true marks a goal (incl. penalties/own goals); cards are false.
+  // For own goals ESPN sets `team` to the *benefiting* side, so the side mapping
+  // is already correct without flipping.
   return details
     .filter((d) => d.scoringPlay === true)
     .map((d): MatchGoal | null => {
       const side = d.team ? sideByTeamId.get(d.team.id) : undefined;
       if (!side) return null;
+      const typeText = d.type?.text ?? "Goal";
       return {
         side,
         clock: d.clock?.displayValue ?? "",
         scorer: d.athletesInvolved?.[0]?.displayName ?? "",
-        type: d.type?.text ?? "Goal",
+        type: typeText,
+        ownGoal: d.ownGoal === true || /own goal/i.test(typeText),
+        penalty: d.penaltyKick === true || /penalty/i.test(typeText),
       };
     })
     .filter((g): g is MatchGoal => g !== null);
+}
+
+function toCards(
+  details: RawDetail[] | undefined,
+  sideByTeamId: Map<string, Side>,
+): MatchCard[] {
+  if (!details) return [];
+  // Cards are non-scoring plays flagged with yellowCard/redCard; fall back to the
+  // type label when ESPN omits the booleans.
+  return details
+    .map((d): MatchCard | null => {
+      const typeText = d.type?.text ?? "";
+      const isRed = d.redCard === true || /red card/i.test(typeText);
+      const isYellow = d.yellowCard === true || /yellow card/i.test(typeText);
+      if (!isRed && !isYellow) return null;
+      const side = d.team ? sideByTeamId.get(d.team.id) : undefined;
+      if (!side) return null;
+      return {
+        side,
+        clock: d.clock?.displayValue ?? "",
+        player: d.athletesInvolved?.[0]?.displayName ?? "",
+        // A second yellow surfaces as redCard=true, so red takes precedence.
+        kind: isRed ? "red" : "yellow",
+      };
+    })
+    .filter((c): c is MatchCard => c !== null);
 }
 
 function parseEvent(raw: unknown, league: string): Match | null {
@@ -130,6 +172,7 @@ function parseEvent(raw: unknown, league: string): Match | null {
     homeScore: toScore(state, homeRaw.score),
     awayScore: toScore(state, awayRaw.score),
     goals: toGoals(competition.details, sideByTeamId),
+    cards: toCards(competition.details, sideByTeamId),
   };
 }
 

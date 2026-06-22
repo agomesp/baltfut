@@ -68,7 +68,9 @@
             { "scoringPlay": true, "clock": { "displayValue": "23'" }, "type": { "text": "Goal" }, "team": { "id": "503" }, "athletesInvolved": [{ "displayName": "Havertz" }] },
             { "scoringPlay": true, "clock": { "displayValue": "41'" }, "type": { "text": "Penalty - Scored" }, "team": { "id": "478" }, "athletesInvolved": [{ "displayName": "Mbappé" }] },
             { "scoringPlay": true, "clock": { "displayValue": "67'" }, "type": { "text": "Goal - Header" }, "team": { "id": "503" }, "athletesInvolved": [{ "displayName": "Wirtz" }] },
-            { "scoringPlay": false, "clock": { "displayValue": "70'" }, "type": { "text": "Yellow Card" }, "team": { "id": "478" }, "athletesInvolved": [{ "displayName": "Tchouaméni" }] }
+            { "scoringPlay": false, "clock": { "displayValue": "70'" }, "type": { "text": "Yellow Card" }, "yellowCard": true, "redCard": false, "team": { "id": "478" }, "athletesInvolved": [{ "displayName": "Tchouaméni" }] },
+            { "scoringPlay": false, "clock": { "displayValue": "82'" }, "type": { "text": "Red Card" }, "yellowCard": false, "redCard": true, "team": { "id": "503" }, "athletesInvolved": [{ "displayName": "Rüdiger" }] },
+            { "scoringPlay": true, "clock": { "displayValue": "88'" }, "type": { "text": "Own Goal" }, "ownGoal": true, "team": { "id": "503" }, "athletesInvolved": [{ "displayName": "Upamecano" }] }
           ]
         }
       ]
