@@ -127,3 +127,18 @@ body {
 .rec-blink {
   animation: recBlink 1.5s ease-in-out infinite !important;
 }
+
+/* Live reactions: an emoji rises and fades. */
+@keyframes baltfutFloat {
+  0% {
+    transform: translateY(0) scale(0.7);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-46vh) scale(1.15);
+    opacity: 0;
+  }
+}

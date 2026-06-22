@@ -8,6 +8,7 @@ import { rankSubs } from "@/lib/ranking";
 import { MONO, DISPLAY, cardStyle, PulseDot } from "@/components/primitives";
 import { PredictionPanel } from "@/components/prediction-panel";
 import { ChipCarousel } from "@/components/chip-carousel";
+import { Reactions } from "@/components/reactions";
 import { Countdown } from "@/components/countdown";
 import { teamLabel } from "@/components/match-meta";
 import { LoopVideo } from "@/components/loop-video";
@@ -419,6 +420,7 @@ export function LiveView({
         </div>
       ) : (
         <>
+          <Reactions matchId={selected.match.id} />
           <ChipCarousel chips={chips} selectedId={selected.match.id} onSelect={onSelect} releasedIds={releasedIds} />
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "stretch" }}>
             <div style={{ ...cardStyle, flex: "1 1 280px", minWidth: 260, display: "flex", flexDirection: "column" }}>
