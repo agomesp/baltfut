@@ -64,11 +64,15 @@ do $$
 declare n int;
 begin
   set local role anon;
-  select count(*) into n from (select match_id from public.votes) s;
-  if n <> 3 then raise exception 'FAIL E1: expected 3 public rows, got %', n; end if;
+  -- Scope to the test's own fixtures ('1002'/'1003'). Real matches use ESPN ids
+  -- (e.g. '760452'), and data-seeding migrations populate the table before this
+  -- runs, so asserting the whole-table count would be brittle. This still proves
+  -- anon can read the public columns of the rows we inserted.
+  select count(*) into n from (select match_id from public.votes where match_id in ('1002','1003')) s;
+  if n <> 3 then raise exception 'FAIL E1: expected 3 test rows, got %', n; end if;
   raise notice 'PASS E1: anon read % public vote rows', n;
 
-  select count(*) into n from public.vote_entries;
+  select count(*) into n from public.vote_entries where match_id in ('1002','1003');
   if n <> 3 then raise exception 'FAIL E2: vote_entries returned %', n; end if;
   raise notice 'PASS E2: anon read vote_entries (% rows)', n;
 
