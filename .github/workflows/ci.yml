@@ -13,8 +13,8 @@ jobs:
     name: Lint · Typecheck · Test · Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -48,7 +48,7 @@ jobs:
       PGPASSWORD: postgres
       PGDATABASE: postgres
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Apply roles, migrations, then assert RLS
         run: |
           set -euo pipefail
@@ -64,7 +64,7 @@ jobs:
     name: Edge function type-check (Deno)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
