@@ -6,6 +6,7 @@ import { UpdateBanner } from "@/components/update-banner";
 import { ModoStreamer } from "@/components/modo-streamer";
 import { PipView } from "@/components/pip-view";
 import { KeepAlive } from "@/components/keep-alive";
+import { PromoLink } from "@/components/promo-link";
 
 // Flags-only webfont so country-flag emoji render on Windows/Edge (whose system
 // emoji font omits flags, showing the 2-letter code instead). Only flag glyphs
@@ -67,6 +68,7 @@ export default function RootLayout({
       <body style={{ minHeight: "100vh" }}>
         {children}
         <KeepAlive />
+        <PromoLink />
         <UpdateBanner />
         <div
           style={{

@@ -128,17 +128,40 @@ body {
   animation: recBlink 1.5s ease-in-out infinite !important;
 }
 
-/* Live reactions: an emoji rises and fades. */
+/* Live reactions: an emoji balloons up to the top of the page and fades out. */
 @keyframes baltfutFloat {
   0% {
-    transform: translateY(0) scale(0.7);
+    transform: translateY(0) scale(0.6);
     opacity: 0;
   }
-  12% {
+  10% {
+    opacity: 1;
+  }
+  82% {
     opacity: 1;
   }
   100% {
-    transform: translateY(-46vh) scale(1.15);
+    transform: translateY(-92vh) scale(1.25);
     opacity: 0;
   }
+}
+
+/* Reaction bar buttons — macOS-dock-style magnification on hover (incl. neighbours). */
+.rx-btn {
+  font-size: 18px;
+  line-height: 1;
+  padding: 3px 5px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 999px;
+  transition: transform 0.14s ease;
+  transform-origin: bottom center;
+}
+.rx-btn:hover {
+  transform: scale(1.9) translateY(-3px);
+}
+.rx-btn:hover + .rx-btn,
+.rx-btn:has(+ .rx-btn:hover) {
+  transform: scale(1.4) translateY(-1px);
 }
