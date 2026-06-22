@@ -176,5 +176,26 @@ Deno.serve(async (req: Request) => {
   );
   if (claimErr) console.error("name_claims upsert failed:", claimErr.code, claimErr.message);
 
+  // Realtime nudge: tell subscribed clients a palpite landed for this match so
+  // they refetch the public feed immediately (instead of waiting for the poll).
+  // SECURITY: this carries NO vote data — only the match id (already public) —
+  // so it cannot leak ip_hash. The authoritative rows still come from the
+  // column-restricted `vote_entries` view. Best-effort; never blocks the vote.
+  try {
+    await fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        apikey: SERVICE_ROLE_KEY,
+        authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        messages: [{ topic: `palpites:${vote.matchId}`, event: "new", payload: {}, private: false }],
+      }),
+    });
+  } catch {
+    /* best-effort — clients still get the poll fallback */
+  }
+
   return json({ ok: true }, 201, cors);
 });

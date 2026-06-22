@@ -7,11 +7,15 @@ import {
   fetchLineups,
   teamGroupMap,
   buildBracket,
+  parseScoreboard,
+  scoreboardUrl,
+  DEFAULT_LEAGUE,
   FIFA_WORLD_DATE_RANGE,
   type Match,
   type Group,
   type MatchLineups,
 } from "@/lib/espn";
+import { startScoreboardWorker } from "@/lib/scoreboard-worker";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   fetchVoteEntries,
@@ -31,6 +35,9 @@ import { BracketView } from "@/components/bracket-view";
 import { RankingView } from "@/components/ranking-view";
 
 const REFRESH_MS = 30_000;
+// Scoreboard refresh, driven by a Web Worker so it stays full-rate even when the
+// tab is hidden (main-thread timers get throttled to ~1/min after 5 min hidden).
+const SCORE_WORKER_MS = 20_000;
 // The selected match's palpites poll faster so new ones appear near-live.
 const ENTRIES_REFRESH_MS = 12_000;
 const DEFAULT_LETTERS = "ABCDEFGHIJKL".split("");
@@ -159,17 +166,45 @@ export default function Home() {
     [loadCounts],
   );
 
+  // Standings + vote counts refresh. The scoreboard is owned by the worker below,
+  // so the periodic timer only needs these (which change rarely).
+  const loadAux = useCallback(async () => {
+    try {
+      setGroups(await fetchStandings());
+    } catch {
+      /* non-fatal */
+    }
+    await loadCounts();
+  }, [loadCounts]);
+
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const controller = new AbortController();
-    void loadAll(controller.signal);
-    const id = setInterval(() => void loadAll(), REFRESH_MS);
+    void loadAll(controller.signal); // initial: scoreboard + standings + counts
+    const id = setInterval(() => void loadAux(), REFRESH_MS); // periodic: aux only
     return () => {
       controller.abort();
       clearInterval(id);
     };
-  }, [loadAll]);
+  }, [loadAll, loadAux]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Scoreboard via a Web Worker: worker timers escape the hidden-tab throttle, so
+  // the score stays full-rate even while the streamer's window is hidden (the
+  // keep-alive video keeps it painting; this keeps the data current).
+  useEffect(() => {
+    return startScoreboardWorker(
+      scoreboardUrl(DEFAULT_LEAGUE, FIFA_WORLD_DATE_RANGE),
+      SCORE_WORKER_MS,
+      (json) => {
+        const next = parseScoreboard(json, DEFAULT_LEAGUE);
+        if (next.length) {
+          setMatches(next);
+          setError(null);
+        }
+      },
+    );
+  }, []);
 
   // Snapshot the latest data so the next (Modo Streamer) reload can paint it
   // instantly instead of the empty loading state.
@@ -251,6 +286,26 @@ export default function Home() {
     const id = setInterval(() => void loadEntries(activeId), ENTRIES_REFRESH_MS);
     return () => clearInterval(id);
   }, [view, activeId, loadEntries]);
+
+  // Realtime push: the cast-vote function broadcasts a dataless "new" nudge for a
+  // match when a palpite lands; we refetch the (secure, public) feed immediately
+  // instead of waiting for the poll. The broadcast carries no row data, so it
+  // can't leak ip_hash; the poll above stays as a fallback if Realtime is down.
+  useEffect(() => {
+    if (view !== "live" || !activeId) return;
+    const client = getSupabaseClient();
+    if (!client) return;
+    const channel = client
+      .channel(`palpites:${activeId}`)
+      .on("broadcast", { event: "new" }, () => {
+        void loadEntries(activeId);
+        void loadAllEntries();
+      })
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [view, activeId, loadEntries, loadAllEntries]);
 
   useEffect(() => {
     if (view !== "live" || !activeId) return;
