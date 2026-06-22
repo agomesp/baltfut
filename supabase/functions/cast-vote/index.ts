@@ -11,6 +11,7 @@
 // app's tsconfig; Deno type-checks it on `supabase functions serve`/`deploy`.
 import { createClient } from "@supabase/supabase-js";
 import { validateVote } from "../_shared/vote.ts";
+import { matchTimingFromSummary, palpitesClosed } from "../_shared/deadline.ts";
 import { getClientIp, hashIp } from "../_shared/ip.ts";
 import {
   buildCorsHeaders,
@@ -70,6 +71,26 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Falha na validação.", fields: result.errors }, 422, cors);
   }
   const vote = result.data;
+
+  // Server-side cutoff: reject palpites for matches that have finished or are past
+  // kickoff + 5min, using ESPN as the trusted clock. This enforces the deadline
+  // even when a client bypasses the UI (e.g. POSTing directly to the API), so a
+  // finished/old match can't be palpited to game the ranking. Fail open on any
+  // ESPN/network error so a hiccup never blocks legitimate palpites.
+  try {
+    const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${encodeURIComponent(
+      vote.league,
+    )}/summary?event=${encodeURIComponent(vote.matchId)}`;
+    const espn = await fetch(summaryUrl);
+    if (espn.ok) {
+      const timing = matchTimingFromSummary(await espn.json());
+      if (palpitesClosed(timing, Date.now())) {
+        return json({ error: "Palpites encerrados para esta partida." }, 403, cors);
+      }
+    }
+  } catch {
+    /* ESPN unreachable — fail open */
+  }
 
   const ip = getClientIp(req.headers);
   if (!ip) {
