@@ -119,3 +119,13 @@ export function flagEmoji(code: string): string {
   const iso2 = FIFA_TO_ISO2[code];
   return iso2 ? regionalIndicators(iso2) : "";
 }
+
+// flag-icons (CC0) file base for a FIFA code: ISO2 lowercase, or gb-eng/gb-sct/
+// gb-wls for the home nations; "" if unknown. Used for the vendored SVGs in
+// public/flags/ (real flag artwork, unlike the emoji which doesn't scale large).
+const FIFA_TO_FLAG_SUBDIV: Record<string, string> = { ENG: "gb-eng", SCO: "gb-sct", WAL: "gb-wls" };
+export function flagFileBase(code: string): string {
+  if (FIFA_TO_FLAG_SUBDIV[code]) return FIFA_TO_FLAG_SUBDIV[code];
+  const iso2 = FIFA_TO_ISO2[code];
+  return iso2 ? iso2.toLowerCase() : "";
+}

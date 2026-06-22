@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Match, MatchCard, MatchGoal, MatchLineups, MatchSub, Side, TeamLineup } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
@@ -9,6 +10,26 @@ import { PredictionPanel } from "@/components/prediction-panel";
 import { ChipCarousel } from "@/components/chip-carousel";
 import { Countdown } from "@/components/countdown";
 import { teamLabel } from "@/components/match-meta";
+import { LoopVideo } from "@/components/loop-video";
+import { flagFileBase } from "@/lib/team-names";
+
+const ASSET_BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
+/** True once mounted if the URL has `?fx` — forces the live ambience on for a
+ * demo even when no match is live (read after mount to avoid a hydration gap). */
+function useFxForce(): boolean {
+  const [force, setForce] = useState(false);
+  useEffect(() => {
+    try {
+      // Intentional one-shot read after mount (avoids an SSR/CSR hydration gap).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setForce(new URLSearchParams(window.location.search).has("fx"));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  return force;
+}
 
 function groupLabel(m: Match, groupByTeam: Record<string, string>): string {
   const g = groupByTeam[m.home.abbreviation] ?? groupByTeam[m.away.abbreviation];
@@ -180,6 +201,50 @@ function FeedRow({ item, align }: { item: FeedItem; align: "left" | "right" }) {
   );
 }
 
+/**
+ * Broadcast-style ambience layered into the hero, all seamlessly-looping videos
+ * that also keep the compositor painting (so they double as keep-alive for an OBS
+ * capture of the hero):
+ *   - a dim, full-bleed pitch glow behind the score (live);
+ *   - the followed team's flag (vendored SVG, real artwork), dim, with a sweeping
+ *     shine overlay (shown whenever that team is in this match);
+ *   - an "Ao vivo" lower-third with a breathing dot (live).
+ * `?fx` in the URL forces the live ambience on for a demo. pointer-events
+ * disabled; the score content sits above (z-index 1).
+ */
+function HeroFx({ match, phase, followCode }: { match: Match; phase: ChipPhase; followCode: string | null }) {
+  const force = useFxForce();
+  const live = phase === "live" || force;
+  const followed =
+    followCode && (followCode === match.home.abbreviation || followCode === match.away.abbreviation)
+      ? followCode
+      : null;
+  const flagBase = followed ? flagFileBase(followed) : "";
+  return (
+    <>
+      {live ? (
+        <LoopVideo
+          srcs={["ambient-pitch.webm", "ambient-pitch.mp4"]}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.14, zIndex: 0, pointerEvents: "none" }}
+        />
+      ) : null}
+      {flagBase ? (
+        <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`${ASSET_BASE}/flags/${flagBase}.svg`} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.13 }} />
+          <LoopVideo srcs={["flag-shine.mp4"]} blend style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 }} />
+        </div>
+      ) : null}
+      {live ? (
+        <div style={{ position: "absolute", left: 16, bottom: 14, zIndex: 2, display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 999, background: "rgba(0,0,0,0.4)", pointerEvents: "none" }}>
+          <LoopVideo srcs={["live-dot.mp4"]} blend style={{ width: 16, height: 16, borderRadius: 999 }} />
+          <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#fff" }}>Ao vivo</span>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function BigDetail({ match, phase, followCode, groupByTeam, compact = false }: { match: Match; phase: ChipPhase; followCode: string | null; groupByTeam: Record<string, string>; compact?: boolean }) {
   const homeColor = match.home.abbreviation === followCode ? "var(--signal-strong)" : "var(--ink)";
   const awayColor = match.away.abbreviation === followCode ? "var(--signal-strong)" : "var(--ink)";
@@ -205,7 +270,9 @@ function BigDetail({ match, phase, followCode, groupByTeam, compact = false }: {
         <StatusLine match={match} phase={phase} />
         <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-2)" }}>{meta}</span>
       </div>
-      <div style={{ minHeight: bodyMinH, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: bodyPad, gap: 40 }}>
+      <div style={{ position: "relative", overflow: "hidden", minHeight: bodyMinH }}>
+        <HeroFx match={match} phase={phase} followCode={followCode} />
+        <div style={{ position: "relative", zIndex: 1, minHeight: bodyMinH, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: bodyPad, gap: 40 }}>
         <div style={{ width: "100%", maxWidth: heroMax, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: heroGap }}>
           <div style={{ textAlign: "right", minWidth: 0 }}>
             <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: teamFont, letterSpacing: "-0.03em", lineHeight: 0.92, color: homeColor }}>{match.home.abbreviation}</div>
@@ -240,6 +307,7 @@ function BigDetail({ match, phase, followCode, groupByTeam, compact = false }: {
             </div>
           </div>
         ) : null}
+        </div>
       </div>
     </div>
   );
