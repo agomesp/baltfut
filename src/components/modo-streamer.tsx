@@ -189,10 +189,6 @@ export function ModoStreamer() {
           : "Atualização automática desativada. Toque para ativar."
       }
       style={{
-        position: "fixed",
-        bottom: 14,
-        right: 14,
-        zIndex: 60,
         display: "inline-flex",
         alignItems: "center",
         gap: 8,

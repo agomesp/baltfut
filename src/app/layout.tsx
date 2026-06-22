@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { UpdateBanner } from "@/components/update-banner";
 import { ModoStreamer } from "@/components/modo-streamer";
+import { PipView } from "@/components/pip-view";
 
 // Flags-only webfont so country-flag emoji render on Windows/Edge (whose system
 // emoji font omits flags, showing the 2-letter code instead). Only flag glyphs
@@ -55,7 +56,20 @@ export default function RootLayout({
       <body style={{ minHeight: "100vh" }}>
         {children}
         <UpdateBanner />
-        <ModoStreamer />
+        <div
+          style={{
+            position: "fixed",
+            bottom: 14,
+            right: 14,
+            zIndex: 60,
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
+          <PipView />
+          <ModoStreamer />
+        </div>
       </body>
     </html>
   );
