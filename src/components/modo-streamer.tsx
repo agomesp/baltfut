@@ -4,189 +4,95 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Tv } from "lucide-react";
 import { MONO } from "@/components/primitives";
 
-const RELOAD_SECS = 30; // reload cadence while Modo Streamer is on
-const IDLE_OFF_MS = 2 * 60 * 60 * 1000; // auto-disable after 2h in the background
-const SCROLL_KEY = "baltfut_scroll";
-const ACTIVE_KEY = "baltfut_lastactive";
-const SCROLL_FRESH_MS = 120_000; // only restore a scroll position from a recent reload
-
-function getLastActive(): number {
-  try {
-    return Number(sessionStorage.getItem(ACTIVE_KEY)) || Date.now();
-  } catch {
-    return Date.now();
-  }
-}
-function bumpActive() {
-  try {
-    sessionStorage.setItem(ACTIVE_KEY, String(Date.now()));
-  } catch {
-    /* ignore */
-  }
-}
-function saveScroll() {
-  try {
-    sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ y: window.scrollY, t: Date.now() }));
-  } catch {
-    /* ignore */
-  }
-}
-
 /**
- * Reload bypassing the HTTP/CDN cache. GitHub Pages serves index.html with
- * max-age=600, so a plain location.reload() can keep getting stale HTML that
- * points to JS chunks deleted by a deploy → 404 → grey screen. A unique query
- * forces a fresh document fetch (and thus the current chunk URLs).
+ * Modo Streamer — PiP keep-alive. OFF by default; the user must turn it on.
+ *
+ * Clicking it ON opens a small, always-on-top Document Picture-in-Picture window
+ * (the click is the user gesture browsers require — a PiP can't auto-open on
+ * load). That window never gets occluded or throttled, which keeps the page
+ * "active" so the score + subs keep auto-updating for an OBS capture. Closing the
+ * PiP turns the mode off; while it's on the page does NOT auto-reload, so the PiP
+ * stays open. Unsupported browsers (no Document PiP) just toggle the flag.
+ *
+ * Caveat: this keeps the page active and the PiP painted; it does not force a
+ * fully-covered main window to keep painting — for that, capture the PiP window
+ * or use an OBS Browser Source.
  */
-function reloadFresh() {
-  try {
-    const url = new URL(window.location.href);
-    url.searchParams.set("r", String(Date.now()));
-    window.location.replace(url.toString());
-  } catch {
-    window.location.reload();
-  }
+const PIP_STYLE =
+  "html,body{margin:0;height:100%}" +
+  "body{background:#0b0b0c;color:#d8d8d2;display:flex;align-items:center;justify-content:center;" +
+  "font-family:ui-monospace,Menlo,Consolas,monospace}" +
+  ".s{font-size:11px;line-height:1.45;letter-spacing:.02em;text-align:center;padding:8px 10px}" +
+  ".d{display:inline-block;width:7px;height:7px;border-radius:999px;background:#e5484d;" +
+  "margin-right:6px;vertical-align:middle;animation:b 1.4s ease-in-out infinite}" +
+  "@keyframes b{0%,100%{opacity:1}50%{opacity:.2}}";
+
+interface DocumentPiP {
+  requestWindow: (opts: { width: number; height: number }) => Promise<Window>;
 }
 
-/**
- * Modo Streamer — keeps the page fresh for a capture/background window.
- *
- * While ON it simply reloads the page every RELOAD_SECS, regardless of whether the
- * browser thinks the tab is visible — more reliable for OBS, where a captured
- * window in the background may not be reported as hidden, yet its timers get
- * throttled and the tab can be discarded (the screen goes grey/stale). Reloading
- * on a short cadence keeps the tab active so it is never throttled or discarded.
- *
- * Scroll position and the in-progress palpite are preserved across reloads. After
- * 2h with the browser window unfocused it auto-disables (so an abandoned tab stops
- * hitting the APIs); focusing the window resets that 2h counter. The floating
- * button toggles it for the current page load (a manual refresh returns to ON).
- */
 export function ModoStreamer() {
-  const [on, setOn] = useState(true);
-  const onRef = useRef(true);
-  const timerRef = useRef<number | undefined>(undefined);
+  const [on, setOn] = useState(false);
+  const pipRef = useRef<Window | null>(null);
 
-  const clearReload = useCallback(() => {
-    if (timerRef.current) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = undefined;
+  const closePip = useCallback(() => {
+    const p = pipRef.current;
+    pipRef.current = null;
+    if (p && !p.closed) {
+      try {
+        p.close();
+      } catch {
+        /* ignore */
+      }
     }
   }, []);
 
-  // Reschedule the reload — but ONLY while the window is visible. Reloading a
-  // window that's covered (another app fullscreen / fully occluded) blanks the
-  // OBS capture to grey, because the browser won't paint the freshly-loaded
-  // document while it's hidden. So when hidden we keep the last painted frame
-  // (like a page that never reloads) and resume reloading — picking up new
-  // builds + fresh data — the moment it's visible again.
-  const apply = useCallback(() => {
-    clearReload();
-    if (!onRef.current) return;
-    if (document.hidden) return;
-    timerRef.current = window.setTimeout(() => {
-      saveScroll();
-      reloadFresh();
-    }, RELOAD_SECS * 1000);
-  }, [clearReload]);
-
-  // Mount: scroll restore + listeners + initial schedule / auto-disable.
-  useEffect(() => {
-    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-
-    // Restore a recent scroll position (i.e. right after an auto-reload), retrying
-    // while the async data renders and grows the page.
-    try {
-      const raw = sessionStorage.getItem(SCROLL_KEY);
-      if (raw) {
-        const { y, t } = JSON.parse(raw);
-        if (typeof y === "number" && y > 0 && Date.now() - t < SCROLL_FRESH_MS) {
-          let tries = 0;
-          const restore = () => {
-            window.scrollTo(0, y);
-            if (++tries < 60 && Math.abs(window.scrollY - y) > 2) requestAnimationFrame(restore);
-          };
-          requestAnimationFrame(restore);
-          window.setTimeout(() => window.scrollTo(0, y), 500);
-          window.setTimeout(() => window.scrollTo(0, y), 1200);
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-
-    let scrollT: number | undefined;
-    const onScroll = () => {
-      window.clearTimeout(scrollT);
-      scrollT = window.setTimeout(saveScroll, 250);
-    };
-    const reset = () => bumpActive(); // focus / interaction → reset the 2h counter
-    const onVis = () => {
-      if (!document.hidden) {
-        bumpActive();
-        saveScroll();
-      }
-      apply(); // schedule the reload when visible, cancel it when covered/hidden
-    };
-
-    if (document.hasFocus()) bumpActive();
-
-    // Auto-disable if the window has been unfocused past the limit; else schedule.
-    /* eslint-disable react-hooks/set-state-in-effect */
-    if (!document.hasFocus() && Date.now() - getLastActive() > IDLE_OFF_MS) {
+  const toggle = useCallback(() => {
+    if (on) {
+      closePip();
       setOn(false);
-    } else {
-      apply();
+      return;
     }
-    /* eslint-enable react-hooks/set-state-in-effect */
+    const dpip = (window as unknown as { documentPictureInPicture?: DocumentPiP }).documentPictureInPicture;
+    if (!dpip) {
+      // No Document PiP (e.g. Firefox/Safari): just flag it on; the keep-alive
+      // video + worker still run. Nothing to open.
+      setOn(true);
+      return;
+    }
+    // Must be called during this click's user activation.
+    dpip
+      .requestWindow({ width: 240, height: 64 })
+      .then((pip) => {
+        pipRef.current = pip;
+        const st = pip.document.createElement("style");
+        st.textContent = PIP_STYLE;
+        pip.document.head.appendChild(st);
+        const el = pip.document.createElement("div");
+        el.className = "s";
+        el.innerHTML = '<span class="d"></span>Atualizando placar p/ os subs — não feche';
+        pip.document.body.appendChild(el);
+        pip.addEventListener("pagehide", () => {
+          pipRef.current = null;
+          setOn(false);
+        });
+        setOn(true);
+      })
+      .catch(() => {
+        setOn(false);
+      });
+  }, [on, closePip]);
 
-    // Safety net: if a JS chunk fails to load (typically right after a deploy,
-    // when stale HTML references deleted chunks), recover with a fresh reload.
-    const isChunkErr = (m: string) =>
-      /ChunkLoadError|Loading chunk|Importing a module script failed|error loading dynamically imported module/i.test(m);
-    const onErr = (e: ErrorEvent) => {
-      if (isChunkErr(String(e?.message || ""))) reloadFresh();
-    };
-    const onRej = (e: PromiseRejectionEvent) => {
-      const r = e?.reason as { message?: string } | string | undefined;
-      if (isChunkErr(String((r as { message?: string })?.message ?? r ?? ""))) reloadFresh();
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("focus", reset);
-    window.addEventListener("pointerdown", reset);
-    window.addEventListener("keydown", reset);
-    window.addEventListener("pagehide", saveScroll);
-    window.addEventListener("error", onErr);
-    window.addEventListener("unhandledrejection", onRej);
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      window.clearTimeout(scrollT);
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("focus", reset);
-      window.removeEventListener("pointerdown", reset);
-      window.removeEventListener("keydown", reset);
-      window.removeEventListener("pagehide", saveScroll);
-      window.removeEventListener("error", onErr);
-      window.removeEventListener("unhandledrejection", onRej);
-      document.removeEventListener("visibilitychange", onVis);
-      clearReload();
-    };
-  }, [apply, clearReload]);
-
-  // React to the toggle.
-  useEffect(() => {
-    onRef.current = on;
-    apply();
-  }, [on, apply]);
+  // Close the PiP if this ever unmounts.
+  useEffect(() => () => closePip(), [closePip]);
 
   return (
     <button
-      onClick={() => setOn((v) => !v)}
+      onClick={toggle}
       title={
         on
-          ? `Recarrega a cada ${RELOAD_SECS}s para não congelar em segundo plano (ex.: OBS). Toque para desativar.`
-          : "Atualização automática desativada. Toque para ativar."
+          ? "Mantendo a página ativa numa janelinha (não feche). Toque para desligar."
+          : "Abre uma janelinha que mantém o placar atualizando em segundo plano (ex.: OBS)."
       }
       style={{
         display: "inline-flex",
@@ -210,28 +116,13 @@ export function ModoStreamer() {
         <span
           aria-hidden
           className="rec-blink"
-          style={{
-            width: 9,
-            height: 9,
-            borderRadius: 999,
-            background: "#e5484d",
-            display: "inline-block",
-            flex: "0 0 auto",
-          }}
+          style={{ width: 9, height: 9, borderRadius: 999, background: "#e5484d", display: "inline-block", flex: "0 0 auto" }}
         />
       ) : (
         <Tv size={15} />
       )}
       Modo Streamer
-      <span
-        style={{
-          fontSize: 10,
-          padding: "2px 7px",
-          borderRadius: 999,
-          background: "rgba(0,0,0,0.18)",
-          color: "var(--signal-ink)",
-        }}
-      >
+      <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 999, background: "rgba(0,0,0,0.18)", color: "var(--signal-ink)" }}>
         {on ? "Ativado" : "Desativado"}
       </span>
     </button>
