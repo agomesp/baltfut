@@ -232,8 +232,8 @@ function HeroFx({ match, phase, followCode }: { match: Match; phase: ChipPhase; 
       {flagBase ? (
         <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`${ASSET_BASE}/flags/${flagBase}.svg`} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.13 }} />
-          <LoopVideo srcs={["flag-shine.mp4"]} blend style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.55 }} />
+          <img src={`${ASSET_BASE}/flags/${flagBase}.svg`} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.22 }} />
+          <LoopVideo srcs={["flag-shine.mp4"]} blend style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.3 }} />
         </div>
       ) : null}
       {/* "AO VIVO ON [Kick]" — always shown (it's the streamer's Kick, not the
@@ -246,7 +246,7 @@ function HeroFx({ match, phase, followCode }: { match: Match; phase: ChipPhase; 
         style={{ position: "absolute", left: 16, bottom: 14, zIndex: 2, display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 999, background: "rgba(0,0,0,0.45)", textDecoration: "none", color: "#fff" }}
       >
         <LoopVideo srcs={["live-dot.mp4"]} blend style={{ width: 16, height: 16, borderRadius: 999 }} />
-        <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#fff" }}>Ao vivo on</span>
+        <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#fff" }}>Ao vivo na</span>
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden style={{ flex: "0 0 auto" }}>
           <path fill="#53FC18" d="M1.333 0h8v5.333H12V2.667h2.667V0h8v8H20v2.667h-2.667v2.666H20V16h2.667v8h-8v-2.667H12v-2.666H9.333V24h-8Z" />
         </svg>

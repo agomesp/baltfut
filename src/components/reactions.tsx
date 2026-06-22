@@ -66,14 +66,14 @@ export function Reactions({ matchId }: { matchId: string }) {
         {floaters.map((f) => (
           <span
             key={f.id}
-            style={{ position: "absolute", bottom: 70, left: `${f.left}%`, fontSize: 30, pointerEvents: "none", animation: `baltfutFloat ${f.dur}ms ease-out forwards` }}
+            style={{ position: "absolute", bottom: 54, left: `${f.left}%`, fontSize: 30, pointerEvents: "none", animation: `baltfutFloat ${f.dur}ms ease-out forwards` }}
           >
             {f.emoji}
           </span>
         ))}
       </div>
 
-      <div style={{ position: "fixed", bottom: 64, left: "50%", transform: "translateX(-50%)", zIndex: 56 }}>
+      <div style={{ position: "fixed", bottom: 14, left: "50%", transform: "translateX(-50%)", zIndex: 56 }}>
         {/* Expanded emoji bar (collapses with a fade/scale). */}
         <div
           style={{

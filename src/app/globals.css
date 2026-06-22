@@ -128,20 +128,26 @@ body {
   animation: recBlink 1.5s ease-in-out infinite !important;
 }
 
-/* Live reactions: an emoji balloons up to the top of the page and fades out. */
+/* Live reactions: an emoji pops in (grows from 0), balloons up to the top of the
+   page, and fades out before vanishing. */
 @keyframes baltfutFloat {
   0% {
-    transform: translateY(0) scale(0.6);
+    transform: translateY(0) scale(0);
     opacity: 0;
   }
   10% {
+    transform: translateY(-3vh) scale(1.25);
     opacity: 1;
   }
-  82% {
+  18% {
+    transform: translateY(-6vh) scale(1);
+    opacity: 1;
+  }
+  85% {
     opacity: 1;
   }
   100% {
-    transform: translateY(-92vh) scale(1.25);
+    transform: translateY(-95vh) scale(1.15);
     opacity: 0;
   }
 }
@@ -161,7 +167,11 @@ body {
 .rx-btn:hover {
   transform: scale(1.9) translateY(-3px);
 }
-.rx-btn:hover + .rx-btn,
+/* Neighbours grow a bit too. Split into separate rules so a browser lacking
+   :has() still applies the adjacent-sibling rule. */
+.rx-btn:hover + .rx-btn {
+  transform: scale(1.4) translateY(-1px);
+}
 .rx-btn:has(+ .rx-btn:hover) {
   transform: scale(1.4) translateY(-1px);
 }
