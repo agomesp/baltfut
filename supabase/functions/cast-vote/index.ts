@@ -12,7 +12,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { validateVote } from "../_shared/vote.ts";
 import { matchTimingFromSummary, palpitesClosed } from "../_shared/deadline.ts";
-import { decideClaim, isReservedName } from "../_shared/name-claim.ts";
+import { decideClaim, isReservedName, nameSkeleton } from "../_shared/name-claim.ts";
 import { getClientIp, hashIp, hashToken } from "../_shared/ip.ts";
 import {
   buildCorsHeaders,
@@ -120,12 +120,19 @@ Deno.serve(async (req: Request) => {
   }
   const tokenHash = await hashToken(token, IP_PEPPER);
   const nameLower = vote.username.trim().toLowerCase();
-  const { data: claim } = await supabase
-    .from("name_claims")
-    .select("token_hash,last_used_at")
-    .eq("name_lower", nameLower)
-    .maybeSingle();
-  if (decideClaim(claim ?? null, tokenHash, Date.now()) === "taken") {
+  // Canonical "skeleton" of the name, so visual look-alikes ("Rodrigo BaItar"
+  // with a capital-I vs "Rodrigo Baltar") share one identity and can't be used
+  // to impersonate an existing owner. We check BOTH the exact name's claim and
+  // any DIFFERENT name with the same skeleton; if either is owned by a different,
+  // still-fresh token, reject.
+  const nameCanon = nameSkeleton(vote.username);
+  const [{ data: claim }, { data: lookalikes }] = await Promise.all([
+    supabase.from("name_claims").select("token_hash,last_used_at").eq("name_lower", nameLower).maybeSingle(),
+    supabase.from("name_claims").select("token_hash,last_used_at,name_lower").eq("name_canon", nameCanon).neq("name_lower", nameLower),
+  ]);
+  const nowMs = Date.now();
+  const takenByLookalike = (lookalikes ?? []).some((c) => decideClaim(c, tokenHash, nowMs) === "taken");
+  if (takenByLookalike || decideClaim(claim ?? null, tokenHash, nowMs) === "taken") {
     return json(
       { error: "Esse nome pertence a outra pessoa. Escolha outro." },
       403,
@@ -169,6 +176,7 @@ Deno.serve(async (req: Request) => {
     {
       name_lower: nameLower,
       name: vote.username.trim(),
+      name_canon: nameCanon,
       token_hash: tokenHash,
       last_used_at: new Date().toISOString(),
     },

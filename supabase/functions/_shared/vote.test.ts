@@ -39,6 +39,26 @@ describe("validateVote", () => {
     expect(result.errors).toHaveProperty("username");
   });
 
+  it("accepts accented Latin names (pt-BR)", () => {
+    for (const username of ["José", "Conceição", "Müller", "Téo", "João-Vítor", "Ana.Paula"]) {
+      expect(validateVote({ ...valid, username }).success).toBe(true);
+    }
+  });
+
+  it("rejects cross-script letters and non-ASCII digits (homoglyph defense)", () => {
+    for (const username of [
+      "Аllan", // Cyrillic А (U+0410)
+      "Rοdrigo", // Greek omicron (U+03BF)
+      "Ѕergio", // Cyrillic Ѕ
+      "Ana١٢", // Arabic-Indic digits
+      "naïve😀", // emoji
+    ]) {
+      const result = validateVote({ ...valid, username });
+      expect(result.success, username).toBe(false);
+      expect(result.errors).toHaveProperty("username");
+    }
+  });
+
   it("rejects non-integer, negative, or out-of-range scores", () => {
     expect(validateVote({ ...valid, predHome: 1.5 }).success).toBe(false);
     expect(validateVote({ ...valid, predAway: -1 }).success).toBe(false);

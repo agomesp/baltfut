@@ -1,7 +1,46 @@
 import { describe, it, expect } from "vitest";
-import { decideClaim, isReservedName, CLAIM_STALE_MS } from "@shared/name-claim";
+import { decideClaim, isReservedName, nameSkeleton, CLAIM_STALE_MS } from "@shared/name-claim";
 
 const iso = (ms: number) => new Date(ms).toISOString();
+
+describe("nameSkeleton", () => {
+  it("folds the capital-I / lowercase-l homoglyph (the demonstrated attack)", () => {
+    expect(nameSkeleton("Rodrigo BaItar")).toBe(nameSkeleton("Rodrigo Baltar"));
+    expect(nameSkeleton("Rodrigo Baltar")).toBe("rodrigobaltar");
+  });
+
+  it("is case-insensitive and ignores spaces/separators", () => {
+    expect(nameSkeleton("aLLaN")).toBe("allan");
+    const k = nameSkeleton("Rodrigo Baltar");
+    expect(nameSkeleton("Rodrigo  Baltar")).toBe(k);
+    expect(nameSkeleton("Rodrigo.Baltar")).toBe(k);
+    expect(nameSkeleton("Rodrigo_Baltar")).toBe(k);
+    expect(nameSkeleton("Rodrigo-Baltar")).toBe(k);
+  });
+
+  it("folds digit look-alikes (1->l, 0->o)", () => {
+    expect(nameSkeleton("Ba1tar")).toBe(nameSkeleton("Baltar"));
+    expect(nameSkeleton("R0drigo")).toBe(nameSkeleton("Rodrigo"));
+  });
+
+  it("strips diacritics", () => {
+    expect(nameSkeleton("Téo")).toBe(nameSkeleton("Teo"));
+    expect(nameSkeleton("Álvarez")).toBe("alvarez");
+  });
+
+  it("folds common cross-script (Cyrillic) look-alikes", () => {
+    expect(nameSkeleton("Rоdrigo")).toBe(nameSkeleton("Rodrigo")); // Cyrillic 'о'
+    expect(nameSkeleton("аllаn")).toBe("allan"); // Cyrillic 'а'
+  });
+
+  it("strips zero-width / invisible characters", () => {
+    expect(nameSkeleton("Bal​tar")).toBe(nameSkeleton("Baltar"));
+  });
+
+  it("does NOT fold a genuinely-different dotted lowercase 'i'", () => {
+    expect(nameSkeleton("baitar")).not.toBe(nameSkeleton("baltar"));
+  });
+});
 
 describe("decideClaim", () => {
   const now = Date.parse("2026-06-22T12:00:00Z");

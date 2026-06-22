@@ -19,9 +19,13 @@ export const SCORE_MIN = 0;
 /** Generous upper bound — blocks absurd values without ever clipping a real score. */
 export const SCORE_MAX = 30;
 
-// Letters (any language), digits, spaces, and a few separators — no control
-// chars, angle brackets, or punctuation that could carry markup/script.
-const USERNAME_RE = /^[\p{L}\p{N} _.\-]+$/u;
+// Latin-script letters (so accented pt-BR names like "José"/"Müller" pass),
+// ASCII digits, spaces, and a few separators. Deliberately NO other scripts
+// (Cyrillic/Greek) and NO non-ASCII digits — those are pure homoglyph vectors
+// (a Cyrillic "а" reading as Latin "a") with no legitimate use here; the name
+// skeleton folds the remaining same-script look-alikes. Still no control chars,
+// angle brackets, or markup-bearing punctuation.
+const USERNAME_RE = /^[\p{Script=Latin}0-9 _.\-]+$/u;
 const LEAGUE_RE = /^[a-z0-9.\-]+$/i;
 const ID_RE = /^[A-Za-z0-9_-]+$/;
 
