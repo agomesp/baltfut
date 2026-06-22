@@ -30,15 +30,27 @@ export function getClientIp(headers: HeaderLike): string | null {
   return null;
 }
 
-/**
- * Salted SHA-256 of an IP, hex-encoded. The pepper is a server-only secret, so
- * the stored hash is neither reversible nor rainbow-table-able, and the raw IP
- * is never persisted.
- */
-export async function hashIp(ip: string, pepper: string): Promise<string> {
-  const data = new TextEncoder().encode(`${pepper}:${ip}`);
+/** Salted SHA-256 of a value, hex-encoded. The pepper is a server-only secret. */
+async function saltedSha256Hex(value: string, pepper: string): Promise<string> {
+  const data = new TextEncoder().encode(`${pepper}:${value}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+/**
+ * Salted SHA-256 of an IP. The raw IP is never persisted; the hash is neither
+ * reversible nor rainbow-table-able thanks to the server-only pepper.
+ */
+export function hashIp(ip: string, pepper: string): Promise<string> {
+  return saltedSha256Hex(ip, pepper);
+}
+
+/**
+ * Salted SHA-256 of the owner's nickname token (kept in their localStorage). The
+ * raw token never leaves the browser readable form / is never persisted.
+ */
+export function hashToken(token: string, pepper: string): Promise<string> {
+  return saltedSha256Hex(token, pepper);
 }

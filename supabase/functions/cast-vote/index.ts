@@ -12,7 +12,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { validateVote } from "../_shared/vote.ts";
 import { matchTimingFromSummary, palpitesClosed } from "../_shared/deadline.ts";
-import { getClientIp, hashIp } from "../_shared/ip.ts";
+import { decideClaim } from "../_shared/name-claim.ts";
+import { getClientIp, hashIp, hashToken } from "../_shared/ip.ts";
 import {
   buildCorsHeaders,
   parseAllowedOrigins,
@@ -102,6 +103,30 @@ Deno.serve(async (req: Request) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // Nickname ownership: a name belongs to the first person who used it, proved by
+  // a secret token in their browser's localStorage. Block anyone else from
+  // palpiting under that name while the claim is fresh (the owner palpited within
+  // the last 24h); after that it goes stale and can be re-claimed.
+  const rawToken = (body as { token?: unknown }).token;
+  const token = typeof rawToken === "string" ? rawToken.trim() : "";
+  if (token.length < 8 || token.length > 200) {
+    return json({ error: "Requisição inválida." }, 400, cors);
+  }
+  const tokenHash = await hashToken(token, IP_PEPPER);
+  const nameLower = vote.username.trim().toLowerCase();
+  const { data: claim } = await supabase
+    .from("name_claims")
+    .select("token_hash,last_used_at")
+    .eq("name_lower", nameLower)
+    .maybeSingle();
+  if (decideClaim(claim ?? null, tokenHash, Date.now()) === "taken") {
+    return json(
+      { error: "Esse nome pertence a outra pessoa. Escolha outro." },
+      403,
+      cors,
+    );
+  }
+
   const { error } = await supabase.from("votes").insert({
     match_id: vote.matchId,
     league: vote.league,
@@ -132,6 +157,18 @@ Deno.serve(async (req: Request) => {
     console.error("cast-vote insert failed:", error.code, error.message);
     return json({ error: "Não foi possível registrar seu palpite." }, 500, cors);
   }
+
+  // Palpite recorded — claim/refresh ownership of the name (best-effort).
+  const { error: claimErr } = await supabase.from("name_claims").upsert(
+    {
+      name_lower: nameLower,
+      name: vote.username.trim(),
+      token_hash: tokenHash,
+      last_used_at: new Date().toISOString(),
+    },
+    { onConflict: "name_lower" },
+  );
+  if (claimErr) console.error("name_claims upsert failed:", claimErr.code, claimErr.message);
 
   return json({ ok: true }, 201, cors);
 });

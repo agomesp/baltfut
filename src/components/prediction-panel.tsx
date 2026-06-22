@@ -82,21 +82,39 @@ export function PredictionPanel({
   const [away, setAway] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<SubmitOutcome | null>(null);
+  // A confirmed name (in localStorage) is locked to its owner; the input is freed
+  // only when there's no saved name (or the owner taps "trocar").
+  const [nameLocked, setNameLocked] = useState(false);
   // Ticks every second and re-syncs on tab focus, so the countdown stays accurate
   // and the form locks at the deadline even after the tab was backgrounded.
   const now = useNow(1000);
 
   const draftKey = `baltfut_draft:${match.id}`;
 
-  // Restore the saved name (global) and any in-progress score draft for THIS match
-  // so a reload (auto-refresh / Modo Streamer) mid-typing doesn't lose the input.
+  // Restore name + the in-progress score draft for THIS match so a reload
+  // (auto-refresh / Modo Streamer) mid-typing doesn't lose the input. A confirmed
+  // `baltfut_name` locks the input to its owner; otherwise the editable typing
+  // draft (`baltfut_name_draft`) is restored so a new user doesn't lose it either.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
+    let locked = "";
     try {
-      const saved = localStorage.getItem("baltfut_name");
-      if (saved) setUser(saved);
+      locked = localStorage.getItem("baltfut_name") || "";
     } catch {
       /* ignore */
+    }
+    if (locked) {
+      setUser(locked);
+      setNameLocked(true);
+    } else {
+      let draftName = "";
+      try {
+        draftName = localStorage.getItem("baltfut_name_draft") || "";
+      } catch {
+        /* ignore */
+      }
+      setUser(draftName);
+      setNameLocked(false);
     }
     let h = "";
     let a = "";
@@ -115,12 +133,16 @@ export function PredictionPanel({
   }, [draftKey]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Persist the draft a beat after typing stops.
+  // Persist the draft a beat after typing stops. The name is only saved as an
+  // (unlocking) draft until it's confirmed by a successful submit.
   useEffect(() => {
     const id = window.setTimeout(() => {
       try {
-        const name = user.trim();
-        if (name) localStorage.setItem("baltfut_name", name);
+        if (!nameLocked) {
+          const name = user.trim();
+          if (name) localStorage.setItem("baltfut_name_draft", name);
+          else localStorage.removeItem("baltfut_name_draft");
+        }
         if (home || away) localStorage.setItem(draftKey, JSON.stringify({ home, away }));
         else localStorage.removeItem(draftKey);
       } catch {
@@ -128,7 +150,18 @@ export function PredictionPanel({
       }
     }, 600);
     return () => window.clearTimeout(id);
-  }, [user, home, away, draftKey]);
+  }, [user, home, away, draftKey, nameLocked]);
+
+  function unlockName() {
+    try {
+      localStorage.removeItem("baltfut_name");
+    } catch {
+      /* ignore */
+    }
+    setUser("");
+    setNameLocked(false);
+    setOutcome(null);
+  }
 
   const open = isPalpiteOpen(closesAt, now);
   const remaining = closesAt - now;
@@ -172,11 +205,13 @@ export function PredictionPanel({
     setSubmitting(false);
     if (result.ok) {
       try {
-        localStorage.setItem("baltfut_name", name);
+        localStorage.setItem("baltfut_name", name); // confirmed → owned + locked
+        localStorage.removeItem("baltfut_name_draft");
         localStorage.removeItem(draftKey);
       } catch {
         /* ignore */
       }
+      setNameLocked(true);
       setHome("");
       setAway("");
       onVoted();
@@ -206,7 +241,16 @@ export function PredictionPanel({
           <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.04em", color: remaining < 60_000 ? "#e5484d" : "var(--signal-strong)" }}>
             Palpites encerrando em {formatCountdown(remaining)}
           </span>
-          <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="Seu nome" maxLength={24} autoComplete="off" aria-label="Seu nome" style={inputStyle} />
+          {nameLocked ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input value={user} readOnly aria-label="Seu nome" title="Seu nome fixo (reservado para você neste navegador)" style={{ ...inputStyle, flex: "1 1 auto", minWidth: 0, opacity: 0.85, cursor: "default" }} />
+              <button type="button" onClick={unlockName} title="Usar outro nome" style={{ flex: "0 0 auto", fontFamily: MONO, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink-3)", background: "transparent", border: "1px solid var(--line-2)", borderRadius: 4, padding: "8px 10px", cursor: "pointer" }}>
+                Trocar
+              </button>
+            </div>
+          ) : (
+            <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="Seu nome" maxLength={24} autoComplete="off" aria-label="Seu nome" style={inputStyle} />
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ flex: "0 0 auto", fontFamily: MONO, fontWeight: 500, fontSize: 15, color: "var(--ink)" }}>{match.home.abbreviation}</span>
             <input value={home} onChange={(e) => setHome(digits(e.target.value))} inputMode="numeric" placeholder="0" aria-label={`Gols ${match.home.abbreviation}`} style={{ ...inputStyle, flex: "1 1 0", minWidth: 0, textAlign: "center", fontFamily: MONO, fontSize: 16, padding: "9px 4px" }} />
