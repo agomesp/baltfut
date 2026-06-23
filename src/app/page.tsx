@@ -191,7 +191,7 @@ export default function Home() {
 
   // Scoreboard via a Web Worker: worker timers escape the hidden-tab throttle, so
   // the score stays full-rate even while the streamer's window is hidden (the
-  // keep-alive video keeps it painting; this keeps the data current).
+  // Modo Streamer PiP keeps it painting; this keeps the data current).
   useEffect(() => {
     return startScoreboardWorker(
       scoreboardUrl(DEFAULT_LEAGUE, FIFA_WORLD_DATE_RANGE),
@@ -372,7 +372,7 @@ export default function Home() {
         followName={followName}
         onClearFollow={() => setFollow(null)}
       />
-      <main style={{ maxWidth: 1180, margin: "0 auto", padding: "32px 24px 96px" }}>
+      <main style={{ maxWidth: 1180, margin: "0 auto", padding: "10px 23px 60px" }}>
         {loading ? (
           <p style={{ color: "var(--ink-3)" }}>Carregando…</p>
         ) : error && matches.length === 0 ? (

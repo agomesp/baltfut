@@ -48,7 +48,7 @@ export function ChipCarousel({ chips, selectedId, onSelect, releasedIds }: ChipC
   }, [selectedId]);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 22 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
       <button onClick={() => scroll(-1)} aria-label="Jogos anteriores" style={chevronStyle}>
         <ChevronLeft size={16} />
       </button>

@@ -3,7 +3,7 @@
  * JSON each time. Worker timers are NOT subject to the main-thread background-tab
  * throttle (which clamps hidden-tab timers to ~1/min after 5 minutes), so the
  * score data stays full-rate even while the streamer's window is hidden. The
- * keep-alive video keeps the page *painting*; this keeps the *data* fresh, so the
+ * Modo Streamer PiP keeps the page *painting*; this keeps the *data* fresh, so the
  * painted score is current rather than stale.
  *
  * Built from a Blob so it needs no separately-bundled worker file — works cleanly

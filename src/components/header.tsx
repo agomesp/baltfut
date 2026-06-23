@@ -45,6 +45,7 @@ export function Header({
           maxWidth: 1180,
           margin: "0 auto",
           padding: "14px 24px",
+          borderBottom: "1px solid var(--line)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -149,7 +150,7 @@ export function Header({
               <span
                 style={{
                   fontFamily: MONO,
-                  fontSize: 13,
+                  fontSize: 14,
                   letterSpacing: "0.08em",
                   textTransform: "uppercase",
                   color: isRank ? "var(--rank)" : active ? "var(--ink)" : "var(--ink-2)",

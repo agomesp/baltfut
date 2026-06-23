@@ -152,6 +152,15 @@ body {
   }
 }
 
+/* Promo showcase marquee — the track holds the items twice; -50% = one full loop. */
+@keyframes baltfutPromoScroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.promo-marquee:hover > div {
+  animation-play-state: paused;
+}
+
 /* Reaction bar buttons — macOS-dock-style magnification on hover (incl. neighbours). */
 .rx-btn {
   font-size: 18px;

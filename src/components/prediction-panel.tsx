@@ -39,6 +39,8 @@ export interface PredictionPanelProps {
   /** False when this match is beyond the current+next window (not yet open). */
   released: boolean;
   onVoted: () => void;
+  /** Compact styling for the split (2-match) view — smaller notice boxes. */
+  dense?: boolean;
   /** Injectable for tests; defaults to the live Edge Function call. */
   transport?: CastVoteTransport;
 }
@@ -88,8 +90,14 @@ export function PredictionPanel({
   closesAt,
   released,
   onVoted,
+  dense = false,
   transport = supabaseCastVote,
 }: PredictionPanelProps) {
+  // Smaller notice boxes in the split (2-match) view.
+  const nMargin = dense ? "8px 14px 10px" : "12px 18px 14px";
+  const nPad = dense ? "8px 11px" : "12px 14px";
+  const nTitle = dense ? 9 : 11;
+  const nBody = dense ? 10 : 13;
   const [user, setUser] = useState("");
   const [home, setHome] = useState("");
   const [away, setAway] = useState("");
@@ -110,6 +118,10 @@ export function PredictionPanel({
   // draft (`baltfut_name_draft`) is restored so a new user doesn't lose it either.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
+    // A new match (auto-advance when one ends, or a manual switch) must clear any
+    // stale submit message — otherwise "Esse nome já foi usado nesta partida."
+    // from the previous match lingers on the next one.
+    setOutcome(null);
     let locked = "";
     try {
       locked = localStorage.getItem("baltfut_name") || "";
@@ -145,6 +157,14 @@ export function PredictionPanel({
     setAway(a);
   }, [draftKey]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Auto-dismiss a submit error after a few seconds so it doesn't linger (it's
+  // also cleared on match change above).
+  useEffect(() => {
+    if (!outcome || outcome.ok) return;
+    const id = window.setTimeout(() => setOutcome(null), 5000);
+    return () => window.clearTimeout(id);
+  }, [outcome]);
 
   // Persist the draft a beat after typing stops. The name is only saved as an
   // (unlocking) draft until it's confirmed by a successful submit.
@@ -247,11 +267,11 @@ export function PredictionPanel({
       </div>
 
       {!released ? (
-        <div style={{ margin: "12px 18px 14px", padding: "12px 14px", borderRadius: 6, border: "1px solid var(--line-2)", background: "var(--bg)" }}>
-          <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "#e5a23b", marginBottom: 4 }}>
+        <div style={{ margin: nMargin, padding: nPad, borderRadius: 6, border: "1px solid var(--line-2)", background: "var(--bg)" }}>
+          <div style={{ fontFamily: MONO, fontSize: nTitle, letterSpacing: "0.06em", textTransform: "uppercase", color: "#e5a23b", marginBottom: dense ? 3 : 4 }}>
             Palpites não liberados
           </div>
-          <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
+          <div style={{ fontSize: nBody, color: "var(--ink-2)" }}>
             Palpites não liberados ainda para essa partida, somente após a partida anterior à anterior completar.
           </div>
         </div>
@@ -284,11 +304,11 @@ export function PredictionPanel({
           {outcome?.ok ? <span style={{ fontSize: 12, color: "var(--signal-strong)" }}>Palpite enviado!</span> : null}
         </form>
       ) : (
-        <div style={{ margin: "12px 18px 14px", padding: "12px 14px", borderRadius: 6, border: "1px solid var(--line-2)", background: "var(--bg)" }}>
-          <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "#e5a23b", marginBottom: 4 }}>
+        <div style={{ margin: nMargin, padding: nPad, borderRadius: 6, border: "1px solid var(--line-2)", background: "var(--bg)" }}>
+          <div style={{ fontFamily: MONO, fontSize: nTitle, letterSpacing: "0.06em", textTransform: "uppercase", color: "#e5a23b", marginBottom: dense ? 3 : 4 }}>
             Palpites encerrados
           </div>
-          <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
+          <div style={{ fontSize: nBody, color: "var(--ink-2)" }}>
             Palpites encerrados para esta partida. Palpite a próxima — até 5min do início da partida.
           </div>
         </div>

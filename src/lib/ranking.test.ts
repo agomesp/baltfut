@@ -39,6 +39,29 @@ describe("rankSubs", () => {
     ]);
   });
 
+  it("orders by correct palpites only — wrong palpites don't change the order", () => {
+    const ms: Record<string, Match> = {
+      a: match("a", "post", 1, 0),
+      b: match("b", "post", 2, 0),
+      c: match("c", "post", 3, 0),
+    };
+    // Both have 1 win. "ana" also has 2 losses, "zeca" has none. Order must be
+    // alphabetical (ana, zeca) — NOT fewest-losses-first (which would put zeca on top).
+    const ranked = rankSubs(
+      [
+        entry("ana", "a", 1, 0), // win
+        entry("ana", "b", 9, 9), // loss
+        entry("ana", "c", 9, 9), // loss
+        entry("zeca", "a", 1, 0), // win
+      ],
+      ms,
+    );
+    expect(ranked).toEqual([
+      { username: "ana", wins: 1, losses: 2 },
+      { username: "zeca", wins: 1, losses: 0 },
+    ]);
+  });
+
   it("ignores palpites on unfinished matches", () => {
     expect(rankSubs([entry("ana", "mLive", 1, 0)], matchesById)).toEqual([]);
   });
