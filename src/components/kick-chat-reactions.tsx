@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CHAT_EMOTES_EVENT, chatEmotesOn } from "@/components/chat-emotes-toggle";
 
 /**
  * Watch the streamer's Kick chat (public Pusher WebSocket) and float each emote
@@ -33,9 +34,21 @@ interface Floater {
 
 export function KickChatReactions({ chatroomId = CHATROOM_ID, maxPerMsg = 4 }: { chatroomId?: number; maxPerMsg?: number }) {
   const [floaters, setFloaters] = useState<Floater[]>([]);
+  const [enabled, setEnabled] = useState(true);
+
+  // Follow the on/off toggle (ChatEmotesToggle). Read after mount (no localStorage
+  // during prerender) and react to toggle events.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    setEnabled(chatEmotesOn());
+    const onToggle = () => setEnabled(chatEmotesOn());
+    window.addEventListener(CHAT_EMOTES_EVENT, onToggle);
+    return () => window.removeEventListener(CHAT_EMOTES_EVENT, onToggle);
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !enabled) return; // off → no WS, no floats
 
     let ws: WebSocket | null = null;
     let stopped = false;
@@ -77,7 +90,7 @@ export function KickChatReactions({ chatroomId = CHATROOM_ID, maxPerMsg = 4 }: {
       window.clearTimeout(retry);
       ws?.close();
     };
-  }, [chatroomId, maxPerMsg]);
+  }, [chatroomId, maxPerMsg, enabled]);
 
   return (
     <div aria-hidden style={{ position: "fixed", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 54 }}>

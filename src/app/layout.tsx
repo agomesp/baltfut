@@ -6,6 +6,7 @@ import { UpdateBanner } from "@/components/update-banner";
 import { ModoStreamer } from "@/components/modo-streamer";
 import { PipView } from "@/components/pip-view";
 import { KickChatReactions } from "@/components/kick-chat-reactions";
+import { ChatEmotesToggle } from "@/components/chat-emotes-toggle";
 
 // Flags-only webfont so country-flag emoji render on Windows/Edge (whose system
 // emoji font omits flags, showing the 2-letter code instead). Only flag glyphs
@@ -79,6 +80,7 @@ export default function RootLayout({
             alignItems: "center",
           }}
         >
+          <ChatEmotesToggle />
           <PipView />
           <ModoStreamer />
         </div>
