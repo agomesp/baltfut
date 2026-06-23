@@ -11,16 +11,24 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 // from our own list, so a client can NEVER inject an arbitrary URL (unknown ids
 // are ignored). Only site-open users join in.
 // Reaction images are Kick emotes (animated GIFs — <img> renders them animated),
-// in bar order. Absolute URLs, used directly as the <img> src.
-const REACTIONS: { id: string; src: string }[] = [
-  { id: "r1", src: "https://files.kick.com/emotes/4147884/fullsize" },
-  { id: "r2", src: "https://files.kick.com/emotes/37226/fullsize" },
-  { id: "r3", src: "https://files.kick.com/emotes/37225/fullsize" },
-  { id: "r4", src: "https://files.kick.com/emotes/4148085/fullsize" },
-  { id: "r5", src: "https://files.kick.com/emotes/37240/fullsize" },
-  { id: "r6", src: "https://files.kick.com/emotes/39261/fullsize" },
+// in bar order. The kick URL is primary; if it 404s / goes down, onError swaps to
+// a self-hosted copy under public/reactions/ (downloaded fallbacks).
+const ASSET_BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const REACTIONS: { id: string; src: string; fallback: string }[] = [
+  { id: "r1", src: "https://files.kick.com/emotes/4147884/fullsize", fallback: "reactions/r1.gif" },
+  { id: "r2", src: "https://files.kick.com/emotes/37226/fullsize", fallback: "reactions/r2.png" },
+  { id: "r3", src: "https://files.kick.com/emotes/37225/fullsize", fallback: "reactions/r3.png" },
+  { id: "r4", src: "https://files.kick.com/emotes/4148085/fullsize", fallback: "reactions/r4.gif" },
+  { id: "r5", src: "https://files.kick.com/emotes/37240/fullsize", fallback: "reactions/r5.png" },
+  { id: "r6", src: "https://files.kick.com/emotes/39261/fullsize", fallback: "reactions/r6.gif" },
 ];
-const SRC_BY_ID = new Map(REACTIONS.map((r) => [r.id, r.src]));
+const BY_ID = new Map(REACTIONS.map((r) => [r.id, r]));
+// On a failed remote load, swap to the local fallback once (guard avoids a loop).
+function swapToFallback(img: HTMLImageElement, fallback: string) {
+  if (img.dataset.fb) return;
+  img.dataset.fb = "1";
+  img.src = `${ASSET_BASE}/${fallback}`;
+}
 const COOLDOWN_MS = 800; // min gap between this user's reactions (anti-spam)
 
 let nextId = 0;
@@ -39,7 +47,7 @@ export function Reactions({ matchId }: { matchId: string }) {
   const lastReact = useRef(0);
 
   const spawn = useCallback((rid: string) => {
-    if (!SRC_BY_ID.has(rid)) return; // ignore anything outside our set
+    if (!BY_ID.has(rid)) return; // ignore anything outside our set
     const f: Floater = { id: nextId++, rid, left: 6 + Math.random() * 88, dur: 3600 + Math.random() * 1800 };
     setFloaters((cur) => [...cur.slice(-39), f]); // cap concurrent floaters
     window.setTimeout(() => setFloaters((cur) => cur.filter((x) => x.id !== f.id)), f.dur + 150);
@@ -73,15 +81,19 @@ export function Reactions({ matchId }: { matchId: string }) {
     <>
       {/* Float layer — pointer-events disabled so taps fall through to the page. */}
       <div aria-hidden style={{ position: "fixed", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 55 }}>
-        {floaters.map((f) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={f.id}
-            src={SRC_BY_ID.get(f.rid)}
-            alt=""
-            style={{ position: "absolute", bottom: 54, left: `${f.left}%`, width: 44, height: 44, objectFit: "contain", pointerEvents: "none", animation: `baltfutFloat ${f.dur}ms ease-out forwards` }}
-          />
-        ))}
+        {floaters.map((f) => {
+          const r = BY_ID.get(f.rid);
+          return r ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={f.id}
+              src={r.src}
+              alt=""
+              onError={(e) => swapToFallback(e.currentTarget, r.fallback)}
+              style={{ position: "absolute", bottom: 54, left: `${f.left}%`, width: 44, height: 44, objectFit: "contain", pointerEvents: "none", animation: `baltfutFloat ${f.dur}ms ease-out forwards` }}
+            />
+          ) : null;
+        })}
       </div>
 
       <div style={{ position: "fixed", bottom: 14, left: "50%", transform: "translateX(-50%)", zIndex: 56 }}>
@@ -107,7 +119,7 @@ export function Reactions({ matchId }: { matchId: string }) {
             {REACTIONS.map((r) => (
               <button key={r.id} className="rx-btn" onClick={() => react(r.id)} title="Reagir">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={r.src} alt="" width={28} height={28} style={{ width: 28, height: 28, objectFit: "contain", display: "block" }} />
+                <img src={r.src} alt="" width={28} height={28} onError={(e) => swapToFallback(e.currentTarget, r.fallback)} style={{ width: 28, height: 28, objectFit: "contain", display: "block" }} />
               </button>
             ))}
           </div>
