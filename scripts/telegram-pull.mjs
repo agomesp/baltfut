@@ -59,8 +59,24 @@ function parse(htmlDoc) {
 
 const res = await fetch(`https://t.me/s/${CHANNEL}`, { headers: { "user-agent": "Mozilla/5.0 baltfut-promos" } });
 if (!res.ok) { console.error(`✋ t.me returned ${res.status}`); process.exit(1); }
-const items = parse(await res.text());
-const payload = { channel: CHANNEL, url: `https://t.me/${CHANNEL}`, fetchedAt: new Date().toISOString(), items };
-fs.writeFileSync(OUT, JSON.stringify(payload, null, 2) + "\n");
-console.log(`✓ wrote ${items.length} promos → ${path.relative(process.cwd(), OUT)}`);
+const parsed = parse(await res.text());
+const items = parsed.map((it, i) => ({ position: i, ...it }));
+
+// With Supabase creds (the GitHub cron) → atomically replace the `promos` table
+// via the set_promos RPC. No git commit, so NO Pages deploy / viewer reload.
+// Without creds (local dev) → just write the JSON file for inspection.
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (SUPABASE_URL && SERVICE_ROLE) {
+  const res2 = await fetch(`${SUPABASE_URL}/rest/v1/rpc/set_promos`, {
+    method: "POST",
+    headers: { apikey: SERVICE_ROLE, authorization: `Bearer ${SERVICE_ROLE}`, "content-type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  if (!res2.ok) { console.error(`✋ set_promos failed: ${res2.status} ${await res2.text()}`); process.exit(1); }
+  console.log(`✓ upserted ${items.length} promos → Supabase (no deploy, no reload)`);
+} else {
+  fs.writeFileSync(OUT, JSON.stringify({ channel: CHANNEL, url: `https://t.me/${CHANNEL}`, fetchedAt: new Date().toISOString(), items }, null, 2) + "\n");
+  console.log(`✓ wrote ${items.length} promos → ${path.relative(process.cwd(), OUT)} (local; set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to upsert to the DB)`);
+}
 for (const i of items.slice(0, 5)) console.log(`  · ${i.store ?? "?"} — ${i.product?.slice(0, 48)} — ${i.price ?? "?"}${i.image ? " [img]" : ""}`);

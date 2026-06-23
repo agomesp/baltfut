@@ -1,19 +1,21 @@
 name: Update promos
 
-# Refresh the RB Store promo feed (public/promos.json) from the PUBLIC Telegram
-# channel — no secrets, no infra (see docs/telegram-spike.md). Commits only when
-# the feed changed; that push deploys Pages, which reloads open viewers, so the
-# cadence is deliberately low. Adjust the cron / run manually as needed; pause it
-# during a stream if a mid-stream reload isn't wanted.
+# Refresh the RB Store promo feed from the PUBLIC Telegram channel into the
+# Supabase `promos` table (via the set_promos RPC). No git commit → NO Pages
+# deploy → open viewers do NOT reload; the page picks up new deals on its next
+# poll. See docs/telegram-spike.md.
+#
+# Requires repo secrets:
+#   NEXT_PUBLIC_SUPABASE_URL      (already set)
+#   SUPABASE_SERVICE_ROLE_KEY     (ADD THIS — Supabase → Settings → API → service_role)
 on:
   schedule:
-    - cron: "17 */4 * * *" # every 4 hours (offset minute to avoid the top-of-hour rush)
+    - cron: "17 */2 * * *" # every 2 hours (cheap now — no deploy per refresh)
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
-# Don't let two refreshes race a push.
 concurrency:
   group: promos
   cancel-in-progress: true
@@ -21,20 +23,12 @@ concurrency:
 jobs:
   pull:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: node scripts/telegram-pull.mjs
-      - name: Commit if the feed changed
-        run: |
-          if ! git diff --quiet -- public/promos.json; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add public/promos.json
-            git commit -m "chore(promos): refresh RB Store feed"
-            git push
-          else
-            echo "no change"
-          fi

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Gift, ArrowRight } from "lucide-react";
 import { MONO } from "@/components/primitives";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 /**
  * Slim promo bar that sits on top of the live score. Latest deals from the public
@@ -14,8 +15,8 @@ import { MONO } from "@/components/primitives";
  * SECURITY: only string fields are rendered (React escapes them); images come from
  * Telegram's CDN — no raw markup from messages is injected.
  */
-const ASSET_BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const CHANNEL = "https://t.me/rbstorenet";
+const POLL_MS = 4 * 60_000; // re-read the feed every 4 min (no deploy needed)
 
 interface Promo {
   product: string;
@@ -29,13 +30,19 @@ interface Promo {
 export function PromoShowcase({ height = 60 }: { height?: number }) {
   const [items, setItems] = useState<Promo[]>([]);
 
+  // Poll the Supabase `promos` table so the cron can refresh the feed WITHOUT a
+  // Pages deploy / viewer reload — new deals just appear on the next poll.
   useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
     let alive = true;
-    fetch(`${ASSET_BASE}/promos.json`, { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d?.items) setItems(d.items.filter((i: Promo) => i.product && i.link)); })
-      .catch(() => {});
-    return () => { alive = false; };
+    const load = async () => {
+      const { data } = await client.from("promos").select("product,price,link,image,store,coupon").order("position");
+      if (alive && data) setItems((data as Promo[]).filter((i) => i.product && i.link));
+    };
+    void load();
+    const id = window.setInterval(() => void load(), POLL_MS);
+    return () => { alive = false; window.clearInterval(id); };
   }, []);
 
   const loop = items.length ? [...items, ...items] : [];

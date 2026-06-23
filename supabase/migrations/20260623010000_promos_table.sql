@@ -1,0 +1,49 @@
+-- Promo feed (RB Store deals from the public Telegram channel). Replaces the
+-- static public/promos.json: the page POLLS this table (anon read) and the cron
+-- REPLACES the set via set_promos() — so refreshing promos no longer requires a
+-- Pages deploy / viewer reload. Mirrors the votes security model (anon read-only;
+-- writes only via service_role).
+create table public.promos (
+  position   smallint primary key,
+  product    text not null,
+  price      text,
+  link       text not null,
+  image      text,
+  store      text,
+  coupon     text,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.promos enable row level security;
+alter table public.promos force row level security;
+
+-- Grants gotcha: a new table gets ZERO grants on this project — grant both.
+revoke all on public.promos from anon, authenticated;
+grant select on public.promos to anon, authenticated;            -- public read
+grant select, insert, update, delete on public.promos to service_role;
+
+create policy "Public can read promos"
+  on public.promos for select to anon, authenticated using (true);
+
+-- Atomic replace of the whole feed (one transaction → readers never see it empty).
+-- Only service_role may execute it; anon cannot.
+create or replace function public.set_promos(items jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $func$
+begin
+  delete from public.promos;
+  insert into public.promos (position, product, price, link, image, store, coupon)
+  select x.position, x.product, x.price, x.link, x.image, x.store, x.coupon
+  from jsonb_to_recordset(items) as x(
+    position smallint, product text, price text, link text, image text, store text, coupon text
+  );
+end;
+$func$;
+revoke all on function public.set_promos(jsonb) from public, anon, authenticated;
+grant execute on function public.set_promos(jsonb) to service_role;
+
+-- Seed with the current feed so the bar has deals immediately after deploy.
+select public.set_promos('[{"position":0,"product":"Placa de Vídeo NVIDIA GeForce PNY RTX5060 8GB DUAL FAN OC Blackwell- VCG50608DFXPB1-O","price":"R$ 2.153,00","link":"https://rbstore.net/s/621243d2_th","image":"https://cdn4.telesco.pe/file/IHRJxPL52QvjqAE2amK1XFyfkgth1jF-4tEaNZvZVy8byyzkLKCpXsasrQJ_Z2rHMZo4iG2L0LZITMq7HnZM2Km2OMRgHXUDJkmP00YcpzuMXnppqvgSZmNJCXZ9kOMAJ1CZa5eu9O6P4LGsL0vDdHBSQcsrNrqim0m3no2r68kHe2ZFaoh5hfKwG-N2EV-YFw8_7w-5KhabJKQwbH8gi6iYb6_Pe8AlS-YkyJ73Lj971hSmqR9r2vPg0azDKQg4xOf2PUe1or_EChC6bZDLTRjC-MlPkndj7NF-DhkZN0fiiLsxS3uVVcwEreENO80SqpyGhrF8mLFw72GLt-HSRA.jpg","store":"Shopee","coupon":"https"},{"position":1,"product":"Placa de Vídeo NVIDIA GeForce Galax RTX5060 1 Click OC 2X 8GB - 128 Bits - HDMI/3X Display","price":"R$ 2.153,00","link":"https://rbstore.net/s/7ba2afe5_th","image":"https://cdn4.telesco.pe/file/V7SKv27eiVa59ifKgtT-SXzIt8VEKLoX675j5KemN0Bn9_HZRuVlswTakdr5l6FI0DBWFJvlZcfvlOBLMA2pxvjuMdz3QiXJgrcvHJZuKvUxWPBd1YavC53jVQTasZqeq2dgkjMlfyiR0gSBfc5rGCpjf5vsLY9ny6BOSgRFZH4LfQGAnW4d_8dMLxBRSetMqC5Imeav4VomVc37jOrSlM78OQOrGqS-i53YHbq2OSQ2KpBVICN09nyhPjt2NPTCYQP69jj8VbZTI3CvzhN4GTTU5AbhFOcbvHoV3ibg9fyoGWXR9LQuZtLloWrK0mGgHGaRdUxx_8XbNeSjk4n8kQ.jpg","store":"Shopee","coupon":"https"},{"position":2,"product":"Placa de vídeo NVIDIA GeForce MSI RTX5060 8GB VENTUS 2X OC Blackwell - 912-V537-017","price":"R$ 2.153,00","link":"https://rbstore.net/s/1abcd1ce_th","image":"https://cdn4.telesco.pe/file/ucZGQCI57DVEpWoulvtePjVv677ziYwTTftEVoFCoFrzX1POEwnsMFS5dOeXxP70cf6AQ68J5rGdfqckjF5nrdO0RrxaOY4n4Eg30XEIFiJ-C0Hrt3fB4oj3kRZ1WWNgqcfanK3OpRPncNXMZQ5OHRglXm1cvXp_wdq401eNxF10Oex2A8jdfkDI7Rif7XP_8hOqmC3hNHjPcbpOJLyOJR_EvUsQKQauZGNe48-1Z-pE3EseLW3mFydgRR9-MxYgXa01F_PDKiLgY8n33je-h9Txwgz1sGWPNzn9iz-N780l8IT2L9E0uwXddrNOxME-6vlgDNzwxUkiqjJnONbqtQ.jpg","store":"Shopee","coupon":"https"},{"position":3,"product":"Console Playstation 5 Slim Edição Digital 825 Gb","price":"R$ 3.518,00","link":"https://rbstore.net/s/2d9d53d1_th","image":"https://cdn4.telesco.pe/file/vCzFb5dApDreEDabyFFVMQ9k5sZpgi-uvXQpY7beTwfTsUc3fPisiVnoyhgmcJ3WqPH0u6EH89kXi2s1AbNSStALaCjSF1Q7P2Wpbt58lWHEdWHmp6vXq4C5-ipdxstPqPT-rm68wh_-8NZeMhaMMV14S05E3Gihv_E4M8gauesT_S1MjYh0pHZ_qcYMvKgMUcbUfy5dFb6uSBfVwBTaqvmMsAaKmq7-BpvlX1gwIP2V6g3BcknkG0HGjgH1WxJS2VEHSpQaHhzqzsgwW4C3s57AdnjQ-0tNXPRRvar0Xvsq3CG5McxHZ37bsPyVlSVMBWYt7J_WcxOCA_M7GIzXCA.jpg","store":"Mercado Livre","coupon":"FUTNAVEIA"},{"position":4,"product":"Placa Mãe Gigabyte B850 GAMING WIFI6 (AM5/4xDDR5/HDMI/DP/M.2/USB 3.2)","price":"R$ 1.299,00","link":"https://rbstore.net/s/bcbb10c2_th","image":"https://cdn4.telesco.pe/file/qQzzGhYDEbvySb4LHipv6VDbkOVD2aolIQv-Uc11LSHZzb1H4qBmDI15m9vx-B683kuLmrfNa-2Pgj6KM0tU72iKcsaVGVNo08V-rAdxltiOaEGjJln4jfFSaTKycUHS_bGMRgx2FxpeNmmFKRrUQ8l0Upzg8ST1C__LADWiyA56cmEJyPNIVeBtr4q_iscM0gDEh19cDfrecnhcCjz7nBtoNTi95fUhBXfagqc1naXaZ_wBX_GVLGntOtmhStaKCCxZUMhGD9hyoqKZasKkXQUKEbGSvCgEFfrQeqEeKScNpuRNkj5ms6luhMIlrH_30vRa11o1QqVeHNs-Su5GBQ.jpg","store":"Amazon","coupon":"PARAVOCE"},{"position":5,"product":"AMD Ryzen 5 7500F, 5.0GHz Max Turbo, Cache 38MB, AM5, (OEM) 100-000000597","price":"R$ 820,00","link":"https://rbstore.net/s/3d07cf3b_th","image":"https://cdn4.telesco.pe/file/bCBXLsiEipqUYN0pzch-xjO9Mhcdp26jkmTELph1wrtN0_Gze5uC6Fvg7Q6uFGZm_oywzFFWszauBzxhEjrr4evqknUmLBG4U7K1BeAIsbNDGuNR0AppqFCQNQKlQ8Zrk4ZBCU7E7DiherkX2SDj9G7jkJNiXRYEmhjKUmkycu19xaYQnLD-fH12lwian04Ycy4ay59HlsZmm4CnXi7gcpse9bbqHwkkcWiuYX3vo4s-6UeZKfm9k4zdGQqwWjXn7ZvqrA1MNKNyqbWf_MxzUw3aCSh-1hZhFExwP55LRTJ2iPJbQbeoCBzrTI2VEJ_ISMstmcx1wW8CxQAWQ7HGgw.jpg","store":"Shopee","coupon":"https"},{"position":6,"product":"PNY Placa gráfica GEFORCE RTX™ 5060 8GB Dual Fan DLSS 4","price":"R$ 2.299,00","link":"https://rbstore.net/s/c4c850c3_th","image":"https://cdn4.telesco.pe/file/B34pK37cR2Wabw4itPQ2xpdiWka1CD9Z-yWV9FasYENYyT-f1VwZpH9KzBKwo4RB-bGa-Y627LQ0RupjKVp-Zfy-mv5tJKDqRtNFuvFFJt_T2co_cYPiyWCa3g4zXg9mBwPVhkIhYIOPjKa3EYEJtlOz1HmTgc1ZPLlmSFKd7Cgb9n6dSxEklJ3fTwXTBVX0fvFXfAMkjLPtMN7vbiqJJQSeL2xpXB1tNvlb-aG417F25FeGK7ohuQ6AHMcTOfaxIqUfpHnILe6sqmxZ-7xABJhcbypbChmHlWwCxwrbesy2NQzrrlHdLbauh_X116UqxEgxF7Uww7Gl04PIDuLd3g.jpg","store":"Amazon","coupon":"PARAVOCE"},{"position":7,"product":"Placa de Vídeo NVIDIA GeForce MSI RTX5060 8GB Ventus OC White 2X - 128 Bits - HDMI/3X DP -","price":"R$ 2.107,00","link":"https://rbstore.net/s/fc0b2a80_th","image":"https://cdn4.telesco.pe/file/IHgsSQcdFg4tsRaDKJ6KuGdyoh8zAtfvj4FGg0N8W_t-xQY_n1B3BT2n2qM-hxtXBLGTYKDtMxVx9VO25F5FKNG7Nt1q-_LdqXYmGFK6afDYCht_T4RLMVV0_arJKBtuWIQRCpai23ucW4ZJEMx9T846cP8D_-vg9VjLUMx2pYa1ZfN73UG2_kuvTkLbHaj5A0rIdsM4_dfj-4CbPNZvlsGDfepOsPSnoA-WoAg3s-cx5Xv9d7JA9RoUZjuV-Rjh3EEr970J2GAShQy82h7S_jOx__8rxfwrOOU2zMTM8LkWbW7j4Oo6WTJBA27Ol6L20VJl1t65V3zxIGZROkm6pQ.jpg","store":"Shopee","coupon":"https"},{"position":8,"product":"Processador AMD Ryzen 7 5700X, 3,4 GHz, 8 núcleos, 16 threads, cache de 32 MB, soquete AM4","price":"R$ 1.040,00","link":"https://rbstore.net/s/dd4a9eb2_th","image":"https://cdn4.telesco.pe/file/fVvRFnfOryDVAEka8gmnBQ6yVuHBRPwY4QsWVr4sCvIOk4FYEoLXBZIKI8ZvJP8BVkdZv9pAOg7TIaLs_8sDwnioIi66QjybQLvamEsAcb6SIr619r1KYukFQsBMMgyuzynonaRm4hW-OUtaIMPs0hAPFPBkLnRqR6m50Gu3j8frXg_8W5ukc_wKMa4w6H3FuHxf87ddhbnLefOtMB8Q0_xVDNPE-cU4f1bqITb9znBHkS_QwCzR0ePnvzVQsHHM1qy2XowhHgVwP77tSiOG1d0SPZxjm3x7veCynj8ohlXUSKWCAD4wDiUMxq3mkV3dCaI4H15bdF325R2BiQy8jg.jpg","store":"Amazon","coupon":"PARAVOCE"},{"position":9,"product":"Processador AMD Ryzen 7 8700F AM5 100100001590BOX","price":"R$ 998,00","link":"https://rbstore.net/s/8042e51d_th","image":"https://cdn4.telesco.pe/file/NIitW3FFjScifFcNoRZ89PcoBTGjmfZJ47a6VcM8aj5jkKgfPvfgdrS3ARlJCc8fqcqZuiB2RXEkXnnNbv1aLnacMte8SWGggj_IeW-wUsG5moYDF4XW5U2WHfqa3msxAePw00BaYeTGe2qb5qFg_fSudTmPE__hNQ-TU4lr2TkVMDjRX-Ha0YZXnZYAj9KwktQeoCBA_Jiklklj0W86gQP-eFzmpJX7YwDpTiv8zpKdSTHiB7v_cSbUxwQyyWDNCgfyQQ90Ik-rnhktYmr-Ps6iVGqsQxxavZ11SmIVHTJNA0l72NbS_r7bQXvb6TbrKgkqJW35IDALgj_y816NxQ.jpg","store":"Amazon","coupon":null}]'::jsonb);
