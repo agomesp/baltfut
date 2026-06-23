@@ -73,6 +73,13 @@ Deno.serve(async (req: Request) => {
   }
   const vote = result.data;
 
+  // Anti-troll: a score of 10+ for either side is never a real prediction — it's
+  // only used to game the live "ganhando/pode ganhar" ranking. Reject it, but
+  // with the same "name taken" message so the real reason isn't obvious.
+  if (vote.predHome >= 10 || vote.predAway >= 10) {
+    return json({ error: "Esse nome pertence a outra pessoa. Escolha outro." }, 403, cors);
+  }
+
   // Reserved names (e.g. "ChatGPT", the house bot) belong to the app — its
   // palpites are seeded server-side. Nobody may palpite under them.
   if (isReservedName(vote.username)) {
