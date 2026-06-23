@@ -1,13 +1,11 @@
 -- Supabase blocks an unqualified DELETE ("DELETE requires a WHERE clause"), so
 -- the set_promos() RPC failed. Replace it with a qualified delete (position is
--- the NOT NULL primary key, so `where position is not null` matches every row)
--- and disable safe-updates inside the function for good measure.
+-- the NOT NULL primary key, so `where position is not null` matches every row).
 create or replace function public.set_promos(items jsonb)
 returns void
 language plpgsql
 security definer
 set search_path = public
-set sql_safe_updates = off
 as $func$
 begin
   delete from public.promos where position is not null;
