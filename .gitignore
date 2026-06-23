@@ -40,6 +40,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local-only admin panel — privileged (service_role); never commit, never deploy
+/admin/
+
 # supabase (local stack state / generated, never the migrations)
 supabase/.branches
 supabase/.temp
