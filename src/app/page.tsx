@@ -27,7 +27,6 @@ import { buildChipGames, defaultChipId } from "@/lib/chips";
 import { releasedMatchIds } from "@/lib/palpite";
 import { teamNamePt } from "@/lib/team-names";
 import { Header, type ViewKey } from "@/components/header";
-import type { ViewMode } from "@/lib/concurrent-games";
 import { LiveView } from "@/components/live-view";
 import { FixturesView } from "@/components/fixtures-view";
 import { GroupsView } from "@/components/groups-view";
@@ -46,9 +45,6 @@ export default function Home() {
   const [view, setView] = useState<ViewKey>("live");
   const [dark, setDark] = useState(true);
   const [follow, setFollow] = useState<string | null>(null);
-  // AUTO = the app decides 1 vs 2 concurrent games (see concurrent-games); SINGLE
-  // forces one game (a manual override kept for testing).
-  const [viewMode, setViewMode] = useState<ViewMode>("auto");
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -366,13 +362,6 @@ export default function Home() {
     void loadCounts();
   };
 
-  // The AUTO / 1 JOGO toggle (masthead + pre-match). AUTO lets the live view pick
-  // 1 vs 2 games per the concurrent-games rule; 1 JOGO forces a single game.
-  const onViewMode = (m: ViewMode) => {
-    setViewMode(m);
-    setView("live");
-  };
-
   return (
     <>
       <Header
@@ -383,8 +372,6 @@ export default function Home() {
         followCode={follow}
         followName={followName}
         onClearFollow={() => setFollow(null)}
-        viewMode={viewMode}
-        onViewMode={onViewMode}
       />
       <main
         style={
@@ -414,8 +401,6 @@ export default function Home() {
             followCode={follow}
             groupByTeam={groupByTeam}
             releasedIds={releasedIds}
-            viewMode={viewMode}
-            onViewMode={onViewMode}
           />
         )}
         {!loading && view === "matches" && (

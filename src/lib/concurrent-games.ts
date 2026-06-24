@@ -10,10 +10,7 @@ import type { Match } from "@/lib/espn";
  *  - When a game starts in the MIDDLE of another (overlapping but staggered),
  *    the pair opens 10 minutes before the later one kicks off, and collapses
  *    back to a single game when the first one finishes (showing the one left).
- *
- * "single" mode forces one game (a manual override kept for testing).
  */
-export type ViewMode = "single" | "auto";
 
 /** Wall-clock span of a match for overlap detection (90 + halftime + stoppage). */
 export const MATCH_SPAN_MS = 120 * 60_000;
@@ -51,10 +48,7 @@ export function decideConcurrent(
   selected: Match,
   matches: Match[],
   now: number,
-  viewMode: ViewMode,
 ): ConcurrentDecision {
-  if (viewMode === "single") return { primary: selected, partner: null };
-
   const partner = concurrentPartner(selected, matches);
   if (!partner) return { primary: selected, partner: null };
 

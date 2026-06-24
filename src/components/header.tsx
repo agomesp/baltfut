@@ -2,7 +2,6 @@
 
 import { useNow } from "@/lib/use-now";
 import { wcProgress } from "@/lib/wc-progress";
-import type { ViewMode } from "@/lib/concurrent-games";
 
 export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket";
 
@@ -25,11 +24,9 @@ export interface HeaderProps {
   followCode: string | null;
   followName: string | null;
   onClearFollow: () => void;
-  viewMode: ViewMode;
-  onViewMode: (m: ViewMode) => void;
 }
 
-export function Header({ view, onView, dark, onToggleTheme, followCode, followName, onClearFollow, viewMode, onViewMode }: HeaderProps) {
+export function Header({ view, onView, dark, onToggleTheme, followCode, followName, onClearFollow }: HeaderProps) {
   const now = useNow(1000);
   const wc = wcProgress(now);
 
@@ -58,12 +55,6 @@ export function Header({ view, onView, dark, onToggleTheme, followCode, followNa
               </button>
             );
           })}
-
-          {/* 1 JOGO (force single) / AUTO (auto 1-vs-2). Jumps to the live view. */}
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 11, padding: 3 }}>
-            <button onClick={() => onViewMode("single")} style={{ cursor: "pointer", padding: "8px 15px", borderRadius: 8, fontFamily: JB, fontSize: 11, letterSpacing: "0.06em", border: "none", transition: "all .3s", background: view === "live" && viewMode === "single" ? "#c8ff2d" : "transparent", color: view === "live" && viewMode === "single" ? "#0f1f02" : "#9bb6a6" }}>1 JOGO</button>
-            <button onClick={() => onViewMode("auto")} style={{ cursor: "pointer", padding: "8px 15px", borderRadius: 8, fontFamily: JB, fontSize: 11, letterSpacing: "0.06em", border: "none", transition: "all .3s", background: view === "live" && viewMode === "auto" ? "#c8ff2d" : "transparent", color: view === "live" && viewMode === "auto" ? "#0f1f02" : "#9bb6a6" }}>AUTO</button>
-          </div>
 
           {followCode ? (
             <button onClick={onClearFollow} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: JB, fontSize: 10.5, letterSpacing: "0.06em", color: "#0f1f02", background: "#c8ff2d", border: "none", borderRadius: 999, padding: "7px 12px", cursor: "pointer" }}>

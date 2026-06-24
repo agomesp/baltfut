@@ -27,35 +27,29 @@ function mk(id: string, offsetMin: number, state: Match["state"]): Match {
 }
 
 describe("decideConcurrent", () => {
-  it("single mode always shows one game", () => {
-    const a = mk("a", 0, "in");
-    const b = mk("b", 0, "in");
-    expect(decideConcurrent(a, [a, b], T0, "single")).toEqual({ primary: a, partner: null });
-  });
-
   it("shows one game when nothing else overlaps", () => {
     const a = mk("a", 0, "pre");
     const far = mk("far", 300, "pre"); // 5h later — no overlap
-    expect(decideConcurrent(a, [a, far], T0 - 60 * MIN, "auto")).toEqual({ primary: a, partner: null });
+    expect(decideConcurrent(a, [a, far], T0 - 60 * MIN)).toEqual({ primary: a, partner: null });
   });
 
   it("pairs two simultaneous pre-match games anytime before kickoff", () => {
     const a = mk("a", 0, "pre");
     const b = mk("b", 0, "pre");
-    const d = decideConcurrent(a, [a, b], T0 - 5 * 60 * MIN, "auto"); // 5h early
+    const d = decideConcurrent(a, [a, b], T0 - 5 * 60 * MIN); // 5h early
     expect(d.partner).toBe(b);
   });
 
   it("pairs two simultaneous live games", () => {
     const a = mk("a", 0, "in");
     const b = mk("b", 0, "in");
-    expect(decideConcurrent(a, [a, b], T0 + 30 * MIN, "auto").partner).toBe(b);
+    expect(decideConcurrent(a, [a, b], T0 + 30 * MIN).partner).toBe(b);
   });
 
   it("drops back to the remaining game when the selected one finishes", () => {
     const a = mk("a", 0, "post"); // finished
     const b = mk("b", 0, "in"); // still live
-    expect(decideConcurrent(a, [a, b], T0 + 100 * MIN, "auto")).toEqual({ primary: b, partner: null });
+    expect(decideConcurrent(a, [a, b], T0 + 100 * MIN)).toEqual({ primary: b, partner: null });
   });
 
   describe("staggered overlap (b starts 60 min into a)", () => {
@@ -63,13 +57,13 @@ describe("decideConcurrent", () => {
     const b = mk("b", 60, "pre");
 
     it("shows one game before 10 min ahead of the later kickoff", () => {
-      const d = decideConcurrent(a, [a, b], T0 + 45 * MIN, "auto"); // 15 min before b
+      const d = decideConcurrent(a, [a, b], T0 + 45 * MIN); // 15 min before b
       expect(d.partner).toBeNull();
       expect(d.primary).toBe(a);
     });
 
     it("opens the pair 10 min before the later kickoff", () => {
-      const d = decideConcurrent(a, [a, b], T0 + 60 * MIN - LEAD_MS, "auto");
+      const d = decideConcurrent(a, [a, b], T0 + 60 * MIN - LEAD_MS);
       expect(d.partner).toBe(b);
     });
   });

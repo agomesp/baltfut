@@ -27,7 +27,6 @@ import {
   SectionLabel,
   teamAccent,
 } from "@/components/live/bf-ui";
-import type { ViewMode } from "@/lib/concurrent-games";
 
 function groupVenue(match: Match, groupByTeam: Record<string, string>): string {
   const g = groupByTeam[match.home.abbreviation] ?? groupByTeam[match.away.abbreviation];
@@ -151,14 +150,11 @@ export interface PreMatchPanelProps {
   groupByTeam: Record<string, string>;
   /** Matches open for palpites (current + next kickoff group). */
   releasedIds: Set<string>;
-  /** Shared view mode (same state as the masthead 1 JOGO / AUTO toggle). */
-  viewMode: ViewMode;
-  onViewMode: (m: ViewMode) => void;
   onVoted: () => void;
   transport?: CastVoteTransport;
 }
 
-export function PreMatchPanel({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, releasedIds, viewMode, onViewMode, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
+export function PreMatchPanel({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, releasedIds, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
   const { name } = useNameLock();
   const myName = name || null;
   const homeCode = match.home.abbreviation;
@@ -169,26 +165,10 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
   // so simply mirror that — AUTO with a simultaneous partner shows both games.
   const showDuo = second != null;
 
-  const seg = (active: boolean, color: string) => ({
-    cursor: "pointer",
-    padding: "7px 14px",
-    borderRadius: 7,
-    fontFamily: JB,
-    fontSize: 10.5,
-    letterSpacing: "0.06em",
-    background: active ? color : "transparent",
-    color: active ? "#0f1f02" : "#9bb6a6",
-    border: "none",
-  });
-
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
         <SectionLabel color={GOLD}>{"// PALPITES ABERTOS"}</SectionLabel>
-        <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 3, marginLeft: "auto" }}>
-          <button onClick={() => onViewMode("single")} style={seg(viewMode === "single", LIME)}>1 JOGO</button>
-          <button onClick={() => onViewMode("auto")} style={seg(viewMode === "auto", LIME)}>AUTO</button>
-        </div>
       </div>
 
       {!showDuo ? (

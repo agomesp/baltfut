@@ -20,7 +20,7 @@ import { PreMatchPanel } from "@/components/live/prematch-panel";
 import { LineupPanel } from "@/components/live/lineup-panel";
 import { PalpiteForm } from "@/components/live/palpite-form";
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
-import { decideConcurrent, type ViewMode } from "@/lib/concurrent-games";
+import { decideConcurrent } from "@/lib/concurrent-games";
 
 /** A match's display phase (pre / live / post). */
 function matchPhase(m: Match): ChipPhase {
@@ -156,8 +156,6 @@ export interface LiveViewProps {
   followCode: string | null;
   groupByTeam: Record<string, string>;
   releasedIds: Set<string>;
-  viewMode: ViewMode;
-  onViewMode: (m: ViewMode) => void;
 }
 
 export function LiveView({
@@ -174,15 +172,13 @@ export function LiveView({
   followCode,
   groupByTeam,
   releasedIds,
-  viewMode,
-  onViewMode,
 }: LiveViewProps) {
   const now = useNow(15_000);
   const selected = chips.find((c) => c.match.id === selectedId) ?? chips[0];
 
   // Auto-decide 1 vs 2 concurrent games. Ticks with `now`, so the pair opens 10
   // min before an overlapping game and collapses to the survivor when one ends.
-  const decision = selected ? decideConcurrent(selected.match, matches, now, viewMode) : null;
+  const decision = selected ? decideConcurrent(selected.match, matches, now) : null;
   const primary = decision?.primary ?? null;
   const partner = decision?.partner ?? null;
   const primaryPhase = primary ? matchPhase(primary) : undefined;
@@ -249,8 +245,6 @@ export function LiveView({
               matches={matches}
               groupByTeam={groupByTeam}
               releasedIds={releasedIds}
-              viewMode={viewMode}
-              onViewMode={onViewMode}
               onVoted={onVoted}
             />
           ) : partner ? (
