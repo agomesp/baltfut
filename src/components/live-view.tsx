@@ -176,7 +176,9 @@ export function LiveView({
   const liveMatches = chips.filter((c) => c.phase === "live").map((c) => c.match);
   const phase = selected?.phase;
   const isPre = phase === "pre";
-  const isDuo = !isPre && liveMode === "duo" && liveMatches.length >= 2;
+  // Duo only when a live match is selected (so clicking a finished/upcoming chip
+  // still shows that match), mirroring the original auto-split condition.
+  const isDuo = phase === "live" && liveMode === "duo" && liveMatches.length >= 2;
 
   // The next upcoming match (for the pre-match "2 JOGOS" mode): the earliest
   // upcoming chip that isn't the selected one.

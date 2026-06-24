@@ -47,6 +47,8 @@ export default function Home() {
   const [follow, setFollow] = useState<string | null>(null);
   // PLACAR (single live match) vs 2 JOGOS (two live matches) — the masthead toggle.
   const [liveMode, setLiveMode] = useState<LiveMode>("placar");
+  // Once the viewer toggles manually we stop auto-picking the mode for them.
+  const liveModeUserSet = useRef(false);
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -368,6 +370,7 @@ export default function Home() {
   // 2 JOGOS, if the current selection isn't a live match, fall back to the default
   // (live) chip so the dual-match stage actually has live games to show.
   const onLiveMode = (m: LiveMode) => {
+    liveModeUserSet.current = true;
     setLiveMode(m);
     setView("live");
     if (m === "duo") {
@@ -375,6 +378,13 @@ export default function Home() {
       if (!sel || sel.phase !== "live") setSelectedId(null);
     }
   };
+
+  // Auto-show 2 JOGOS when 2+ matches are live (the old auto-split behaviour),
+  // until the viewer picks a mode manually.
+  useEffect(() => {
+    if (liveModeUserSet.current) return;
+    setLiveMode(matches.filter((m) => m.isLive).length >= 2 ? "duo" : "placar");
+  }, [matches]);
 
   return (
     <>
