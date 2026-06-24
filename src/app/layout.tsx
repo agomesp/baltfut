@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import {
+  Space_Grotesk,
+  IBM_Plex_Sans,
+  IBM_Plex_Mono,
+  Bricolage_Grotesque,
+  Saira_Condensed,
+  JetBrains_Mono,
+  Archivo,
+} from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { UpdateBanner } from "@/components/update-banner";
@@ -33,6 +41,31 @@ const mono = IBM_Plex_Mono({
   variable: "--font-mono",
 });
 
+// BaltFut v3 redesign type system (AO VIVO). Bricolage = display/headings/usernames,
+// Saira Condensed = big numerals (scores/countdowns/W–L), JetBrains Mono = labels &
+// `// SECTION` markers, Archivo = team-code badges. Kept alongside the originals so
+// the not-yet-redesigned views keep their current fonts.
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-bric",
+});
+const saira = Saira_Condensed({
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+  variable: "--font-saira",
+});
+const jbMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-jb",
+});
+const archivo = Archivo({
+  subsets: ["latin"],
+  weight: ["600", "700", "800", "900"],
+  variable: "--font-archivo",
+});
+
 export const metadata: Metadata = {
   title: "BaltFut - Copa do Mundo 26 · placar ao vivo & palpites",
   description:
@@ -58,7 +91,7 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       data-theme="dark"
-      className={`${display.variable} ${body.variable} ${mono.variable} ${flagFont.variable}`}
+      className={`${display.variable} ${body.variable} ${mono.variable} ${flagFont.variable} ${bricolage.variable} ${saira.variable} ${jbMono.variable} ${archivo.variable}`}
       suppressHydrationWarning
     >
       <head>

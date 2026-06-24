@@ -26,7 +26,7 @@ import {
 import { buildChipGames, defaultChipId } from "@/lib/chips";
 import { releasedMatchIds } from "@/lib/palpite";
 import { teamNamePt } from "@/lib/team-names";
-import { Header, type ViewKey } from "@/components/header";
+import { Header, type ViewKey, type LiveMode } from "@/components/header";
 import { LiveView } from "@/components/live-view";
 import { FixturesView } from "@/components/fixtures-view";
 import { GroupsView } from "@/components/groups-view";
@@ -46,6 +46,8 @@ export default function Home() {
   const [view, setView] = useState<ViewKey>("live");
   const [dark, setDark] = useState(true);
   const [follow, setFollow] = useState<string | null>(null);
+  // PLACAR (single live match) vs 2 JOGOS (two live matches) — the masthead toggle.
+  const [liveMode, setLiveMode] = useState<LiveMode>("placar");
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -126,6 +128,8 @@ export default function Home() {
     } catch {
       /* ignore */
     }
+    // The live view keeps its dark pitch-green backdrop regardless of theme.
+    document.documentElement.setAttribute("data-view", view);
   }, [view]);
   useEffect(() => {
     try {
@@ -361,6 +365,18 @@ export default function Home() {
     void loadCounts();
   };
 
+  // Masthead PLACAR / 2 JOGOS toggle: set the mode and jump to the live view. For
+  // 2 JOGOS, if the current selection isn't a live match, fall back to the default
+  // (live) chip so the dual-match stage actually has live games to show.
+  const onLiveMode = (m: LiveMode) => {
+    setLiveMode(m);
+    setView("live");
+    if (m === "duo") {
+      const sel = chips.find((c) => c.match.id === activeId);
+      if (!sel || sel.phase !== "live") setSelectedId(null);
+    }
+  };
+
   return (
     <>
       <Header
@@ -371,8 +387,16 @@ export default function Home() {
         followCode={follow}
         followName={followName}
         onClearFollow={() => setFollow(null)}
+        liveMode={liveMode}
+        onLiveMode={onLiveMode}
       />
-      <main style={{ maxWidth: 1180, margin: "0 auto", padding: "10px 23px 60px" }}>
+      <main
+        style={
+          view === "live"
+            ? { maxWidth: 1620, margin: "0 auto", padding: "14px 30px 16px" }
+            : { maxWidth: 1180, margin: "0 auto", padding: "10px 23px 60px" }
+        }
+      >
         {loading ? (
           <p style={{ color: "var(--ink-3)" }}>Carregando…</p>
         ) : error && matches.length === 0 ? (
@@ -394,6 +418,7 @@ export default function Home() {
             followCode={follow}
             groupByTeam={groupByTeam}
             releasedIds={releasedIds}
+            liveMode={liveMode}
           />
         )}
         {!loading && view === "matches" && (

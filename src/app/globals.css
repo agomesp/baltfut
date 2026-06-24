@@ -26,6 +26,23 @@
 
   --card-yellow: #f5c84a;
   --card-red: #e5484d;
+
+  /* BaltFut v3 redesign palette (AO VIVO). Pitch-green vignette + lime/gold
+     accents. Used by the new masthead, hero, palpites, ranking and footer.
+     Scoped tokens (prefixed --bf-) so they never collide with the originals. */
+  --bf-bg: radial-gradient(120% 90% at 72% -8%, #11401f 0%, #071a0f 46%, #04110a 100%);
+  --bf-stripes: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.012) 0 64px, transparent 64px 128px);
+  --bf-text: #f1f7f0;
+  --bf-dim: #7d9a86;
+  --bf-dim-2: #6f8a78;
+  --bf-lime: #c8ff2d;
+  --bf-lime-deep: #9ef01f;
+  --bf-gold: #ffb347;
+  --bf-gold-deep: #e8b53a;
+  --bf-danger: #ff4d4d;
+  --bf-line: rgba(255, 255, 255, 0.08);
+  --bf-surface: rgba(255, 255, 255, 0.02);
+  --bf-surface-2: rgba(255, 255, 255, 0.025);
 }
 
 /* Light */
@@ -61,9 +78,24 @@ html {
 
 body {
   margin: 0;
+  /* v3 redesign: pitch-green vignette + subtle vertical stripe texture, fixed so
+     it doesn't slide under internal scroll. Light theme keeps the flat paper bg. */
+  background: var(--bf-stripes), var(--bf-bg);
+  background-attachment: fixed;
+  color: var(--bf-text);
+  -webkit-font-smoothing: antialiased;
+}
+:root[data-theme="light"] body {
   background: var(--bg);
   color: var(--ink);
-  -webkit-font-smoothing: antialiased;
+}
+/* The AO VIVO redesign is dark-only by design (it overlays a video stream), so
+   keep its pitch-green backdrop even when the rest of the app is in light theme.
+   Placed after the light rule so it wins on the live view. */
+:root[data-view="live"] body {
+  background: var(--bf-stripes), var(--bf-bg);
+  background-attachment: fixed;
+  color: var(--bf-text);
 }
 
 /* Horizontal scrollers (e.g. the chip carousel) hide their scrollbar. */
@@ -104,6 +136,52 @@ body {
     opacity: 1;
     transform: none;
   }
+}
+
+/* v3 redesign (AO VIVO) animations: live-dot pulse, flag sheen sweep, waving-flag
+   crest, and the craque cutout's gentle bob. All are decorative, so the
+   reduced-motion rule below disables them. */
+@keyframes bfpulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+@keyframes bfsheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+@keyframes bfwave {
+  0%,
+  100% {
+    transform: perspective(260px) rotateY(-7deg) skewY(-1.4deg);
+  }
+  50% {
+    transform: perspective(260px) rotateY(7deg) skewY(1.4deg);
+  }
+}
+@keyframes bfbob {
+  0%,
+  100% {
+    transform: translate(-50%, 0) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -6px) scale(1.02);
+  }
+}
+/* Bottom fade for the single-column ranking / palpite lists (mask the overflow). */
+.bf-fade-y {
+  -webkit-mask-image: linear-gradient(180deg, #000 78%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 78%, transparent 100%);
 }
 
 @media (prefers-reduced-motion: reduce) {

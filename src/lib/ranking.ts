@@ -35,3 +35,30 @@ export function rankSubs(
     .map(([username, v]) => ({ username, ...v }))
     .sort((a, b) => b.wins - a.wins || a.username.localeCompare(b.username));
 }
+
+/** The "pior palpiteiro": lowest hit-rate among subs with at least one graded palpite. */
+export interface WorstSub {
+  username: string;
+  wins: number;
+  losses: number;
+  /** Hit rate as a fraction 0..1 (wins / (wins + losses)). */
+  pct: number;
+}
+
+/**
+ * Lowest win ratio in the table — the "Pior palpiteiro" footer. Only subs with a
+ * graded palpite (wins + losses > 0) qualify (a 0–0 record has no rate). Ties go to
+ * whoever rankSubs already placed first (it's pre-sorted), keeping output stable.
+ */
+export function worstPalpiteiro(ranks: SubRank[]): WorstSub | null {
+  let worst: WorstSub | null = null;
+  for (const r of ranks) {
+    const total = r.wins + r.losses;
+    if (total === 0) continue;
+    const pct = r.wins / total;
+    if (!worst || pct < worst.pct) {
+      worst = { username: r.username, wins: r.wins, losses: r.losses, pct };
+    }
+  }
+  return worst;
+}
