@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Match, MatchCard, MatchGoal, MatchLineups, MatchSub, Side, TeamLineup } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
@@ -14,6 +14,7 @@ import { Countdown } from "@/components/countdown";
 import { teamLabel } from "@/components/match-meta";
 import { LoopVideo } from "@/components/loop-video";
 import { flagFileBase } from "@/lib/team-names";
+import { PLAYER_CUTOUTS_ENABLED, craqueFor, playerCutoutSrc } from "@/lib/player-images";
 
 const ASSET_BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 /** Height of the slim promo bar that sits on top of the live score. */
@@ -191,6 +192,40 @@ function FeedRow({ item, align, dense = false }: { item: FeedItem; align: "left"
 }
 
 /**
+ * The followed team's "craque" (star player) cutout, layered over the flag crest
+ * in the hero. Flag-gated (PLAYER_CUTOUTS_ENABLED) + self-hosted under
+ * public/players/. If the PNG is missing it hides itself (onError) so the flag
+ * crest below shows through — the documented fallback. See
+ * docs/player-images-spike.md.
+ */
+function CraqueCutout({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      aria-hidden
+      onError={() => setFailed(true)}
+      style={{
+        position: "absolute",
+        right: "3%",
+        bottom: 0,
+        height: "96%",
+        width: "auto",
+        maxWidth: "50%",
+        objectFit: "contain",
+        objectPosition: "bottom right",
+        opacity: 0.9,
+        filter: "drop-shadow(0 10px 26px rgba(0,0,0,0.5))",
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
+/**
  * Hero ambience (skipped in the dense/split view for perf). The full-bleed pitch
  * video was removed — keepalive is now the Modo Streamer PiP. Remaining:
  *   - the followed team's flag (vendored SVG), dim, with a sweeping shine overlay
@@ -204,6 +239,9 @@ function HeroFx({ match, followCode }: { match: Match; followCode: string | null
       ? followCode
       : null;
   const flagBase = followed ? flagFileBase(followed) : "";
+  // Craque cutout (off by default): only when the flag is on AND the followed
+  // team has a seeded star. Absent → null → the flag crest is the fallback.
+  const craque = PLAYER_CUTOUTS_ENABLED && followed ? craqueFor(followed) : null;
   return (
     <>
       {flagBase ? (
@@ -211,6 +249,7 @@ function HeroFx({ match, followCode }: { match: Match; followCode: string | null
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`${ASSET_BASE}/flags/${flagBase}.svg`} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.22 }} />
           <LoopVideo srcs={["flag-shine.mp4"]} blend style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.3 }} />
+          {craque ? <CraqueCutout src={playerCutoutSrc(craque.img, ASSET_BASE)} /> : null}
         </div>
       ) : null}
       {/* "AO VIVO ON [Kick]" — always shown (it's the streamer's Kick, not the
