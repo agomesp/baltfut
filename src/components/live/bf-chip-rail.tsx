@@ -42,16 +42,24 @@ export function BfChipRail({ chips, selectedId, onSelect, releasedIds }: { chips
     return () => ro.disconnect();
   }, [measure, chips.length]);
 
-  // Keep the selected chip in view (centered), without scrolling the page. Set
-  // scrollLeft directly — programmatic smooth scrolling is unreliable here.
+  // Center the selected chip in the rail (no page scroll). Re-runs when the
+  // overflow state flips — the rail switches from centered to left-aligned as
+  // chips stream in on load — and on a rAF so layout has settled first; without
+  // both, the initial auto-selected match lands pinned to an edge, not centered.
+  // scrollLeft is set directly (clamped) — smooth scrolling is unreliable here.
   useEffect(() => {
     const el = scrollRef.current;
-    const active = el?.querySelector<HTMLElement>('[data-active="true"]');
-    if (el && active) {
-      el.scrollLeft = active.offsetLeft - (el.clientWidth - active.clientWidth) / 2;
-    }
-    measure();
-  }, [selectedId, measure, chips.length]);
+    if (!el) return;
+    const raf = requestAnimationFrame(() => {
+      const active = el.querySelector<HTMLElement>('[data-active="true"]');
+      if (!active) return;
+      const max = el.scrollWidth - el.clientWidth;
+      const target = active.offsetLeft - (el.clientWidth - active.clientWidth) / 2;
+      el.scrollLeft = Math.max(0, Math.min(max, target));
+      measure();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [selectedId, chips.length, overflowing, measure]);
 
   // Page the rail by ~70% of its width. scrollLeft is set directly (instant)
   // because scrollBy({behavior:"smooth"}) is a no-op in some engines/contexts.
