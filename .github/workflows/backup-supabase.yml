@@ -1,0 +1,68 @@
+name: Backup Supabase data
+
+# Daily encrypted backup of the app's Postgres data (votes, name_claims, promos…).
+# The dump is AES256-encrypted BEFORE it ever leaves the runner, then stored as a
+# private workflow artifact — so even though this repo is public (and artifacts on
+# public repos are broadly downloadable), the backup is unreadable without the
+# passphrase. This matters because the dump contains `ip_hash`, which is NEVER
+# exposed to `anon`; nothing public-readable here, no leak.
+#
+# Requires these repository secrets:
+#   SUPABASE_ACCESS_TOKEN   - personal access token (same one deploy-supabase uses)
+#   SUPABASE_PROJECT_REF    - project ref
+#   SUPABASE_DB_PASSWORD    - database password
+#   BACKUP_PASSPHRASE       - long random string; the only key that decrypts a backup
+#
+# Restore (locally, with the passphrase):
+#   gpg --batch --passphrase "$BACKUP_PASSPHRASE" -d baltfut-backup.tar.gz.gpg \
+#     | tar xz                       # -> schema.sql + data.sql
+#   psql "$DB_URL" -f schema.sql && psql "$DB_URL" -f data.sql   # or restore data only
+on:
+  schedule:
+    - cron: "0 5 * * *" # 05:00 UTC daily (~02:00 BRT, off-peak)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        run: supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+
+      # Structure (also tracked in supabase/migrations, dumped here for a one-shot
+      # restore) + the irreplaceable row data. Public schema only — no auth/storage.
+      - name: Dump schema + data
+        run: |
+          supabase db dump --schema public -f schema.sql
+          supabase db dump --schema public --data-only -f data.sql
+          echo "dump sizes:"; ls -lh schema.sql data.sql
+
+      - name: Encrypt (AES256) — plaintext never leaves the runner
+        run: |
+          if [ -z "${{ secrets.BACKUP_PASSPHRASE }}" ]; then
+            echo "::error::BACKUP_PASSPHRASE secret is not set — refusing to upload an unencrypted backup."
+            exit 1
+          fi
+          tar czf backup.tar.gz schema.sql data.sql
+          gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --passphrase "${{ secrets.BACKUP_PASSPHRASE }}" \
+            -o "baltfut-backup-$(date -u +%Y%m%d).tar.gz.gpg" backup.tar.gz
+          rm -f schema.sql data.sql backup.tar.gz # drop plaintext so only the .gpg is uploadable
+
+      - name: Upload encrypted artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: baltfut-db-backup
+          path: "*.tar.gz.gpg"
+          retention-days: 90
+          if-no-files-found: error

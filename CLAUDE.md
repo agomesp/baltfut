@@ -93,6 +93,11 @@ Changes to any of these: re-run `scripts/db/` assertions (CI `database` job does
   Supabase** workflow (`gh workflow run deploy-supabase.yml`, manual).
 - Repo secrets set: NEXT_PUBLIC_SUPABASE_URL/ANON_KEY, SUPABASE_PROJECT_REF/
   ACCESS_TOKEN/DB_PASSWORD, VOTE_IP_PEPPER, ALLOWED_ORIGINS.
+- **Backups:** `backup-supabase.yml` (daily 05:00 UTC + manual) dumps the public
+  schema, **GPG-AES256-encrypts** it (passphrase = `BACKUP_PASSPHRASE` secret —
+  MUST be added) and uploads a 90-day artifact. Encrypted because the dump holds
+  `ip_hash` and the repo/its artifacts are public. Restore: `gpg -d …gpg | tar xz`
+  → `psql -f schema.sql -f data.sql`. Offsite/long-term retention is a follow-up.
 
 ## Pending / next
 
