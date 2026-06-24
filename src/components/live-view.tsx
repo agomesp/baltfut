@@ -180,10 +180,14 @@ export function LiveView({
   // still shows that match), mirroring the original auto-split condition.
   const isDuo = phase === "live" && liveMode === "duo" && liveMatches.length >= 2;
 
-  // The next upcoming match (for the pre-match "2 JOGOS" mode): the earliest
-  // upcoming chip that isn't the selected one.
+  // "2 JOGOS" pre-match pairs the selected game with another kicking off at the
+  // SAME time (e.g. the final group round's two simultaneous games), not just the
+  // next one. Null → the toggle is disabled when nothing else starts at that moment.
   const upcoming = chips.filter((c) => c.phase === "pre").map((c) => c.match);
-  const second = isPre ? upcoming.find((m) => m.id !== selected?.match.id) ?? null : null;
+  const second =
+    isPre && selected
+      ? upcoming.find((m) => m.id !== selected.match.id && m.startsAt === selected.match.startsAt) ?? null
+      : null;
 
   // Fill the viewport on wide screens so the stage is a fixed dense dashboard
   // (the design is height:100vh with internal scroll); narrow screens flow + scroll.
