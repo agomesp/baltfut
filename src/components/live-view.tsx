@@ -238,6 +238,7 @@ export function LiveView({
               allEntries={allEntries}
               matches={matches}
               groupByTeam={groupByTeam}
+              releasedIds={releasedIds}
               onVoted={onVoted}
             />
           ) : isDuo ? (

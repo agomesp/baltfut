@@ -110,8 +110,11 @@ export function BfChipRail({ chips, selectedId, onSelect, releasedIds }: { chips
               bg = "rgba(46,205,102,0.06)";
               dot = GREEN;
             } else if (isNext) {
-              border = "1px solid rgba(255,255,255,0.16)";
-              color = "#cfd3ce";
+              // Released-but-not-started games (the closest upcoming) get a green
+              // outline so they read as "open for palpites" — distinct from the
+              // dashed+pulsing live chip and the solid-green selected one.
+              border = `1px solid ${GREEN}`;
+              color = "#bfeccd";
             }
             return (
               <button

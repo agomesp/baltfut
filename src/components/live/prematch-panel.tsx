@@ -148,11 +148,13 @@ export interface PreMatchPanelProps {
   allEntries: VoteEntry[];
   matches: Match[];
   groupByTeam: Record<string, string>;
+  /** Matches open for palpites (current + next kickoff group). */
+  releasedIds: Set<string>;
   onVoted: () => void;
   transport?: CastVoteTransport;
 }
 
-export function PreMatchPanel({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
+export function PreMatchPanel({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, releasedIds, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
   const [mode, setMode] = useState<"single" | "duo">("single");
   const { name } = useNameLock();
   const myName = name || null;
@@ -191,7 +193,7 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
             <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: 170 }} />
             <div style={{ ...cardWrap, flex: 1.35, minWidth: 0, minHeight: 0, overflow: "hidden", border: "1px solid rgba(200,255,45,0.16)", padding: "13px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
               <SectionLabel>{"// FAÇA SEU PALPITE"}</SectionLabel>
-              <PalpiteForm match={match} entries={entries} closesAt={palpiteDeadline(match.startsAt)} onVoted={onVoted} transport={transport} />
+              <PalpiteForm match={match} entries={entries} closesAt={palpiteDeadline(match.startsAt)} released={releasedIds.has(match.id)} onVoted={onVoted} transport={transport} />
               <div className="bf-scroll" style={{ display: "flex", gap: 12, flex: 1, minHeight: 0, alignItems: "flex-start", paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
                 <HistoryColumn code={homeCode} accent={homeAccent} games={teamCupHistory(matches, homeCode)} />
                 <HistoryColumn code={awayCode} accent={awayAccent} games={teamCupHistory(matches, awayCode)} />
@@ -213,6 +215,8 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
           entries={entries}
           secondEntries={secondEntries}
           groupByTeam={groupByTeam}
+          released1={releasedIds.has(match.id)}
+          released2={releasedIds.has(second!.id)}
           myName={myName}
           onVoted={onVoted}
           transport={transport}
@@ -222,7 +226,7 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
   );
 }
 
-function DuoGameCard({ match, entries, groupByTeam, home, away, setHome, setAway, myName, borderColor }: {
+function DuoGameCard({ match, entries, groupByTeam, home, away, setHome, setAway, myName, borderColor, released }: {
   match: Match;
   entries: VoteEntry[];
   groupByTeam: Record<string, string>;
@@ -232,6 +236,7 @@ function DuoGameCard({ match, entries, groupByTeam, home, away, setHome, setAway
   setAway: (n: number) => void;
   myName: string | null;
   borderColor: string;
+  released: boolean;
 }) {
   const homeCode = match.home.abbreviation;
   const awayCode = match.away.abbreviation;
@@ -257,11 +262,17 @@ function DuoGameCard({ match, entries, groupByTeam, home, away, setHome, setAway
           <FlagCrest code={awayCode} accent={awayAccent} size={34} />
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>
-        <Stepper label={homeCode} accent="var(--bf-text)" value={home} onChange={setHome} />
-        <span style={{ fontFamily: SAIRA, fontSize: 22, color: "#42565b", paddingTop: 26 }}>×</span>
-        <Stepper label={awayCode} accent="var(--bf-text)" value={away} onChange={setAway} />
-      </div>
+      {released ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>
+          <Stepper label={homeCode} accent="var(--bf-text)" value={home} onChange={setHome} />
+          <span style={{ fontFamily: SAIRA, fontSize: 22, color: "#42565b", paddingTop: 26 }}>×</span>
+          <Stepper label={awayCode} accent="var(--bf-text)" value={away} onChange={setAway} />
+        </div>
+      ) : (
+        <div style={{ borderRadius: 9, border: "1px solid rgba(255,179,71,0.25)", background: "rgba(255,179,71,0.05)", padding: "10px 12px", textAlign: "center" }}>
+          <span style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "#ffb347" }}>Palpites não liberados ainda</span>
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginTop: 2 }}>
         <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.1em", color: "#6f8a78" }}>PALPITES ENVIADOS</span>
         <span style={{ fontFamily: JB, fontSize: 9, color: "#4d6353" }}>{entries.length}</span>
@@ -271,12 +282,14 @@ function DuoGameCard({ match, entries, groupByTeam, home, away, setHome, setAway
   );
 }
 
-function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, myName, onVoted, transport }: {
+function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, released1, released2, myName, onVoted, transport }: {
   match: Match;
   second: Match;
   entries: VoteEntry[];
   secondEntries: VoteEntry[];
   groupByTeam: Record<string, string>;
+  released1: boolean;
+  released2: boolean;
   myName: string | null;
   onVoted: () => void;
   transport: CastVoteTransport;
@@ -295,18 +308,29 @@ function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, myNam
     return () => window.clearTimeout(id);
   }, [outcome]);
 
+  const noneReleased = !released1 && !released2;
+
   async function submitBoth() {
     setSubmitting(true);
     setOutcome(null);
-    const r1 = await castPalpite(match, name, h1, a1, entries, transport);
-    if (!r1.ok) {
-      setOutcome({ ok: false, text: r1.message });
-      setSubmitting(false);
-      return;
+    if (released1) {
+      const r1 = await castPalpite(match, name, h1, a1, entries, transport);
+      if (!r1.ok) {
+        setOutcome({ ok: false, text: r1.message });
+        setSubmitting(false);
+        return;
+      }
     }
-    const r2 = await castPalpite(second, name, h2, a2, secondEntries, transport);
+    if (released2) {
+      const r2 = await castPalpite(second, name, h2, a2, secondEntries, transport);
+      if (!r2.ok) {
+        setOutcome({ ok: false, text: r2.message });
+        setSubmitting(false);
+        return;
+      }
+    }
     setSubmitting(false);
-    setOutcome(r2.ok ? { ok: true, text: "Palpites enviados!" } : { ok: false, text: r2.message });
+    setOutcome({ ok: true, text: "Palpites enviados!" });
     confirm(name.trim());
     onVoted();
   }
@@ -320,14 +344,14 @@ function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, myNam
         <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: "#6f8a78" }}>palpite nos 2 jogos de uma vez</span>
       </div>
       <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16 }}>
-        <DuoGameCard match={match} entries={entries} groupByTeam={groupByTeam} home={h1} away={a1} setHome={setH1} setAway={setA1} myName={myName} borderColor="rgba(229,68,59,0.18)" />
-        <DuoGameCard match={second} entries={secondEntries} groupByTeam={groupByTeam} home={h2} away={a2} setHome={setH2} setAway={setA2} myName={myName} borderColor="rgba(63,164,95,0.18)" />
+        <DuoGameCard match={match} entries={entries} groupByTeam={groupByTeam} home={h1} away={a1} setHome={setH1} setAway={setA1} myName={myName} borderColor="rgba(229,68,59,0.18)" released={released1} />
+        <DuoGameCard match={second} entries={secondEntries} groupByTeam={groupByTeam} home={h2} away={a2} setHome={setH2} setAway={setA2} myName={myName} borderColor="rgba(63,164,95,0.18)" released={released2} />
       </div>
       {outcome ? (
         <div style={{ textAlign: "center", fontFamily: BRIC, fontSize: 12, color: outcome.ok ? LIME : "#ff6b6b" }}>{outcome.text}</div>
       ) : null}
-      <button type="button" onClick={submitBoth} disabled={submitting} style={{ flex: "none", cursor: "pointer", textAlign: "center", background: LIME, color: "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 15, padding: 15, borderRadius: 12, border: "none", boxShadow: "0 0 26px -8px rgba(200,255,45,0.6)", opacity: submitting ? 0.7 : 1 }}>
-        {submitting ? "ENVIANDO…" : "ENVIAR OS 2 PALPITES →"}
+      <button type="button" onClick={submitBoth} disabled={submitting || noneReleased} style={{ flex: "none", textAlign: "center", background: LIME, color: "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 15, padding: 15, borderRadius: 12, border: "none", boxShadow: "0 0 26px -8px rgba(200,255,45,0.6)", opacity: submitting || noneReleased ? 0.55 : 1, cursor: noneReleased ? "not-allowed" : "pointer" }}>
+        {submitting ? "ENVIANDO…" : noneReleased ? "PALPITES NÃO LIBERADOS" : released1 && released2 ? "ENVIAR OS 2 PALPITES →" : "ENVIAR PALPITE →"}
       </button>
     </div>
   );

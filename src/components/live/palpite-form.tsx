@@ -67,6 +67,22 @@ export function useNameLock() {
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  // Persist the in-progress name (debounced) so a reload mid-typing doesn't lose
+  // it. Only while unconfirmed — a locked name already owns its slot.
+  useEffect(() => {
+    if (locked) return;
+    const id = window.setTimeout(() => {
+      try {
+        const n = name.trim();
+        if (n) localStorage.setItem("baltfut_name_draft", n);
+        else localStorage.removeItem("baltfut_name_draft");
+      } catch {
+        /* ignore */
+      }
+    }, 500);
+    return () => window.clearTimeout(id);
+  }, [name, locked]);
+
   const confirm = (n: string) => {
     try {
       localStorage.setItem("baltfut_name", n);
@@ -155,12 +171,14 @@ export interface PalpiteFormProps {
   match: Match;
   entries: VoteEntry[];
   closesAt: number;
+  /** False when the match is beyond the current+next kickoff-group window (locked). */
+  released?: boolean;
   onVoted: () => void;
   transport?: CastVoteTransport;
 }
 
 /** Full single-match pre-match form: name + two steppers + ENVIAR. */
-export function PalpiteForm({ match, entries, closesAt, onVoted, transport = supabaseCastVote }: PalpiteFormProps) {
+export function PalpiteForm({ match, entries, closesAt, released = true, onVoted, transport = supabaseCastVote }: PalpiteFormProps) {
   const { name, setName, locked, confirm, unlock } = useNameLock();
   const [home, setHome] = useState(0);
   const [away, setAway] = useState(0);
@@ -170,6 +188,41 @@ export function PalpiteForm({ match, entries, closesAt, onVoted, transport = sup
   const open = isPalpiteOpen(closesAt, now);
   const homeAccentCode = match.home.abbreviation;
   const awayAccentCode = match.away.abbreviation;
+  const draftKey = `baltfut_draft:${match.id}`;
+
+  // Restore the in-progress score for THIS match (and reset when the match
+  // changes) so a reload mid-typing doesn't lose it.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    let h = 0;
+    let a = 0;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw);
+        h = clampScore(Number(d.home) || 0);
+        a = clampScore(Number(d.away) || 0);
+      }
+    } catch {
+      /* ignore */
+    }
+    setHome(h);
+    setAway(a);
+  }, [draftKey]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Persist the score draft a beat after a change.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      try {
+        if (home || away) localStorage.setItem(draftKey, JSON.stringify({ home, away }));
+        else localStorage.removeItem(draftKey);
+      } catch {
+        /* ignore */
+      }
+    }, 500);
+    return () => window.clearTimeout(id);
+  }, [home, away, draftKey]);
 
   useEffect(() => {
     if (!outcome || outcome.ok) return;
@@ -191,8 +244,26 @@ export function PalpiteForm({ match, entries, closesAt, onVoted, transport = sup
       confirm(name.trim());
       setHome(0);
       setAway(0);
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        /* ignore */
+      }
       onVoted();
     }
+  }
+
+  // Far-away games (beyond the current + next kickoff group) aren't open for
+  // palpites yet — show the locked notice instead of the form.
+  if (!released) {
+    return (
+      <div style={{ borderRadius: 11, border: "1px solid rgba(255,179,71,0.25)", background: "rgba(255,179,71,0.05)", padding: "14px 16px" }}>
+        <div style={{ fontFamily: JB, fontSize: 10.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "#ffb347", marginBottom: 5 }}>Palpites não liberados</div>
+        <div style={{ fontFamily: BRIC, fontSize: 13, color: "#cfd9d1", lineHeight: 1.4 }}>
+          Esta partida ainda não abriu para palpites — ela libera após a partida anterior à anterior terminar.
+        </div>
+      </div>
+    );
   }
 
   return (
