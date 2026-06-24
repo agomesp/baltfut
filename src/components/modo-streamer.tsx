@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Tv } from "lucide-react";
-import { MONO } from "@/components/primitives";
 import { parseScoreboard, scoreboardUrl, DEFAULT_LEAGUE, FIFA_WORLD_DATE_RANGE } from "@/lib/espn";
 import { startScoreboardWorker } from "@/lib/scoreboard-worker";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
@@ -144,18 +143,18 @@ export function ModoStreamer() {
         display: "inline-flex",
         alignItems: "center",
         gap: 8,
-        fontFamily: MONO,
+        fontFamily: "var(--font-jb)",
         fontSize: 11,
         fontWeight: 600,
-        letterSpacing: "0.08em",
+        letterSpacing: "0.06em",
         textTransform: "uppercase",
-        padding: "10px 14px",
-        borderRadius: 999,
+        padding: "9px 13px",
+        borderRadius: 8,
         cursor: "pointer",
         boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
-        background: on ? "var(--signal)" : "var(--rank)",
-        color: "var(--signal-ink)",
-        border: "1px solid transparent",
+        background: on ? "rgba(67,184,106,0.16)" : "rgba(255,77,77,0.16)",
+        color: on ? "#bff0cf" : "#ffb3b3",
+        border: `1px solid ${on ? "rgba(98,203,132,0.55)" : "rgba(255,77,77,0.55)"}`,
       }}
     >
       {on ? (
@@ -168,8 +167,8 @@ export function ModoStreamer() {
         <Tv size={15} />
       )}
       Modo Streamer
-      <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 999, background: "rgba(0,0,0,0.18)", color: "var(--signal-ink)" }}>
-        {on ? "Ativado" : "Desativado"}
+      <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 6, background: on ? "#43b86a" : "#ff4d4d", color: on ? "#06160c" : "#2a0606" }}>
+        {on ? "ATIVADO" : "DESATIVADO"}
       </span>
     </button>
   );

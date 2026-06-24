@@ -1,14 +1,19 @@
-import { MONO, DISPLAY } from "@/components/primitives";
+"use client";
 
-export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket" | "ranking";
+import { useNow } from "@/lib/use-now";
+import { wcProgress } from "@/lib/wc-progress";
 
-const TABS: { key: ViewKey; idx: string; label: string }[] = [
-  { key: "live", idx: "01", label: "Ao vivo" },
-  { key: "matches", idx: "02", label: "Jogos" },
-  { key: "groups", idx: "03", label: "Grupos" },
-  { key: "results", idx: "04", label: "Resultados" },
-  { key: "bracket", idx: "05", label: "Chaveamento" },
-  { key: "ranking", idx: "06", label: "Ranking dos Subs" },
+export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket";
+
+const BRIC = "var(--font-bric)";
+const JB = "var(--font-jb)";
+
+const NAV: { key: ViewKey; label: string }[] = [
+  { key: "live", label: "AO VIVO" },
+  { key: "matches", label: "JOGOS" },
+  { key: "groups", label: "GRUPOS" },
+  { key: "results", label: "RESULTADOS" },
+  { key: "bracket", label: "CHAVEAMENTO" },
 ];
 
 export interface HeaderProps {
@@ -21,156 +26,47 @@ export interface HeaderProps {
   onClearFollow: () => void;
 }
 
-export function Header({
-  view,
-  onView,
-  dark,
-  onToggleTheme,
-  followCode,
-  followName,
-  onClearFollow,
-}: HeaderProps) {
+export function Header({ view, onView, dark, onToggleTheme, followCode, followName, onClearFollow }: HeaderProps) {
+  const now = useNow(1000);
+  const wc = wcProgress(now);
+
   return (
-    <header
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 20,
-        background: "var(--bg)",
-        borderBottom: "1px solid var(--line)",
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 1180,
-          margin: "0 auto",
-          padding: "14px 24px",
-          borderBottom: "1px solid var(--line)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
-            <span style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 25, letterSpacing: "-0.025em", lineHeight: 1 }}>
-              BaltFut&nbsp;-&nbsp;Copa&nbsp;do&nbsp;Mundo
-            </span>
-            <span style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 25, letterSpacing: "-0.025em", lineHeight: 1, color: "var(--signal)" }}>
-              26.
-            </span>
-          </div>
-          <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--ink-2)" }}>
-            48&nbsp;seleções&nbsp;/&nbsp;12&nbsp;grupos&nbsp;/&nbsp;EUA·CAN·MEX
+    <header style={{ position: "sticky", top: 0, zIndex: 20, background: "rgba(4,17,10,0.62)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
+      {/* World Cup progress (full-bleed) */}
+      <div style={{ height: 6, background: "rgba(255,255,255,0.06)", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(wc.ratio * 100).toFixed(1)}%`, background: "linear-gradient(90deg,#3a7d2c,#c8ff2d)", boxShadow: "0 0 12px rgba(200,255,45,0.5)" }} />
+      </div>
+
+      <div style={{ maxWidth: 1620, margin: "0 auto", padding: "9px 30px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 22, letterSpacing: "-0.02em", color: "#f1f7f0" }}>BaltFut</span>
+          <span style={{ fontFamily: JB, fontSize: 10.5, letterSpacing: "0.1em", color: "#7d9a86" }}>
+            COPA DO MUNDO <span style={{ color: "#c8ff2d" }}>26.</span> · {wc.pct}% CONCLUÍDA
           </span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", gap: 18, fontFamily: JB, fontSize: 11, letterSpacing: "0.04em", alignItems: "center", flexWrap: "wrap" }}>
+          {NAV.map((t) => {
+            const active = t.key === view;
+            return (
+              <button key={t.key} onClick={() => onView(t.key)} style={{ position: "relative", background: "transparent", border: "none", padding: "2px 0 6px", cursor: "pointer", fontFamily: JB, fontSize: 11, letterSpacing: "0.04em", color: active ? "#f1f7f0" : "#6f8a78" }}>
+                {t.label}
+                {active ? <span style={{ position: "absolute", left: 0, bottom: -1, width: "100%", height: 2, background: "#c8ff2d" }} /> : null}
+              </button>
+            );
+          })}
+
           {followCode ? (
-            <button
-              onClick={onClearFollow}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontFamily: MONO,
-                fontSize: 11,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                color: "var(--signal-ink)",
-                background: "var(--signal)",
-                border: "none",
-                borderRadius: 999,
-                padding: "6px 12px",
-                cursor: "pointer",
-              }}
-            >
-              <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--signal-ink)" }} />
+            <button onClick={onClearFollow} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: JB, fontSize: 10.5, letterSpacing: "0.06em", color: "#0f1f02", background: "#c8ff2d", border: "none", borderRadius: 999, padding: "7px 12px", cursor: "pointer" }}>
+              <span style={{ width: 6, height: 6, borderRadius: 999, background: "#0f1f02" }} />
               {followName} <span style={{ opacity: 0.6 }}>✕</span>
             </button>
           ) : null}
-          <button
-            onClick={onToggleTheme}
-            aria-label="Alternar tema"
-            style={{
-              fontFamily: MONO,
-              fontSize: 11,
-              letterSpacing: "0.10em",
-              textTransform: "uppercase",
-              color: "var(--ink-2)",
-              background: "transparent",
-              border: "1px solid var(--line-2)",
-              borderRadius: 999,
-              padding: "6px 12px",
-              cursor: "pointer",
-            }}
-          >
-            {dark ? "Escuro" : "Claro"}
+
+          <button onClick={onToggleTheme} aria-label="Alternar tema" style={{ border: "1px solid rgba(255,255,255,0.16)", borderRadius: 999, padding: "7px 13px", color: "#cfd3ce", cursor: "pointer", background: "transparent", fontFamily: JB, fontSize: 11, letterSpacing: "0.04em" }}>
+            {dark ? "ESCURO" : "CLARO"}
           </button>
         </div>
-      </div>
-
-      <div
-        style={{
-          maxWidth: 1180,
-          margin: "0 auto",
-          padding: "0 24px",
-          display: "flex",
-          gap: 0,
-          overflowX: "auto",
-          // overflow-x:auto forces overflow-y to compute to auto; the active-tab
-          // underline at bottom:-1px would then trigger a phantom vertical
-          // scrollbar. Pin it hidden.
-          overflowY: "hidden",
-        }}
-      >
-        {TABS.map((t) => {
-          const active = t.key === view;
-          const isRank = t.key === "ranking";
-          return (
-            <button
-              key={t.key}
-              onClick={() => onView(t.key)}
-              style={{
-                position: "relative",
-                flex: "0 0 auto",
-                display: "flex",
-                alignItems: "baseline",
-                gap: 8,
-                background: "transparent",
-                border: "none",
-                padding: "14px 18px 13px 0",
-                marginRight: 18,
-                cursor: "pointer",
-              }}
-            >
-              <span style={{ fontFamily: MONO, fontSize: 11, color: isRank ? "var(--rank)" : "var(--ink-3)" }}>{t.idx}</span>
-              <span
-                style={{
-                  fontFamily: MONO,
-                  fontSize: 14,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: isRank ? "var(--rank)" : active ? "var(--ink)" : "var(--ink-2)",
-                }}
-              >
-                {t.label}
-              </span>
-              <span
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 18,
-                  bottom: -1,
-                  height: 2,
-                  background: active ? (isRank ? "var(--rank)" : "var(--signal)") : "transparent",
-                }}
-              />
-            </button>
-          );
-        })}
       </div>
     </header>
   );

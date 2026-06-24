@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rankSubs } from "@/lib/ranking";
+import { rankSubs, worstPalpiteiro } from "@/lib/ranking";
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 
@@ -64,6 +64,21 @@ describe("rankSubs", () => {
 
   it("ignores palpites on unfinished matches", () => {
     expect(rankSubs([entry("ana", "mLive", 1, 0)], matchesById)).toEqual([]);
+  });
+
+  describe("worstPalpiteiro", () => {
+    it("picks the lowest hit-rate among graded subs", () => {
+      const worst = worstPalpiteiro([
+        { username: "ace", wins: 3, losses: 0 }, // 100%
+        { username: "mid", wins: 1, losses: 1 }, // 50%
+        { username: "flop", wins: 0, losses: 2 }, // 0%
+      ]);
+      expect(worst).toEqual({ username: "flop", wins: 0, losses: 2, pct: 0 });
+    });
+
+    it("skips subs with no graded palpites and returns null when nobody qualifies", () => {
+      expect(worstPalpiteiro([{ username: "new", wins: 0, losses: 0 }])).toBeNull();
+    });
   });
 
   it("counts every palpite on a finished match, regardless of when placed", () => {
