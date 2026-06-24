@@ -366,25 +366,29 @@ export default function Home() {
     void loadCounts();
   };
 
-  // Masthead PLACAR / 2 JOGOS toggle: set the mode and jump to the live view. For
-  // 2 JOGOS, if the current selection isn't a live match, fall back to the default
-  // (live) chip so the dual-match stage actually has live games to show.
+  // The shared PLACAR / 1 JOGO vs 2 JOGOS toggle (masthead + pre-match). Marks the
+  // choice as manual so the auto-picker below stops overriding it for this game.
   const onLiveMode = (m: LiveMode) => {
     liveModeUserSet.current = true;
     setLiveMode(m);
     setView("live");
-    if (m === "duo") {
-      const sel = chips.find((c) => c.match.id === activeId);
-      if (!sel || sel.phase !== "live") setSelectedId(null);
-    }
   };
 
-  // Auto-show 2 JOGOS when 2+ matches are live (the old auto-split behaviour),
-  // until the viewer picks a mode manually.
+  // Auto-pick 1 vs 2 games for the current selection: 2 JOGOS when 2+ are live, or
+  // when the selected upcoming game has a simultaneous partner (same kickoff). The
+  // manual override resets whenever the viewer picks a different game.
+  useEffect(() => {
+    liveModeUserSet.current = false;
+  }, [activeId]);
   useEffect(() => {
     if (liveModeUserSet.current) return;
-    setLiveMode(matches.filter((m) => m.isLive).length >= 2 ? "duo" : "placar");
-  }, [matches]);
+    const liveCount = matches.filter((m) => m.isLive).length;
+    const am = matches.find((m) => m.id === activeId) ?? null;
+    const hasSimPartner =
+      am?.state === "pre" &&
+      matches.some((m) => m.id !== am.id && m.state === "pre" && m.startsAt === am.startsAt);
+    setLiveMode(liveCount >= 2 || hasSimPartner ? "duo" : "placar");
+  }, [matches, activeId]);
 
   return (
     <>
@@ -428,6 +432,7 @@ export default function Home() {
             groupByTeam={groupByTeam}
             releasedIds={releasedIds}
             liveMode={liveMode}
+            onLiveMode={onLiveMode}
           />
         )}
         {!loading && view === "matches" && (

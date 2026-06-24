@@ -150,12 +150,14 @@ export interface PreMatchPanelProps {
   groupByTeam: Record<string, string>;
   /** Matches open for palpites (current + next kickoff group). */
   releasedIds: Set<string>;
+  /** Shared 1-vs-2-games mode (same state as the masthead PLACAR/2 JOGOS toggle). */
+  mode: "placar" | "duo";
+  onMode: (m: "placar" | "duo") => void;
   onVoted: () => void;
   transport?: CastVoteTransport;
 }
 
-export function PreMatchPanel({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, releasedIds, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
-  const [mode, setMode] = useState<"single" | "duo">("single");
+export function PreMatchPanel({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, releasedIds, mode, onMode, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
   const { name } = useNameLock();
   const myName = name || null;
   const homeCode = match.home.abbreviation;
@@ -163,6 +165,7 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
   const homeAccent = teamAccent(homeCode);
   const awayAccent = teamAccent(awayCode);
   const canDuo = second != null;
+  const showDuo = mode === "duo" && canDuo;
 
   const seg = (active: boolean, color: string) => ({
     cursor: "pointer",
@@ -181,12 +184,12 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
       <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
         <SectionLabel color={GOLD}>{"// PALPITES ABERTOS"}</SectionLabel>
         <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 3, marginLeft: "auto" }}>
-          <button onClick={() => setMode("single")} style={seg(mode === "single", LIME)}>1 JOGO</button>
-          <button onClick={() => canDuo && setMode("duo")} disabled={!canDuo} title={canDuo ? "" : "Sem um segundo jogo próximo"} style={{ ...seg(mode === "duo" && canDuo, GOLD), opacity: canDuo ? 1 : 0.4, cursor: canDuo ? "pointer" : "not-allowed" }}>▦ 2 JOGOS</button>
+          <button onClick={() => onMode("placar")} style={seg(mode !== "duo", LIME)}>1 JOGO</button>
+          <button onClick={() => canDuo && onMode("duo")} disabled={!canDuo} title={canDuo ? "" : "Sem jogo simultâneo"} style={{ ...seg(showDuo, GOLD), opacity: canDuo ? 1 : 0.4, cursor: canDuo ? "pointer" : "not-allowed" }}>▦ 2 JOGOS</button>
         </div>
       </div>
 
-      {mode === "single" || !canDuo ? (
+      {!showDuo ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
           <PreHero match={match} groupByTeam={groupByTeam} />
           <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>

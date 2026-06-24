@@ -154,6 +154,7 @@ export interface LiveViewProps {
   groupByTeam: Record<string, string>;
   releasedIds: Set<string>;
   liveMode: LiveMode;
+  onLiveMode: (m: LiveMode) => void;
 }
 
 export function LiveView({
@@ -171,6 +172,7 @@ export function LiveView({
   groupByTeam,
   releasedIds,
   liveMode,
+  onLiveMode,
 }: LiveViewProps) {
   const selected = chips.find((c) => c.match.id === selectedId) ?? chips[0];
   const liveMatches = chips.filter((c) => c.phase === "live").map((c) => c.match);
@@ -245,6 +247,8 @@ export function LiveView({
               matches={matches}
               groupByTeam={groupByTeam}
               releasedIds={releasedIds}
+              mode={liveMode}
+              onMode={onLiveMode}
               onVoted={onVoted}
             />
           ) : isDuo ? (
