@@ -32,10 +32,12 @@ function Marker({ ev, withLabel }: { ev: TimelineEvent; withLabel: boolean }) {
   );
 }
 
-/** One event in the legend row below the track. */
+/** One event in the legend row below the track. Goals/cards/red cards get the
+ *  travelling-beam border (`.bf-evt-*`, see globals.css); subs stay static + dim. */
 function EventChip({ ev }: { ev: TimelineEvent }) {
+  const isSub = ev.kind === "sub";
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: JB, fontSize: 9.5, color: "#aebdb4", padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", opacity: ev.kind === "sub" ? 0.5 : 1 }}>
+    <span className={isSub ? undefined : `bf-evt bf-evt-${ev.kind}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: JB, fontSize: 9.5, color: "#aebdb4", padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.03)", border: isSub ? "1px solid rgba(255,255,255,0.06)" : "none", opacity: isSub ? 0.5 : 1 }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: ev.color }} />
       {ev.minLabel}{" "}
       {ev.kind === "sub" ? (
