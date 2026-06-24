@@ -23,7 +23,7 @@ export function GroupsView({ groups, followCode, onFollow }: GroupsViewProps) {
             <div key={g.letter} style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)", overflow: "hidden" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                 <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 16, color: "#f1f7f0" }}>Grupo {g.letter}</span>
-                <span style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.1em", color: "#6f8a78" }}>SG&nbsp;&nbsp;&nbsp;PTS</span>
+                <span style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.1em", color: "#6f8a78" }}>P&nbsp;&nbsp;&nbsp;SG&nbsp;&nbsp;&nbsp;PTS</span>
               </div>
               {g.rows.map((r) => {
                 const followed = r.code === followCode;
@@ -39,6 +39,7 @@ export function GroupsView({ groups, followCode, onFollow }: GroupsViewProps) {
                     <FlagIcon code={r.code} size={14} />
                     <span style={{ flex: "0 0 38px", fontFamily: BRIC, fontWeight: 800, fontSize: 13.5, color: followed ? LIME : "#f1f7f0" }}>{r.code}</span>
                     <span style={{ flex: "1 1 auto", fontFamily: BRIC, fontSize: 13.5, color: "#cfd9d1", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(r.code, r.name)}</span>
+                    <span style={{ flex: "0 0 24px", fontFamily: SAIRA, fontWeight: 600, fontSize: 14, color: "#6f8a78", textAlign: "center" }}>{r.played}</span>
                     <span style={{ flex: "0 0 34px", fontFamily: SAIRA, fontWeight: 700, fontSize: 15, color: "#9bb6a6", textAlign: "center" }}>{r.gd}</span>
                     <span style={{ flex: "0 0 30px", fontFamily: SAIRA, fontWeight: 800, fontSize: 16, color: "#f1f7f0", textAlign: "right" }}>{r.points}</span>
                   </button>
