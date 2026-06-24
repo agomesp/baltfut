@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { MessageSquare } from "lucide-react";
-import { MONO } from "@/components/primitives";
 
 /**
  * On/off control for floating the Kick chat emotes (KickChatReactions listens for
@@ -51,24 +50,24 @@ export function ChatEmotesToggle() {
         display: "inline-flex",
         alignItems: "center",
         gap: 8,
-        fontFamily: MONO,
+        fontFamily: "var(--font-jb)",
         fontSize: 11,
         fontWeight: 600,
-        letterSpacing: "0.08em",
+        letterSpacing: "0.06em",
         textTransform: "uppercase",
-        padding: "10px 14px",
-        borderRadius: 999,
+        padding: "9px 13px",
+        borderRadius: 8,
         cursor: "pointer",
         boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
-        background: on ? "var(--signal)" : "var(--surface)",
-        color: on ? "var(--signal-ink)" : "var(--ink-2)",
-        border: `1px solid ${on ? "transparent" : "var(--line-2)"}`,
+        background: on ? "#c8ff2d" : "rgba(255,255,255,0.04)",
+        color: on ? "#0f1f02" : "#9bb6a6",
+        border: `1px solid ${on ? "transparent" : "rgba(255,255,255,0.14)"}`,
       }}
     >
       <MessageSquare size={15} />
       Emotes
-      <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 999, background: "rgba(0,0,0,0.18)", color: on ? "var(--signal-ink)" : "var(--ink-3)" }}>
-        {on ? "Ativado" : "Desativado"}
+      <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 6, background: on ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.06)", color: on ? "#0f1f02" : "#9bb6a6" }}>
+        {on ? "ATIVADO" : "DESATIVADO"}
       </span>
     </button>
   );

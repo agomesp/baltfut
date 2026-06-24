@@ -9,7 +9,7 @@ import { communityConsensus } from "@/lib/consensus";
 import { classifyLivePalpites } from "@/lib/live-palpites";
 import { isPalpiteOpen, palpiteDeadline } from "@/lib/palpite";
 import { Reactions } from "@/components/reactions";
-import { PromoShowcase } from "@/components/promo-showcase";
+import { RbStoreStrip, type Promo } from "@/components/live/rb-store-strip";
 import { BfChipRail } from "@/components/live/bf-chip-rail";
 import { HeroScoreboard } from "@/components/live/hero-scoreboard";
 import { CommunityBar } from "@/components/live/community-bar";
@@ -154,6 +154,8 @@ export interface LiveViewProps {
   groupByTeam: Record<string, string>;
   releasedIds: Set<string>;
   liveMode: LiveMode;
+  /** RB Store promos to render (mock fixtures); null = the strip fetches the live feed. */
+  promos?: Promo[] | null;
 }
 
 export function LiveView({
@@ -171,6 +173,7 @@ export function LiveView({
   groupByTeam,
   releasedIds,
   liveMode,
+  promos = null,
 }: LiveViewProps) {
   const selected = chips.find((c) => c.match.id === selectedId) ?? chips[0];
   const liveMatches = chips.filter((c) => c.phase === "live").map((c) => c.match);
@@ -259,7 +262,7 @@ export function LiveView({
           )}
         </div>
 
-        <PromoShowcase height={64} />
+        <RbStoreStrip height={64} override={promos} />
       </div>
     </section>
   );

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PictureInPicture } from "lucide-react";
-import { MONO } from "@/components/primitives";
 import { fetchScoreboard, FIFA_WORLD_DATE_RANGE, type Match } from "@/lib/espn";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchVoteEntries, rankPredictions, type RankedPrediction } from "@/lib/votes";
@@ -348,23 +347,23 @@ export function PipView() {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 8,
-        fontFamily: MONO,
+        gap: 7,
+        fontFamily: "var(--font-jb)",
         fontSize: 11,
         fontWeight: 600,
-        letterSpacing: "0.08em",
+        letterSpacing: "0.06em",
         textTransform: "uppercase",
-        padding: "10px 14px",
-        borderRadius: 999,
+        padding: "9px 13px",
+        borderRadius: 8,
         cursor: "pointer",
         boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
-        background: open ? "var(--signal)" : "var(--surface)",
-        color: open ? "var(--signal-ink)" : "var(--ink)",
-        border: `1px solid ${open ? "transparent" : "var(--line-2)"}`,
+        background: open ? "rgba(67,184,106,0.16)" : "rgba(255,255,255,0.04)",
+        color: open ? "#bff0cf" : "#bdd6d9",
+        border: `1px solid ${open ? "rgba(98,203,132,0.55)" : "rgba(255,255,255,0.14)"}`,
       }}
     >
-      <PictureInPicture size={15} />
-      PiP
+      <PictureInPicture size={14} />
+      PIP
     </button>
   );
 }
