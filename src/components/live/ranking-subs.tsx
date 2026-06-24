@@ -66,11 +66,11 @@ export function RankingSubs({ entries, matches, variant = "column", style }: Ran
 
       {rest.length > 0 ? (
         variant === "grid" ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px", alignContent: "start", overflow: "hidden", flex: 1, minHeight: 0 }}>
+          <div className="bf-scroll" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 14px", alignContent: "start", flex: 1, minHeight: 0, paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
             {rest.map((r, i) => <Row key={r.username} r={r} rank={i + 2} />)}
           </div>
         ) : (
-          <div className="bf-fade-y" style={{ display: "flex", flexDirection: "column", overflow: "hidden", flex: 1, minHeight: 0 }}>
+          <div className="bf-scroll" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
             {rest.map((r, i) => <Row key={r.username} r={r} rank={i + 2} dense />)}
           </div>
         )

@@ -62,7 +62,7 @@ function KickoffClock({ startsAt }: { startsAt: string }) {
 
 function SentList({ entries, homeCode, awayCode, myName, cols = 2 }: { entries: VoteEntry[]; homeCode: string; awayCode: string; myName: string | null; cols?: number }) {
   return (
-    <div className="bf-fade-y" style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "7px 8px", alignContent: "start", overflow: "hidden", flex: 1, minHeight: 0 }}>
+    <div className="bf-scroll" style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "7px 8px", alignContent: "start", flex: 1, minHeight: 0, paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
       {entries.length === 0 ? (
         <div style={{ fontFamily: BRIC, fontSize: 11.5, color: "#6f8a78" }}>Nenhum palpite ainda. Seja o primeiro.</div>
       ) : (
@@ -192,7 +192,7 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
             <div style={{ ...cardWrap, flex: 1.35, minWidth: 0, minHeight: 0, overflow: "hidden", border: "1px solid rgba(200,255,45,0.16)", padding: "13px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
               <SectionLabel>{"// FAÇA SEU PALPITE"}</SectionLabel>
               <PalpiteForm match={match} entries={entries} closesAt={palpiteDeadline(match.startsAt)} onVoted={onVoted} transport={transport} />
-              <div style={{ display: "flex", gap: 12, marginTop: "auto" }}>
+              <div className="bf-scroll" style={{ display: "flex", gap: 12, flex: 1, minHeight: 0, alignItems: "flex-start", paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
                 <HistoryColumn code={homeCode} accent={homeAccent} games={teamCupHistory(matches, homeCode)} />
                 <HistoryColumn code={awayCode} accent={awayAccent} games={teamCupHistory(matches, awayCode)} />
               </div>

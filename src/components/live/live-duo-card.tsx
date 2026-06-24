@@ -46,7 +46,7 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
   const consensus = communityConsensus(entries);
   const final = match.state === "post";
   const { winners, open, lost } = classifyLivePalpites(entries, { home: match.homeScore ?? 0, away: match.awayScore ?? 0 }, final);
-  const palps = [...winners, ...open, ...lost].slice(0, 6);
+  const palps = [...winners, ...open, ...lost];
 
   return (
     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 11, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, background: "rgba(255,255,255,0.015)", padding: "14px 16px", minHeight: 0 }}>
@@ -105,8 +105,9 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
         </div>
       ) : null}
 
-      <div className="bf-fade-y" style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, overflow: "hidden" }}>
-        <SectionLabel color="#6f8a78" style={{ letterSpacing: "0.14em" }}>{"// PALPITES"}</SectionLabel>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <SectionLabel color="#6f8a78" style={{ letterSpacing: "0.14em", flex: "none" }}>{"// PALPITES"}</SectionLabel>
+        <div className="bf-scroll" style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
         {palps.length === 0 ? (
           <span style={{ fontFamily: BRIC, fontSize: 11.5, color: "#6f8a78" }}>Sem palpites nesta partida.</span>
         ) : (
@@ -121,6 +122,7 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
             );
           })
         )}
+        </div>
       </div>
 
       <span style={{ display: "inline-flex", alignSelf: "flex-start", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.03)", borderRadius: 999, padding: "7px 12px", fontFamily: JB, fontSize: 10, color: "#cbdcd0" }}>

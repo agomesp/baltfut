@@ -34,14 +34,15 @@ export function PalpiteBreakdown({
   const empty = winners.length + open.length + lost.length === 0;
 
   return (
-    <div className="bf-fade-y" style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: 9 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: 9 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flex: "none" }}>
         <SectionLabel>{`// PALPITES · ${homeCode} × ${awayCode}`}</SectionLabel>
         <span style={{ fontFamily: JB, fontSize: 9.5, color: "#4d6353" }}>
           {total} {total === 1 ? "palpite" : "palpites"} · {closed ? "encerrados" : "ao vivo"}
         </span>
       </div>
 
+      <div className="bf-scroll" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 9, paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
       {empty ? (
         <div style={{ fontFamily: BRIC, fontSize: 12.5, color: "#7d9a86", padding: "6px 2px" }}>
           Nenhum palpite nesta partida ainda.
@@ -102,6 +103,7 @@ export function PalpiteBreakdown({
           </div>
         </div>
       ) : null}
+      </div>
     </div>
   );
 }
