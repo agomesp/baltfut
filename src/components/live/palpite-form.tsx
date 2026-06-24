@@ -21,14 +21,14 @@ const clampScore = (n: number) => Math.max(SCORE_MIN, Math.min(SCORE_MAX, n));
 /** − value + score stepper (Saira numeral). */
 export function Stepper({ label, accent, value, onChange }: { label: string; accent: string; value: number; onChange: (n: number) => void }) {
   const btn = {
-    width: 34,
-    height: 34,
-    borderRadius: 9,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     border: "1px solid rgba(255,255,255,0.16)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 21,
+    fontSize: 18,
     color: "#cfe3d6",
     cursor: "pointer",
     background: "rgba(255,255,255,0.04)",
@@ -37,10 +37,10 @@ export function Stepper({ label, accent, value, onChange }: { label: string; acc
   };
   return (
     <div style={{ textAlign: "center" }}>
-      <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 16, color: accent, marginBottom: 8 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: accent, marginBottom: 6 }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <button type="button" aria-label={`Menos ${label}`} style={btn} onClick={() => onChange(clampScore(value - 1))}>−</button>
-        <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 44, color: "#fff", width: 48, textAlign: "center", lineHeight: 0.8 }}>{value}</span>
+        <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: "#fff", width: 42, textAlign: "center", lineHeight: 0.8 }}>{value}</span>
         <button type="button" aria-label={`Mais ${label}`} style={btn} onClick={() => onChange(clampScore(value + 1))}>+</button>
       </div>
     </div>
@@ -94,11 +94,11 @@ const inputStyle = {
   boxSizing: "border-box" as const,
   background: "rgba(0,0,0,0.3)",
   border: "1px solid rgba(255,255,255,0.14)",
-  borderRadius: 11,
-  padding: "10px 14px",
+  borderRadius: 10,
+  padding: "9px 13px",
   color: "#fff",
   fontFamily: BRIC,
-  fontSize: 14,
+  fontSize: 13.5,
   outline: "none",
 };
 
@@ -125,9 +125,9 @@ const submitBtnStyle = {
   color: "#0f1f02",
   fontFamily: BRIC,
   fontWeight: 800,
-  fontSize: 15,
-  padding: 13,
-  borderRadius: 12,
+  fontSize: 14,
+  padding: 11,
+  borderRadius: 11,
   border: "none",
   boxShadow: "0 0 26px -8px rgba(200,255,45,0.6)",
   width: "100%",
@@ -196,11 +196,11 @@ export function PalpiteForm({ match, entries, closesAt, onVoted, transport = sup
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <NameField name={name} setName={setName} locked={locked} onUnlock={unlock} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 24, padding: "2px 0" }}>
         <Stepper label={homeAccentCode} accent="var(--bf-text)" value={home} onChange={setHome} />
-        <span style={{ fontFamily: SAIRA, fontWeight: 500, fontSize: 26, color: "#42565b", paddingTop: 26 }}>×</span>
+        <span style={{ fontFamily: SAIRA, fontWeight: 500, fontSize: 22, color: "#42565b", paddingTop: 22 }}>×</span>
         <Stepper label={awayAccentCode} accent="var(--bf-text)" value={away} onChange={setAway} />
       </div>
       <button type="button" onClick={onSubmit} disabled={submitting} style={{ ...submitBtnStyle, opacity: submitting ? 0.7 : 1 }}>

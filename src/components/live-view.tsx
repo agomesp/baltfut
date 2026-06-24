@@ -48,14 +48,14 @@ function segBtn(active: boolean) {
   return {
     flex: "1 1 0",
     fontFamily: JB,
-    fontSize: 10.5,
+    fontSize: 10,
     letterSpacing: "0.06em",
     textTransform: "uppercase" as const,
     background: active ? LIME : "transparent",
     color: active ? "#0f1f02" : "#9bb6a6",
     border: active ? `1px solid ${LIME}` : "1px solid rgba(255,255,255,0.12)",
     borderRadius: 8,
-    padding: "8px",
+    padding: "6px 8px",
     cursor: "pointer",
   };
 }
@@ -96,10 +96,10 @@ function PlacarStage({
   const formOpen = phase === "live" && released && isPalpiteOpen(palpiteDeadline(match.startsAt), now);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
       <HeroScoreboard match={match} />
-      <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
-        <div style={{ flex: 1.5, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 11 }}>
+      <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1.5, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flex: "none" }}>
             <button onClick={() => onPanel("predict")} style={segBtn(panel === "predict")}>Palpites</button>
             <button onClick={() => onPanel("lineup")} style={segBtn(panel === "lineup")}>Escalação</button>
@@ -117,7 +117,7 @@ function PlacarStage({
             </>
           )}
         </div>
-        <div style={{ flex: 0.82, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ flex: 0.82, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <CommunityBar consensus={consensus} homeCode={homeCode} awayCode={awayCode} homeAccent={teamAccent(homeCode)} awayAccent={teamAccent(awayCode)} />
           <RankingSubs entries={allEntries} matches={matches} variant="grid" style={{ flex: 1, minHeight: 0 }} />
         </div>
@@ -130,11 +130,11 @@ function PlacarStage({
 function DuoStage({ liveMatches, allEntries, matches, groupByTeam }: { liveMatches: Match[]; allEntries: VoteEntry[]; matches: Match[]; groupByTeam: Record<string, string> }) {
   const two = liveMatches.slice(0, 2);
   return (
-    <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
+    <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
       {two.map((m) => (
         <LiveDuoCard key={m.id} match={m} entries={allEntries.filter((e) => e.matchId === m.id)} groupLabel={groupVenueLabel(m, groupByTeam)} />
       ))}
-      <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: 288 }} />
+      <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: 250 }} />
     </div>
   );
 }
@@ -193,7 +193,7 @@ export function LiveView({
     const el = fillRef.current;
     if (!el) return;
     const WIDE_MIN = 1000;
-    const BOTTOM_GAP = 84;
+    const BOTTOM_GAP = 74;
     const apply = () => {
       if (window.innerWidth < WIDE_MIN) {
         el.style.height = "";
@@ -228,7 +228,7 @@ export function LiveView({
     <section>
       <Reactions matchId={selected.match.id} />
       <KickLiveChip />
-      <div ref={fillRef} style={{ display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}>
+      <div ref={fillRef} style={{ display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
         <BfChipRail chips={chips} selectedId={selected.match.id} onSelect={onSelect} releasedIds={releasedIds} />
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -262,7 +262,7 @@ export function LiveView({
           )}
         </div>
 
-        <RbStoreStrip height={64} override={promos} />
+        <RbStoreStrip height={54} override={promos} />
       </div>
     </section>
   );

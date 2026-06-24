@@ -43,10 +43,10 @@ function KickoffClock({ startsAt }: { startsAt: string }) {
     <Countdown
       targetMs={Date.parse(startsAt)}
       render={(ms) => {
-        if (ms <= 0) return <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 46, color: "#fff", lineHeight: 0.78 }}>00:00</span>;
+        if (ms <= 0) return <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: "#fff", lineHeight: 0.78 }}>00:00</span>;
         const parts = formatCountdownLong(ms).split(":");
         return (
-          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 46, color: "#fff", lineHeight: 0.78, letterSpacing: "0.02em" }}>
+          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: "#fff", lineHeight: 0.78, letterSpacing: "0.02em" }}>
             {parts.map((p, i) => (
               <span key={i}>
                 {i > 0 ? <span style={{ color: LIME }}>:</span> : null}
@@ -64,15 +64,15 @@ function SentList({ entries, homeCode, awayCode, myName, cols = 2 }: { entries: 
   return (
     <div className="bf-fade-y" style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "7px 8px", alignContent: "start", overflow: "hidden", flex: 1, minHeight: 0 }}>
       {entries.length === 0 ? (
-        <div style={{ fontFamily: BRIC, fontSize: 12, color: "#6f8a78" }}>Nenhum palpite ainda. Seja o primeiro.</div>
+        <div style={{ fontFamily: BRIC, fontSize: 11.5, color: "#6f8a78" }}>Nenhum palpite ainda. Seja o primeiro.</div>
       ) : (
         entries.map((e, i) => {
           const mine = myName != null && e.username.trim().toLowerCase() === myName.trim().toLowerCase();
           return (
-            <div key={`${e.username}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 8, padding: "7px 9px", background: mine ? "rgba(200,255,45,0.1)" : "rgba(255,255,255,0.025)", border: mine ? "1px solid rgba(200,255,45,0.4)" : "1px solid rgba(255,255,255,0.05)" }}>
-              <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 12, color: "#eef3ee", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.username}</span>
+            <div key={`${e.username}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 7, padding: "6px 8px", background: mine ? "rgba(200,255,45,0.1)" : "rgba(255,255,255,0.025)", border: mine ? "1px solid rgba(200,255,45,0.4)" : "1px solid rgba(255,255,255,0.05)" }}>
+              <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11.5, color: "#eef3ee", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.username}</span>
               {mine ? <span style={{ flex: "none", fontFamily: JB, fontSize: 7.5, letterSpacing: "0.06em", fontWeight: 700, color: "#0f1f02", background: LIME, padding: "2px 5px", borderRadius: 4 }}>VOCÊ</span> : null}
-              <span style={{ flex: "none", fontFamily: JB, fontSize: 10, color: "#aebdb4" }}>{pickLine(e, homeCode, awayCode)}</span>
+              <span style={{ flex: "none", fontFamily: JB, fontSize: 9.5, color: "#aebdb4" }}>{pickLine(e, homeCode, awayCode)}</span>
             </div>
           );
         })
@@ -112,20 +112,20 @@ function PreHero({ match, groupByTeam }: { match: Match; groupByTeam: Record<str
   const homeAccent = teamAccent(match.home.abbreviation);
   const awayAccent = teamAccent(match.away.abbreviation);
   return (
-    <div style={{ position: "relative", flex: "none", borderRadius: 14, overflow: "hidden", border: "1px solid rgba(255,179,71,0.16)", background: "linear-gradient(180deg, rgba(255,179,71,0.06), transparent)", padding: "22px 28px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(16px,4vw,40px)" }}>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, minWidth: 0 }}>
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(20px,2.4vw,30px)", letterSpacing: "-0.02em", color: homeAccent, whiteSpace: "nowrap" }}>{teamNamePt(match.home.abbreviation, match.home.name).toUpperCase()}</span>
-          <FlagCrest code={match.home.abbreviation} accent={homeAccent} size={64} />
+    <div style={{ position: "relative", flex: "none", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,179,71,0.16)", background: "linear-gradient(180deg, rgba(255,179,71,0.06), transparent)", padding: "14px 22px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(12px,3vw,30px)" }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, minWidth: 0 }}>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(16px,2vw,23px)", letterSpacing: "-0.02em", color: homeAccent, whiteSpace: "nowrap" }}>{teamNamePt(match.home.abbreviation, match.home.name).toUpperCase()}</span>
+          <FlagCrest code={match.home.abbreviation} accent={homeAccent} size={50} />
         </div>
         <div style={{ flex: "none", textAlign: "center" }}>
-          <div style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.2em", color: GOLD, marginBottom: 8 }}>COMEÇA EM</div>
+          <div style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.2em", color: GOLD, marginBottom: 6 }}>COMEÇA EM</div>
           <KickoffClock startsAt={match.startsAt} />
           <div style={{ fontFamily: JB, fontSize: 9, color: "#6f8a78", marginTop: 9, letterSpacing: "0.05em" }}>{groupVenue(match, groupByTeam) || "COPA DO MUNDO"}</div>
         </div>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
-          <FlagCrest code={match.away.abbreviation} accent={awayAccent} size={64} />
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(20px,2.4vw,30px)", letterSpacing: "-0.02em", color: awayAccent, whiteSpace: "nowrap" }}>{teamNamePt(match.away.abbreviation, match.away.name).toUpperCase()}</span>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+          <FlagCrest code={match.away.abbreviation} accent={awayAccent} size={50} />
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(16px,2vw,23px)", letterSpacing: "-0.02em", color: awayAccent, whiteSpace: "nowrap" }}>{teamNamePt(match.away.abbreviation, match.away.name).toUpperCase()}</span>
         </div>
       </div>
       <div style={{ textAlign: "center", marginTop: 14 }}>
@@ -175,7 +175,7 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
   });
 
   return (
-    <section style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0 }}>
+    <section style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
         <SectionLabel color={GOLD}>{"// PALPITES ABERTOS"}</SectionLabel>
         <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 3, marginLeft: "auto" }}>
@@ -185,21 +185,21 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
       </div>
 
       {mode === "single" || !canDuo ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
           <PreHero match={match} groupByTeam={groupByTeam} />
-          <div style={{ display: "flex", gap: 14, flex: 1, minHeight: 0 }}>
-            <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: 196 }} />
-            <div style={{ ...cardWrap, flex: 1.35, minWidth: 0, border: "1px solid rgba(200,255,45,0.16)", padding: "18px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
+            <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: 170 }} />
+            <div style={{ ...cardWrap, flex: 1.35, minWidth: 0, minHeight: 0, overflow: "hidden", border: "1px solid rgba(200,255,45,0.16)", padding: "13px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
               <SectionLabel>{"// FAÇA SEU PALPITE"}</SectionLabel>
               <PalpiteForm match={match} entries={entries} closesAt={palpiteDeadline(match.startsAt)} onVoted={onVoted} transport={transport} />
-              <div style={{ display: "flex", gap: 14, marginTop: 2 }}>
+              <div style={{ display: "flex", gap: 12, marginTop: "auto" }}>
                 <HistoryColumn code={homeCode} accent={homeAccent} games={teamCupHistory(matches, homeCode)} />
                 <HistoryColumn code={awayCode} accent={awayAccent} games={teamCupHistory(matches, awayCode)} />
               </div>
             </div>
-            <div style={{ ...cardWrap, flex: 1.05, minWidth: 0, padding: 18, display: "flex", flexDirection: "column" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-                <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 15 }}>Palpites enviados</span>
+            <div style={{ ...cardWrap, flex: 1.05, minWidth: 0, padding: 14, display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 11 }}>
+                <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14 }}>Palpites enviados</span>
                 <span style={{ fontFamily: JB, fontSize: 9.5, color: "#6f8a78" }}>{entries.length} no total</span>
               </div>
               <SentList entries={entries} homeCode={homeCode} awayCode={awayCode} myName={myName} />
@@ -238,7 +238,7 @@ function DuoGameCard({ match, entries, groupByTeam, home, away, setHome, setAway
   const homeAccent = teamAccent(homeCode);
   const awayAccent = teamAccent(awayCode);
   return (
-    <div style={{ flex: 1, minWidth: 0, borderRadius: 14, border: `1px solid ${borderColor}`, background: "rgba(255,255,255,0.02)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 13, minHeight: 0 }}>
+    <div style={{ flex: 1, minWidth: 0, borderRadius: 12, border: `1px solid ${borderColor}`, background: "rgba(255,255,255,0.02)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78" }}>{groupVenue(match, groupByTeam) || "COPA DO MUNDO"}</span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: JB, fontSize: 10, color: "#cdeec0", background: "rgba(200,255,45,0.1)", border: "1px solid rgba(200,255,45,0.3)", borderRadius: 999, padding: "4px 10px" }}>
@@ -248,13 +248,13 @@ function DuoGameCard({ match, entries, groupByTeam, home, away, setHome, setAway
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <FlagCrest code={homeCode} accent={homeAccent} size={40} />
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 18, color: homeAccent }}>{teamNamePt(homeCode, match.home.name).toUpperCase()}</span>
+          <FlagCrest code={homeCode} accent={homeAccent} size={34} />
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 16, color: homeAccent }}>{teamNamePt(homeCode, match.home.name).toUpperCase()}</span>
         </div>
-        <span style={{ fontFamily: SAIRA, fontSize: 18, color: "#42565b" }}>×</span>
+        <span style={{ fontFamily: SAIRA, fontSize: 16, color: "#42565b" }}>×</span>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 18, color: awayAccent }}>{teamNamePt(awayCode, match.away.name).toUpperCase()}</span>
-          <FlagCrest code={awayCode} accent={awayAccent} size={40} />
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 16, color: awayAccent }}>{teamNamePt(awayCode, match.away.name).toUpperCase()}</span>
+          <FlagCrest code={awayCode} accent={awayAccent} size={34} />
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>

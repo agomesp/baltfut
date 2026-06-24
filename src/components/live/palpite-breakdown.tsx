@@ -34,32 +34,32 @@ export function PalpiteBreakdown({
   const empty = winners.length + open.length + lost.length === 0;
 
   return (
-    <div className="bf-fade-y" style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: 11 }}>
+    <div className="bf-fade-y" style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: 9 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <SectionLabel>{`// PALPITES · ${homeCode} × ${awayCode}`}</SectionLabel>
-        <span style={{ fontFamily: JB, fontSize: 10, color: "#4d6353" }}>
+        <span style={{ fontFamily: JB, fontSize: 9.5, color: "#4d6353" }}>
           {total} {total === 1 ? "palpite" : "palpites"} · {closed ? "encerrados" : "ao vivo"}
         </span>
       </div>
 
       {empty ? (
-        <div style={{ fontFamily: BRIC, fontSize: 13, color: "#7d9a86", padding: "8px 2px" }}>
+        <div style={{ fontFamily: BRIC, fontSize: 12.5, color: "#7d9a86", padding: "6px 2px" }}>
           Nenhum palpite nesta partida ainda.
         </div>
       ) : null}
 
       {winners.length > 0 ? (
-        <div style={{ display: "flex", gap: 11, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
           {winners.map((p, i) => {
             const s = SKIN.win;
             return (
-              <div key={`w${i}`} style={{ flex: "1 1 240px", minWidth: 0, borderRadius: 10, padding: "8px 11px", background: s.cardBg, border: s.cardBorder, boxShadow: "0 0 20px -10px rgba(200,255,45,0.5)", display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ flex: "none", width: 24, height: 24, borderRadius: "50%", background: "#c8ff2d", color: "#0f1f02", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800 }}>✓</span>
+              <div key={`w${i}`} style={{ flex: "1 1 220px", minWidth: 0, borderRadius: 9, padding: "6px 9px", background: s.cardBg, border: s.cardBorder, boxShadow: "0 0 20px -10px rgba(200,255,45,0.5)", display: "flex", alignItems: "center", gap: 9 }}>
+                <span style={{ flex: "none", width: 22, height: 22, borderRadius: "50%", background: "#c8ff2d", color: "#0f1f02", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800 }}>✓</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...nameStyle(p.username, s.nameColor) }}>{p.username}</div>
-                  <div style={{ fontFamily: JB, fontSize: 10, color: s.pickColor, marginTop: 1 }}>{pickStr(p, homeCode, awayCode)}</div>
+                  <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...nameStyle(p.username, s.nameColor) }}>{p.username}</div>
+                  <div style={{ fontFamily: JB, fontSize: 9.5, color: s.pickColor }}>{pickStr(p, homeCode, awayCode)}</div>
                 </div>
-                <span style={{ flex: "none", fontFamily: JB, fontSize: 9, letterSpacing: "0.06em", fontWeight: 700, padding: "6px 9px", borderRadius: 7, background: s.tagBg, color: s.statusColor }}>{p.status}</span>
+                <span style={{ flex: "none", fontFamily: JB, fontSize: 8.5, letterSpacing: "0.05em", fontWeight: 700, padding: "5px 8px", borderRadius: 7, background: s.tagBg, color: s.statusColor }}>{p.status}</span>
               </div>
             );
           })}
@@ -67,16 +67,16 @@ export function PalpiteBreakdown({
       ) : null}
 
       {open.length > 0 ? (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {open.map((p, i) => {
             const s = SKIN.open;
             return (
-              <div key={`o${i}`} style={{ borderRadius: 9, padding: "7px 10px", background: s.cardBg, border: s.cardBorder, opacity: s.opacity, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div key={`o${i}`} style={{ borderRadius: 8, padding: "6px 9px", background: s.cardBg, border: s.cardBorder, opacity: s.opacity, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...nameStyle(p.username, s.nameColor) }}>{p.username}</div>
-                  <div style={{ fontFamily: JB, fontSize: 9.5, color: s.pickColor, marginTop: 1 }}>{pickStr(p, homeCode, awayCode)}</div>
+                  <div style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...nameStyle(p.username, s.nameColor) }}>{p.username}</div>
+                  <div style={{ fontFamily: JB, fontSize: 9, color: s.pickColor }}>{pickStr(p, homeCode, awayCode)}</div>
                 </div>
-                <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: s.statusColor }}>{p.status}</span>
+                <span style={{ flex: "none", fontFamily: JB, fontSize: 8.5, color: s.statusColor }}>{p.status}</span>
               </div>
             );
           })}
@@ -84,18 +84,18 @@ export function PalpiteBreakdown({
       ) : null}
 
       {lost.length > 0 ? (
-        <div style={{ marginTop: 2 }}>
-          <div style={{ marginBottom: 7 }}><SectionLabel color="#6f8a78" style={{ fontSize: 9.5, letterSpacing: "0.14em" }}>{"// JÁ ELIMINADOS"}</SectionLabel></div>
-          <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+        <div style={{ marginTop: 1 }}>
+          <div style={{ marginBottom: 6 }}><SectionLabel color="#6f8a78" style={{ fontSize: 9, letterSpacing: "0.14em" }}>{"// JÁ ELIMINADOS"}</SectionLabel></div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {lost.map((p, i) => {
               const s = SKIN.lost;
               return (
-                <div key={`l${i}`} style={{ flex: "1 1 180px", minWidth: 0, opacity: s.opacity, borderRadius: 8, padding: "6px 9px", background: s.cardBg, border: s.cardBorder, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                <div key={`l${i}`} style={{ flex: "1 1 170px", minWidth: 0, opacity: s.opacity, borderRadius: 8, padding: "5px 8px", background: s.cardBg, border: s.cardBorder, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontFamily: BRIC, fontWeight: 600, fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...nameStyle(p.username, s.nameColor) }}>{p.username}</div>
-                    <div style={{ fontFamily: JB, fontSize: 9, color: s.pickColor, marginTop: 1, textDecoration: "line-through" }}>{pickStr(p, homeCode, awayCode)}</div>
+                    <div style={{ fontFamily: BRIC, fontWeight: 600, fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...nameStyle(p.username, s.nameColor) }}>{p.username}</div>
+                    <div style={{ fontFamily: JB, fontSize: 8.5, color: s.pickColor, textDecoration: "line-through" }}>{pickStr(p, homeCode, awayCode)}</div>
                   </div>
-                  <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: s.statusColor }}>{p.status}</span>
+                  <span style={{ flex: "none", fontFamily: JB, fontSize: 8.5, color: s.statusColor }}>{p.status}</span>
                 </div>
               );
             })}

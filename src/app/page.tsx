@@ -431,7 +431,7 @@ export default function Home() {
       <main
         style={
           view === "live"
-            ? { maxWidth: 1620, margin: "0 auto", padding: "14px 30px 16px" }
+            ? { maxWidth: 1620, margin: "0 auto", padding: "8px 24px 10px" }
             : { maxWidth: 1180, margin: "0 auto", padding: "10px 23px 60px" }
         }
       >

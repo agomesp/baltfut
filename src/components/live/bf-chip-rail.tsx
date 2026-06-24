@@ -23,8 +23,8 @@ export function BfChipRail({ chips, selectedId, onSelect, releasedIds }: { chips
 
   const arrow = {
     flex: "none" as const,
-    width: 30,
-    height: 30,
+    width: 28,
+    height: 28,
     borderRadius: "50%",
     border: "1px solid rgba(255,255,255,0.16)",
     background: "transparent",
@@ -32,15 +32,15 @@ export function BfChipRail({ chips, selectedId, onSelect, releasedIds }: { chips
     alignItems: "center",
     justifyContent: "center",
     color: "#9bb6a6",
-    fontSize: 14,
+    fontSize: 13,
     cursor: "pointer",
   };
 
   return (
-    <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, borderTop: "1px solid rgba(255,255,255,0.07)", borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "11px 0", flex: "none" }}>
+    <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid rgba(255,255,255,0.07)", borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "9px 0", flex: "none" }}>
       <button aria-label="Jogos anteriores" onClick={() => scroll(-1)} style={arrow}>‹</button>
       <div style={{ position: "relative", flex: 1, minWidth: 0, overflow: "hidden", WebkitMaskImage: "linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)", maskImage: "linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)" }}>
-        <div ref={scrollRef} className="no-scrollbar" style={{ display: "flex", gap: 9, justifyContent: "flex-start", overflowX: "auto", padding: "2px 6px" }}>
+        <div ref={scrollRef} className="no-scrollbar" style={{ display: "flex", gap: 8, justifyContent: "flex-start", overflowX: "auto", padding: "2px 6px" }}>
           {chips.map((chip) => {
             const active = chip.match.id === selectedId;
             const isLive = chip.phase === "live";
@@ -69,7 +69,7 @@ export function BfChipRail({ chips, selectedId, onSelect, releasedIds }: { chips
                 key={chip.match.id}
                 data-active={active}
                 onClick={() => onSelect(chip.match.id)}
-                style={{ flex: "none", display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 15px", borderRadius: 8, fontFamily: JB, fontSize: 12, whiteSpace: "nowrap", cursor: "pointer", background: bg, border, color }}
+                style={{ flex: "none", display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, fontFamily: JB, fontSize: 11, whiteSpace: "nowrap", cursor: "pointer", background: bg, border, color }}
               >
                 {dot ? <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, animation: isLive && !active ? "bfpulse 1.5s infinite" : undefined }} /> : null}
                 {chipLabel(chip)}

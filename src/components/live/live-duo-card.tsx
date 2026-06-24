@@ -49,8 +49,8 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
   const palps = [...winners, ...open, ...lost].slice(0, 6);
 
   return (
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 14, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, background: "rgba(255,255,255,0.015)", padding: "18px 20px", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: JB, fontSize: 10.5 }}>
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 11, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, background: "rgba(255,255,255,0.015)", padding: "14px 16px", minHeight: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: JB, fontSize: 10 }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#9ef01f" }}>
           <BfPulse color="#9ef01f" />
           {final ? "ENCERRADO" : "AO VIVO"} · {matchClockLabel(match)}
@@ -60,17 +60,17 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, minWidth: 0 }}>
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(14px,1.6vw,20px)", color: homeAccent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(homeCode, match.home.name).toUpperCase()}</span>
-          <FlagCrest code={homeCode} accent={homeAccent} size={56} />
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(12px,1.4vw,17px)", color: homeAccent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(homeCode, match.home.name).toUpperCase()}</span>
+          <FlagCrest code={homeCode} accent={homeAccent} size={46} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 11, flex: "none" }}>
-          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: "clamp(40px,5vw,58px)", lineHeight: 0.74, color: "#fff" }}>{match.homeScore ?? 0}</span>
-          <span style={{ width: 17, height: 5, borderRadius: 3, background: LIME, boxShadow: "0 0 11px rgba(200,255,45,0.5)", flex: "0 0 auto" }} />
-          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: "clamp(40px,5vw,58px)", lineHeight: 0.74, color: "#fff" }}>{match.awayScore ?? 0}</span>
+          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: "clamp(30px,4vw,46px)", lineHeight: 0.74, color: "#fff" }}>{match.homeScore ?? 0}</span>
+          <span style={{ width: 15, height: 4, borderRadius: 3, background: LIME, boxShadow: "0 0 11px rgba(200,255,45,0.5)", flex: "0 0 auto" }} />
+          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: "clamp(30px,4vw,46px)", lineHeight: 0.74, color: "#fff" }}>{match.awayScore ?? 0}</span>
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          <FlagCrest code={awayCode} accent={awayAccent} size={56} />
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(14px,1.6vw,20px)", color: awayAccent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(awayCode, match.away.name).toUpperCase()}</span>
+          <FlagCrest code={awayCode} accent={awayAccent} size={46} />
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(12px,1.4vw,17px)", color: awayAccent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(awayCode, match.away.name).toUpperCase()}</span>
         </div>
       </div>
 
@@ -114,9 +114,9 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
             const c = palpiteRowColor(p);
             return (
               <div key={i} style={{ opacity: c.opacity, borderRadius: 7, padding: "5px 9px", background: c.bg, border: c.border, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11.5, color: c.name, flex: "none", maxWidth: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.username}</span>
-                <span style={{ fontFamily: JB, fontSize: 9.5, color: c.pick, flex: 1, minWidth: 0 }}>{homeCode} {p.predHome} × {p.predAway} {awayCode}</span>
-                <span style={{ flex: "none", fontFamily: JB, fontSize: 8.5, letterSpacing: "0.04em", color: c.status }}>{p.status}</span>
+                <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11, color: c.name, flex: "none", maxWidth: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.username}</span>
+                <span style={{ fontFamily: JB, fontSize: 9, color: c.pick, flex: 1, minWidth: 0 }}>{homeCode} {p.predHome} × {p.predAway} {awayCode}</span>
+                <span style={{ flex: "none", fontFamily: JB, fontSize: 8, letterSpacing: "0.04em", color: c.status }}>{p.status}</span>
               </div>
             );
           })
