@@ -10,7 +10,9 @@ function chipLabel(chip: ChipGame): string {
   return `${m.home.abbreviation} ${m.homeScore ?? 0}–${m.awayScore ?? 0} ${m.away.abbreviation}`;
 }
 
-const GREEN = "#2ecd66";
+// The app's primary lime (matches the masthead toggle, CTAs, live dot…) — was a
+// different emerald in the original handoff, which read as inconsistent.
+const GREEN = "#c8ff2d";
 const EDGE_MASK = "linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)";
 
 /** The centered, mask-faded match selector rail (v3 redesign). */
@@ -102,12 +104,12 @@ export function BfChipRail({ chips, selectedId, onSelect, releasedIds }: { chips
             if (active) {
               bg = GREEN;
               border = `1px solid ${GREEN}`;
-              color = "#06160c";
-              dot = "#06160c";
+              color = "#0f1f02";
+              dot = "#0f1f02";
             } else if (isLive) {
               border = `1px dashed ${GREEN}`;
-              color = "#bfeccd";
-              bg = "rgba(46,205,102,0.06)";
+              color = "#cdeec0";
+              bg = "rgba(200,255,45,0.08)";
               dot = GREEN;
             } else if (isNext) {
               // Released-but-not-started games (the closest upcoming) get a green
