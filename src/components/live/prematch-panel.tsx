@@ -295,28 +295,44 @@ function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, relea
   }, [outcome]);
 
   const noneReleased = !released1 && !released2;
+  // Only submit the games the viewer hasn't palpitated yet: if their palpite is
+  // already in one game, just the missing one is sent — so a partial state
+  // doesn't make the whole pair error out on the duplicate.
+  const lowerName = name.trim().toLowerCase();
+  const sentIn = (es: VoteEntry[]) => lowerName !== "" && es.some((x) => x.username.trim().toLowerCase() === lowerName);
+  const pending1 = released1 && !sentIn(entries);
+  const pending2 = released2 && !sentIn(secondEntries);
+  const pendingCount = (pending1 ? 1 : 0) + (pending2 ? 1 : 0);
+  const nothingToSend = !noneReleased && pendingCount === 0;
 
   async function submitBoth() {
     setSubmitting(true);
     setOutcome(null);
-    if (released1) {
+    let count = 0;
+    if (pending1) {
       const r1 = await castPalpite(match, name, h1, a1, entries, transport);
       if (!r1.ok) {
         setOutcome({ ok: false, text: r1.message });
         setSubmitting(false);
         return;
       }
+      count += 1;
     }
-    if (released2) {
+    if (pending2) {
       const r2 = await castPalpite(second, name, h2, a2, secondEntries, transport);
       if (!r2.ok) {
         setOutcome({ ok: false, text: r2.message });
         setSubmitting(false);
         return;
       }
+      count += 1;
     }
     setSubmitting(false);
-    setOutcome({ ok: true, text: "Palpites enviados!" });
+    if (count === 0) {
+      setOutcome({ ok: false, text: "Você já palpitou nesses jogos." });
+      return;
+    }
+    setOutcome({ ok: true, text: count === 2 ? "Palpites enviados!" : "Palpite enviado!" });
     confirm(name.trim());
     onVoted();
   }
@@ -336,8 +352,8 @@ function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, relea
       {outcome ? (
         <div style={{ textAlign: "center", fontFamily: BRIC, fontSize: 12, color: outcome.ok ? LIME : "#ff6b6b" }}>{outcome.text}</div>
       ) : null}
-      <button type="button" onClick={submitBoth} disabled={submitting || noneReleased} style={{ flex: "none", textAlign: "center", background: LIME, color: "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 15, padding: 15, borderRadius: 12, border: "none", boxShadow: "0 0 26px -8px rgba(200,255,45,0.6)", opacity: submitting || noneReleased ? 0.55 : 1, cursor: noneReleased ? "not-allowed" : "pointer" }}>
-        {submitting ? "ENVIANDO…" : noneReleased ? "PALPITES NÃO LIBERADOS" : released1 && released2 ? "ENVIAR OS 2 PALPITES →" : "ENVIAR PALPITE →"}
+      <button type="button" onClick={submitBoth} disabled={submitting || noneReleased || nothingToSend} style={{ flex: "none", textAlign: "center", background: LIME, color: "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 15, padding: 15, borderRadius: 12, border: "none", boxShadow: "0 0 26px -8px rgba(200,255,45,0.6)", opacity: submitting || noneReleased || nothingToSend ? 0.55 : 1, cursor: noneReleased || nothingToSend ? "not-allowed" : "pointer" }}>
+        {submitting ? "ENVIANDO…" : noneReleased ? "PALPITES NÃO LIBERADOS" : nothingToSend ? "PALPITES JÁ ENVIADOS" : pendingCount === 2 ? "ENVIAR OS 2 PALPITES →" : "ENVIAR PALPITE →"}
       </button>
     </div>
   );
