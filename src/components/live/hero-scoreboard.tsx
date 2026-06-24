@@ -1,5 +1,4 @@
 import type { Match, MatchSub } from "@/lib/espn";
-import { teamNamePt } from "@/lib/team-names";
 import {
   BRIC,
   BfPulse,
@@ -49,12 +48,12 @@ function EventChip({ ev }: { ev: TimelineEvent }) {
   );
 }
 
-function TeamBlock({ code, accent, name, crestSize }: { code: string; accent: string; name: string; crestSize: number }) {
+function TeamBlock({ code, accent, crestSize }: { code: string; accent: string; crestSize: number }) {
   return (
     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
       <FlagCrest code={code} accent={accent} size={crestSize} />
       <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(15px,1.9vw,24px)", letterSpacing: "-0.02em", color: accent, textAlign: "center", lineHeight: 1, whiteSpace: "nowrap" }}>
-        {name.toUpperCase()}
+        {code}
       </div>
     </div>
   );
@@ -83,7 +82,7 @@ export function HeroScoreboard({ match, pre = false, compact = false, subs = [] 
   return (
     <div style={{ position: "relative", flex: "none", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(200,255,45,0.12)", background: "linear-gradient(180deg, rgba(200,255,45,0.04), transparent)", padding: compact ? "16px 18px 10px" : "22px 22px 12px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(12px,2.2vw,24px)" }}>
-        <TeamBlock code={match.home.abbreviation} accent={homeAccent} name={teamNamePt(match.home.abbreviation, match.home.name)} crestSize={crestSize} />
+        <TeamBlock code={match.home.abbreviation} accent={homeAccent} crestSize={crestSize} />
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, flex: "none" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: JB, fontSize: 11.5, fontWeight: 600, color: LIME, background: "rgba(200,255,45,0.12)", border: "1px solid rgba(200,255,45,0.38)", borderRadius: 999, padding: "4px 11px", whiteSpace: "nowrap" }}>
@@ -101,7 +100,7 @@ export function HeroScoreboard({ match, pre = false, compact = false, subs = [] 
           )}
         </div>
 
-        <TeamBlock code={match.away.abbreviation} accent={awayAccent} name={teamNamePt(match.away.abbreviation, match.away.name)} crestSize={crestSize} />
+        <TeamBlock code={match.away.abbreviation} accent={awayAccent} crestSize={crestSize} />
       </div>
 
       {showTimeline ? (

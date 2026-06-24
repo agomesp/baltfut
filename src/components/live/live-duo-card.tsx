@@ -1,6 +1,5 @@
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
-import { teamNamePt } from "@/lib/team-names";
 import { communityConsensus } from "@/lib/consensus";
 import { classifyLivePalpites, type LivePalpite } from "@/lib/live-palpites";
 import {
@@ -68,7 +67,7 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, minWidth: 0 }}>
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(12px,1.4vw,17px)", color: homeAccent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(homeCode, match.home.name).toUpperCase()}</span>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(13px,1.5vw,18px)", color: homeAccent, whiteSpace: "nowrap" }}>{homeCode}</span>
           <FlagCrest code={homeCode} accent={homeAccent} size={46} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 11, flex: "none" }}>
@@ -78,7 +77,7 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <FlagCrest code={awayCode} accent={awayAccent} size={46} />
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(12px,1.4vw,17px)", color: awayAccent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(awayCode, match.away.name).toUpperCase()}</span>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(13px,1.5vw,18px)", color: awayAccent, whiteSpace: "nowrap" }}>{awayCode}</span>
         </div>
       </div>
 
