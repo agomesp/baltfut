@@ -20,8 +20,12 @@ import { PreMatchPanel } from "@/components/live/prematch-panel";
 import { LineupPanel } from "@/components/live/lineup-panel";
 import { PalpiteForm } from "@/components/live/palpite-form";
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
+import { decideConcurrent, type ViewMode } from "@/lib/concurrent-games";
 
-export type LiveMode = "placar" | "duo";
+/** A match's display phase (pre / live / post). */
+function matchPhase(m: Match): ChipPhase {
+  return m.isLive ? "live" : m.state === "post" ? "post" : "pre";
+}
 
 function groupVenueLabel(m: Match, groupByTeam: Record<string, string>): string {
   const g = groupByTeam[m.home.abbreviation] ?? groupByTeam[m.away.abbreviation];
@@ -126,12 +130,11 @@ function PlacarStage({
   );
 }
 
-/** 2 JOGOS: two live cards + a full-height ranking column. */
-function DuoStage({ liveMatches, allEntries, matches, groupByTeam }: { liveMatches: Match[]; allEntries: VoteEntry[]; matches: Match[]; groupByTeam: Record<string, string> }) {
-  const two = liveMatches.slice(0, 2);
+/** Two concurrent games side by side + a full-height ranking column. */
+function DuoStage({ games, allEntries, matches, groupByTeam }: { games: Match[]; allEntries: VoteEntry[]; matches: Match[]; groupByTeam: Record<string, string> }) {
   return (
     <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
-      {two.map((m) => (
+      {games.map((m) => (
         <LiveDuoCard key={m.id} match={m} entries={allEntries.filter((e) => e.matchId === m.id)} groupLabel={groupVenueLabel(m, groupByTeam)} />
       ))}
       <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: 250 }} />
@@ -153,8 +156,8 @@ export interface LiveViewProps {
   followCode: string | null;
   groupByTeam: Record<string, string>;
   releasedIds: Set<string>;
-  liveMode: LiveMode;
-  onLiveMode: (m: LiveMode) => void;
+  viewMode: ViewMode;
+  onViewMode: (m: ViewMode) => void;
 }
 
 export function LiveView({
@@ -171,25 +174,24 @@ export function LiveView({
   followCode,
   groupByTeam,
   releasedIds,
-  liveMode,
-  onLiveMode,
+  viewMode,
+  onViewMode,
 }: LiveViewProps) {
+  const now = useNow(15_000);
   const selected = chips.find((c) => c.match.id === selectedId) ?? chips[0];
-  const liveMatches = chips.filter((c) => c.phase === "live").map((c) => c.match);
-  const phase = selected?.phase;
-  const isPre = phase === "pre";
-  // Duo only when a live match is selected (so clicking a finished/upcoming chip
-  // still shows that match), mirroring the original auto-split condition.
-  const isDuo = phase === "live" && liveMode === "duo" && liveMatches.length >= 2;
 
-  // "2 JOGOS" pre-match pairs the selected game with another kicking off at the
-  // SAME time (e.g. the final group round's two simultaneous games), not just the
-  // next one. Null → the toggle is disabled when nothing else starts at that moment.
-  const upcoming = chips.filter((c) => c.phase === "pre").map((c) => c.match);
-  const second =
-    isPre && selected
-      ? upcoming.find((m) => m.id !== selected.match.id && m.startsAt === selected.match.startsAt) ?? null
-      : null;
+  // Auto-decide 1 vs 2 concurrent games. Ticks with `now`, so the pair opens 10
+  // min before an overlapping game and collapses to the survivor when one ends.
+  const decision = selected ? decideConcurrent(selected.match, matches, now, viewMode) : null;
+  const primary = decision?.primary ?? null;
+  const partner = decision?.partner ?? null;
+  const primaryPhase = primary ? matchPhase(primary) : undefined;
+  // Palpites for the shown game: the fresh `entries` feed when it's the selected
+  // chip, else filtered from the all-matches feed (e.g. after following a survivor).
+  const primaryEntries =
+    primary && selected && primary.id === selected.match.id
+      ? entries
+      : allEntries.filter((e) => e.matchId === primary?.id);
 
   // Fill the viewport on wide screens so the stage is a fixed dense dashboard
   // (the design is height:100vh with internal scroll); narrow screens flow + scroll.
@@ -216,9 +218,9 @@ export function LiveView({
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", apply);
     };
-  }, [selected?.match.id, liveMode, isPre, isDuo]);
+  }, [primary?.id, partner?.id, primaryPhase]);
 
-  if (!selected) {
+  if (!selected || !primary) {
     return (
       <section>
         <div style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)", padding: "40px 24px", textAlign: "center" }}>
@@ -231,33 +233,33 @@ export function LiveView({
 
   return (
     <section>
-      <Reactions matchId={selected.match.id} />
+      <Reactions matchId={primary.id} />
       <KickLiveChip />
       <div ref={fillRef} style={{ display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
         <BfChipRail chips={chips} selectedId={selected.match.id} onSelect={onSelect} releasedIds={releasedIds} />
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          {isPre ? (
+          {primaryPhase === "pre" ? (
             <PreMatchPanel
-              match={selected.match}
-              second={second}
-              entries={entries}
-              secondEntries={second ? allEntries.filter((e) => e.matchId === second.id) : []}
+              match={primary}
+              second={partner}
+              entries={primaryEntries}
+              secondEntries={partner ? allEntries.filter((e) => e.matchId === partner.id) : []}
               allEntries={allEntries}
               matches={matches}
               groupByTeam={groupByTeam}
               releasedIds={releasedIds}
-              mode={liveMode}
-              onMode={onLiveMode}
+              viewMode={viewMode}
+              onViewMode={onViewMode}
               onVoted={onVoted}
             />
-          ) : isDuo ? (
-            <DuoStage liveMatches={liveMatches} allEntries={allEntries} matches={matches} groupByTeam={groupByTeam} />
+          ) : partner ? (
+            <DuoStage games={[primary, partner]} allEntries={allEntries} matches={matches} groupByTeam={groupByTeam} />
           ) : (
             <PlacarStage
-              match={selected.match}
-              phase={phase!}
-              entries={entries}
+              match={primary}
+              phase={primaryPhase!}
+              entries={primaryEntries}
               allEntries={allEntries}
               matches={matches}
               panel={panel}
@@ -265,7 +267,7 @@ export function LiveView({
               lineups={lineups}
               onVoted={onVoted}
               followCode={followCode}
-              released={releasedIds.has(selected.match.id)}
+              released={releasedIds.has(primary.id)}
             />
           )}
         </div>

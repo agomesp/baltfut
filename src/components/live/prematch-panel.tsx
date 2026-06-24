@@ -27,6 +27,7 @@ import {
   SectionLabel,
   teamAccent,
 } from "@/components/live/bf-ui";
+import type { ViewMode } from "@/lib/concurrent-games";
 
 function groupVenue(match: Match, groupByTeam: Record<string, string>): string {
   const g = groupByTeam[match.home.abbreviation] ?? groupByTeam[match.away.abbreviation];
@@ -141,7 +142,7 @@ const cardWrap = { borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)",
 
 export interface PreMatchPanelProps {
   match: Match;
-  /** Next upcoming match, for the 2 JOGOS mode (null when there isn't one). */
+  /** Simultaneous partner to co-show (the AUTO duo); null = single game. */
   second: Match | null;
   entries: VoteEntry[];
   secondEntries: VoteEntry[];
@@ -150,22 +151,23 @@ export interface PreMatchPanelProps {
   groupByTeam: Record<string, string>;
   /** Matches open for palpites (current + next kickoff group). */
   releasedIds: Set<string>;
-  /** Shared 1-vs-2-games mode (same state as the masthead PLACAR/2 JOGOS toggle). */
-  mode: "placar" | "duo";
-  onMode: (m: "placar" | "duo") => void;
+  /** Shared view mode (same state as the masthead 1 JOGO / AUTO toggle). */
+  viewMode: ViewMode;
+  onViewMode: (m: ViewMode) => void;
   onVoted: () => void;
   transport?: CastVoteTransport;
 }
 
-export function PreMatchPanel({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, releasedIds, mode, onMode, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
+export function PreMatchPanel({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, releasedIds, viewMode, onViewMode, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
   const { name } = useNameLock();
   const myName = name || null;
   const homeCode = match.home.abbreviation;
   const awayCode = match.away.abbreviation;
   const homeAccent = teamAccent(homeCode);
   const awayAccent = teamAccent(awayCode);
-  const canDuo = second != null;
-  const showDuo = mode === "duo" && canDuo;
+  // The parent (decideConcurrent) only hands us a `second` when it wants the duo,
+  // so simply mirror that — AUTO with a simultaneous partner shows both games.
+  const showDuo = second != null;
 
   const seg = (active: boolean, color: string) => ({
     cursor: "pointer",
@@ -184,8 +186,8 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
       <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
         <SectionLabel color={GOLD}>{"// PALPITES ABERTOS"}</SectionLabel>
         <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 3, marginLeft: "auto" }}>
-          <button onClick={() => onMode("placar")} style={seg(mode !== "duo", LIME)}>1 JOGO</button>
-          <button onClick={() => canDuo && onMode("duo")} disabled={!canDuo} title={canDuo ? "" : "Sem jogo simultâneo"} style={{ ...seg(showDuo, GOLD), opacity: canDuo ? 1 : 0.4, cursor: canDuo ? "pointer" : "not-allowed" }}>▦ 2 JOGOS</button>
+          <button onClick={() => onViewMode("single")} style={seg(viewMode === "single", LIME)}>1 JOGO</button>
+          <button onClick={() => onViewMode("auto")} style={seg(viewMode === "auto", LIME)}>AUTO</button>
         </div>
       </div>
 

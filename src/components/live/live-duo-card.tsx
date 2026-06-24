@@ -45,15 +45,18 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
   const events = buildTimeline(match, homeAccent, awayAccent);
   const consensus = communityConsensus(entries);
   const final = match.state === "post";
+  // The staggered duo can pair a live game with one that hasn't kicked off yet
+  // (the 10-min lead-in), so this card may render a pre-match game.
+  const pre = match.state === "pre";
   const { winners, open, lost } = classifyLivePalpites(entries, { home: match.homeScore ?? 0, away: match.awayScore ?? 0 }, final);
   const palps = [...winners, ...open, ...lost];
 
   return (
     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 11, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, background: "rgba(255,255,255,0.015)", padding: "14px 16px", minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: JB, fontSize: 10 }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#9ef01f" }}>
-          <BfPulse color="#9ef01f" />
-          {final ? "ENCERRADO" : "AO VIVO"} · {matchClockLabel(match)}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: pre ? "#9bb6a6" : "#9ef01f" }}>
+          {pre ? null : <BfPulse color="#9ef01f" />}
+          {pre ? "EM BREVE" : `${final ? "ENCERRADO" : "AO VIVO"} · ${matchClockLabel(match)}`}
         </span>
         <span style={{ color: "#6f8a78", letterSpacing: "0.05em" }}>{groupLabel}</span>
       </div>

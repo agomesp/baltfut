@@ -2,9 +2,9 @@
 
 import { useNow } from "@/lib/use-now";
 import { wcProgress } from "@/lib/wc-progress";
+import type { ViewMode } from "@/lib/concurrent-games";
 
 export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket";
-export type LiveMode = "placar" | "duo";
 
 const BRIC = "var(--font-bric)";
 const JB = "var(--font-jb)";
@@ -25,11 +25,11 @@ export interface HeaderProps {
   followCode: string | null;
   followName: string | null;
   onClearFollow: () => void;
-  liveMode: LiveMode;
-  onLiveMode: (m: LiveMode) => void;
+  viewMode: ViewMode;
+  onViewMode: (m: ViewMode) => void;
 }
 
-export function Header({ view, onView, dark, onToggleTheme, followCode, followName, onClearFollow, liveMode, onLiveMode }: HeaderProps) {
+export function Header({ view, onView, dark, onToggleTheme, followCode, followName, onClearFollow, viewMode, onViewMode }: HeaderProps) {
   const now = useNow(1000);
   const wc = wcProgress(now);
 
@@ -59,10 +59,10 @@ export function Header({ view, onView, dark, onToggleTheme, followCode, followNa
             );
           })}
 
-          {/* PLACAR / 2 JOGOS view toggle (selects the live view). */}
+          {/* 1 JOGO (force single) / AUTO (auto 1-vs-2). Jumps to the live view. */}
           <div style={{ display: "flex", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 11, padding: 3 }}>
-            <button onClick={() => onLiveMode("placar")} style={{ cursor: "pointer", padding: "8px 15px", borderRadius: 8, fontFamily: JB, fontSize: 11, letterSpacing: "0.06em", border: "none", transition: "all .3s", background: view === "live" && liveMode === "placar" ? "#c8ff2d" : "transparent", color: view === "live" && liveMode === "placar" ? "#0f1f02" : "#9bb6a6" }}>PLACAR</button>
-            <button onClick={() => onLiveMode("duo")} style={{ cursor: "pointer", padding: "8px 15px", borderRadius: 8, fontFamily: JB, fontSize: 11, letterSpacing: "0.06em", border: "none", transition: "all .3s", background: view === "live" && liveMode === "duo" ? "#ffb347" : "transparent", color: view === "live" && liveMode === "duo" ? "#1f1704" : "#9bb6a6" }}>▦ 2 JOGOS</button>
+            <button onClick={() => onViewMode("single")} style={{ cursor: "pointer", padding: "8px 15px", borderRadius: 8, fontFamily: JB, fontSize: 11, letterSpacing: "0.06em", border: "none", transition: "all .3s", background: view === "live" && viewMode === "single" ? "#c8ff2d" : "transparent", color: view === "live" && viewMode === "single" ? "#0f1f02" : "#9bb6a6" }}>1 JOGO</button>
+            <button onClick={() => onViewMode("auto")} style={{ cursor: "pointer", padding: "8px 15px", borderRadius: 8, fontFamily: JB, fontSize: 11, letterSpacing: "0.06em", border: "none", transition: "all .3s", background: view === "live" && viewMode === "auto" ? "#c8ff2d" : "transparent", color: view === "live" && viewMode === "auto" ? "#0f1f02" : "#9bb6a6" }}>AUTO</button>
           </div>
 
           {followCode ? (

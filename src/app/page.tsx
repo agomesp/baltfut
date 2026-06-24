@@ -26,7 +26,8 @@ import {
 import { buildChipGames, defaultChipId } from "@/lib/chips";
 import { releasedMatchIds } from "@/lib/palpite";
 import { teamNamePt } from "@/lib/team-names";
-import { Header, type ViewKey, type LiveMode } from "@/components/header";
+import { Header, type ViewKey } from "@/components/header";
+import type { ViewMode } from "@/lib/concurrent-games";
 import { LiveView } from "@/components/live-view";
 import { FixturesView } from "@/components/fixtures-view";
 import { GroupsView } from "@/components/groups-view";
@@ -45,10 +46,9 @@ export default function Home() {
   const [view, setView] = useState<ViewKey>("live");
   const [dark, setDark] = useState(true);
   const [follow, setFollow] = useState<string | null>(null);
-  // PLACAR (single live match) vs 2 JOGOS (two live matches) — the masthead toggle.
-  const [liveMode, setLiveMode] = useState<LiveMode>("placar");
-  // Once the viewer toggles manually we stop auto-picking the mode for them.
-  const liveModeUserSet = useRef(false);
+  // AUTO = the app decides 1 vs 2 concurrent games (see concurrent-games); SINGLE
+  // forces one game (a manual override kept for testing).
+  const [viewMode, setViewMode] = useState<ViewMode>("auto");
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -366,29 +366,12 @@ export default function Home() {
     void loadCounts();
   };
 
-  // The shared PLACAR / 1 JOGO vs 2 JOGOS toggle (masthead + pre-match). Marks the
-  // choice as manual so the auto-picker below stops overriding it for this game.
-  const onLiveMode = (m: LiveMode) => {
-    liveModeUserSet.current = true;
-    setLiveMode(m);
+  // The AUTO / 1 JOGO toggle (masthead + pre-match). AUTO lets the live view pick
+  // 1 vs 2 games per the concurrent-games rule; 1 JOGO forces a single game.
+  const onViewMode = (m: ViewMode) => {
+    setViewMode(m);
     setView("live");
   };
-
-  // Auto-pick 1 vs 2 games for the current selection: 2 JOGOS when 2+ are live, or
-  // when the selected upcoming game has a simultaneous partner (same kickoff). The
-  // manual override resets whenever the viewer picks a different game.
-  useEffect(() => {
-    liveModeUserSet.current = false;
-  }, [activeId]);
-  useEffect(() => {
-    if (liveModeUserSet.current) return;
-    const liveCount = matches.filter((m) => m.isLive).length;
-    const am = matches.find((m) => m.id === activeId) ?? null;
-    const hasSimPartner =
-      am?.state === "pre" &&
-      matches.some((m) => m.id !== am.id && m.state === "pre" && m.startsAt === am.startsAt);
-    setLiveMode(liveCount >= 2 || hasSimPartner ? "duo" : "placar");
-  }, [matches, activeId]);
 
   return (
     <>
@@ -400,8 +383,8 @@ export default function Home() {
         followCode={follow}
         followName={followName}
         onClearFollow={() => setFollow(null)}
-        liveMode={liveMode}
-        onLiveMode={onLiveMode}
+        viewMode={viewMode}
+        onViewMode={onViewMode}
       />
       <main
         style={
@@ -431,8 +414,8 @@ export default function Home() {
             followCode={follow}
             groupByTeam={groupByTeam}
             releasedIds={releasedIds}
-            liveMode={liveMode}
-            onLiveMode={onLiveMode}
+            viewMode={viewMode}
+            onViewMode={onViewMode}
           />
         )}
         {!loading && view === "matches" && (
