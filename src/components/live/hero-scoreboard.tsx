@@ -17,7 +17,7 @@ import { TimelineFill } from "@/components/live/timeline-bar";
 /** A goal (⚽ circle), a card (colored rect), or a substitution (⇄ ring) marker. */
 function Marker({ ev, withLabel }: { ev: TimelineEvent; withLabel: boolean }) {
   return (
-    <div style={{ position: "absolute", top: "50%", left: ev.leftPct, transform: "translate(-50%,-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+    <div style={{ position: "absolute", top: "50%", left: ev.leftPct, transform: "translate(-50%,-50%)", display: "flex", flexDirection: "column", alignItems: "center", opacity: ev.kind === "sub" ? 0.5 : 1 }}>
       {ev.kind === "goal" ? (
         <span style={{ width: 16, height: 16, borderRadius: "50%", background: ev.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, boxShadow: "0 0 0 3px #061509" }}>⚽</span>
       ) : ev.kind === "sub" ? (
@@ -35,7 +35,7 @@ function Marker({ ev, withLabel }: { ev: TimelineEvent; withLabel: boolean }) {
 /** One event in the legend row below the track. */
 function EventChip({ ev }: { ev: TimelineEvent }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: JB, fontSize: 9.5, color: "#aebdb4", padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: JB, fontSize: 9.5, color: "#aebdb4", padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", opacity: ev.kind === "sub" ? 0.5 : 1 }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: ev.color }} />
       {ev.minLabel}{" "}
       {ev.kind === "sub" ? (
