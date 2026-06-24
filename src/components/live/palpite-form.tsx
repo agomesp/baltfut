@@ -14,6 +14,7 @@ import {
 } from "@/lib/votes";
 import { isPalpiteOpen, formatCountdown } from "@/lib/palpite";
 import { isReservedName } from "@shared/name-claim";
+import { MY_NAME_EVENT } from "@/lib/use-my-name";
 import { BRIC, JB, LIME, SAIRA } from "@/components/live/bf-ui";
 
 const clampScore = (n: number) => Math.max(SCORE_MIN, Math.min(SCORE_MAX, n));
@@ -87,6 +88,7 @@ export function useNameLock() {
     try {
       localStorage.setItem("baltfut_name", n);
       localStorage.removeItem("baltfut_name_draft");
+      window.dispatchEvent(new Event(MY_NAME_EVENT));
     } catch {
       /* ignore */
     }
@@ -96,6 +98,7 @@ export function useNameLock() {
   const unlock = () => {
     try {
       localStorage.removeItem("baltfut_name");
+      window.dispatchEvent(new Event(MY_NAME_EVENT));
     } catch {
       /* ignore */
     }

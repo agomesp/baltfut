@@ -68,6 +68,20 @@ export function nameStyle(name: string, color: string): CSSProperties {
   return isReservedName(name) ? RAINBOW_NAME : { color };
 }
 
+/** True when `name` is the viewer's own nickname (case-insensitive). */
+export function isMe(name: string, myName: string | null): boolean {
+  return myName != null && name.trim().toLowerCase() === myName.trim().toLowerCase();
+}
+
+/** The small lime "VOCÊ" badge marking the viewer's own palpite / ranking row. */
+export function VoceTag() {
+  return (
+    <span style={{ flex: "none", fontFamily: JB, fontSize: 7.5, letterSpacing: "0.06em", fontWeight: 700, color: "#0f1f02", background: LIME, padding: "2px 5px", borderRadius: 4 }}>
+      VOCÊ
+    </span>
+  );
+}
+
 /** Leading minute of an event clock ("45'+2'" → 47) for timeline positioning. */
 export function eventMinute(clock: string): number {
   const m = clock.match(/(\d+)(?:'?\s*\+\s*(\d+))?/);

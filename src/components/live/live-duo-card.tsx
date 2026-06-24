@@ -15,9 +15,12 @@ import {
   SAIRA,
   SectionLabel,
   teamAccent,
+  VoceTag,
+  isMe,
   type TimelineEvent,
 } from "@/components/live/bf-ui";
 import { TimelineFill } from "@/components/live/timeline-bar";
+import { useMyName } from "@/lib/use-my-name";
 
 function Marker({ ev }: { ev: TimelineEvent }) {
   return (
@@ -39,6 +42,7 @@ function palpiteRowColor(p: LivePalpite) {
 
 /** One live match in the 2 JOGOS view: score, timeline, consensus + a compact palpite list. */
 export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entries: VoteEntry[]; groupLabel: string }) {
+  const myName = useMyName();
   const homeCode = match.home.abbreviation;
   const awayCode = match.away.abbreviation;
   const homeAccent = teamAccent(homeCode);
@@ -122,6 +126,7 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
             return (
               <div key={i} style={{ opacity: c.opacity, borderRadius: 7, padding: "5px 9px", background: c.bg, border: c.border, display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11, ...nameStyle(p.username, c.name), flex: "none", maxWidth: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.username}</span>
+                {isMe(p.username, myName) ? <VoceTag /> : null}
                 <span style={{ fontFamily: JB, fontSize: 9, color: c.pick, flex: 1, minWidth: 0 }}>{homeCode} {p.predHome} × {p.predAway} {awayCode}</span>
                 <span style={{ flex: "none", fontFamily: JB, fontSize: 8, letterSpacing: "0.04em", color: c.status }}>{p.status}</span>
               </div>

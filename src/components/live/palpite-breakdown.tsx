@@ -1,5 +1,7 @@
+import type { CSSProperties } from "react";
 import type { LivePalpite, LivePalpiteBreakdown } from "@/lib/live-palpites";
-import { BRIC, JB, SectionLabel, nameStyle } from "@/components/live/bf-ui";
+import { useMyName } from "@/lib/use-my-name";
+import { BRIC, JB, SectionLabel, VoceTag, isMe, nameStyle } from "@/components/live/bf-ui";
 
 const SKIN = {
   win: { statusColor: "#0f1f02", tagBg: "#c8ff2d", cardBg: "linear-gradient(120deg, rgba(200,255,45,0.17), rgba(200,255,45,0.03))", cardBorder: "1px solid rgba(200,255,45,0.55)", nameColor: "#eaffc0", pickColor: "#c2e69e", opacity: 1 },
@@ -9,6 +11,16 @@ const SKIN = {
 
 function pickStr(p: LivePalpite, homeCode: string, awayCode: string): string {
   return `${homeCode} [${p.predHome}] × [${p.predAway}] ${awayCode}`;
+}
+
+/** Username line: the name (rainbow for the house bot) + a "VOCÊ" tag if it's you. */
+function NameRow({ name, myName, color, font }: { name: string; myName: string | null; color: string; font: CSSProperties }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+      <span style={{ ...font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, ...nameStyle(name, color) }}>{name}</span>
+      {isMe(name, myName) ? <VoceTag /> : null}
+    </div>
+  );
 }
 
 export function PalpiteBreakdown({
@@ -25,6 +37,7 @@ export function PalpiteBreakdown({
   closed: boolean;
 }) {
   const { winners, open, lost } = breakdown;
+  const myName = useMyName();
   const empty = winners.length + open.length + lost.length === 0;
 
   return (
@@ -51,7 +64,7 @@ export function PalpiteBreakdown({
               <div key={`w${i}`} style={{ flex: "1 1 220px", minWidth: 0, borderRadius: 9, padding: "6px 9px", background: s.cardBg, border: s.cardBorder, boxShadow: "0 0 20px -10px rgba(200,255,45,0.5)", display: "flex", alignItems: "center", gap: 9 }}>
                 <span style={{ flex: "none", width: 22, height: 22, borderRadius: "50%", background: "#c8ff2d", color: "#0f1f02", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800 }}>✓</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...nameStyle(p.username, s.nameColor) }}>{p.username}</div>
+                  <NameRow name={p.username} myName={myName} color={s.nameColor} font={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13 }} />
                   <div style={{ fontFamily: JB, fontSize: 9.5, color: s.pickColor }}>{pickStr(p, homeCode, awayCode)}</div>
                 </div>
                 <span style={{ flex: "none", fontFamily: JB, fontSize: 8.5, letterSpacing: "0.05em", fontWeight: 700, padding: "5px 8px", borderRadius: 7, background: s.tagBg, color: s.statusColor }}>{p.status}</span>
@@ -68,7 +81,7 @@ export function PalpiteBreakdown({
             return (
               <div key={`o${i}`} style={{ borderRadius: 8, padding: "6px 9px", background: s.cardBg, border: s.cardBorder, opacity: s.opacity, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...nameStyle(p.username, s.nameColor) }}>{p.username}</div>
+                  <NameRow name={p.username} myName={myName} color={s.nameColor} font={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11.5 }} />
                   <div style={{ fontFamily: JB, fontSize: 9, color: s.pickColor }}>{pickStr(p, homeCode, awayCode)}</div>
                 </div>
                 <span style={{ flex: "none", fontFamily: JB, fontSize: 8.5, color: s.statusColor }}>{p.status}</span>
@@ -87,7 +100,7 @@ export function PalpiteBreakdown({
               return (
                 <div key={`l${i}`} style={{ flex: "1 1 170px", minWidth: 0, opacity: s.opacity, borderRadius: 8, padding: "5px 8px", background: s.cardBg, border: s.cardBorder, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontFamily: BRIC, fontWeight: 600, fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...nameStyle(p.username, s.nameColor) }}>{p.username}</div>
+                    <NameRow name={p.username} myName={myName} color={s.nameColor} font={{ fontFamily: BRIC, fontWeight: 600, fontSize: 11 }} />
                     <div style={{ fontFamily: JB, fontSize: 8.5, color: s.pickColor, textDecoration: "line-through" }}>{pickStr(p, homeCode, awayCode)}</div>
                   </div>
                   <span style={{ flex: "none", fontFamily: JB, fontSize: 8.5, color: s.statusColor }}>{p.status}</span>
