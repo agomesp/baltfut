@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { Match, Side } from "@/lib/espn";
+import type { Match, MatchSub, Side } from "@/lib/espn";
 import { flagFileBase } from "@/lib/team-names";
 
 /** BaltFut v3 (AO VIVO) shared design kit: fonts, colors, team accents, the
@@ -60,20 +60,27 @@ export function eventMinute(clock: string): number {
 export interface TimelineEvent {
   minute: number;
   leftPct: string;
-  kind: "goal" | "yellow" | "red";
+  kind: "goal" | "yellow" | "red" | "sub";
   side: Side;
+  /** Scorer / carded player / the player coming ON for a substitution. */
   player: string;
+  /** The player going OFF (substitutions only). */
+  playerOut?: string;
   minLabel: string;
   color: string;
 }
 
-/** Goals + cards merged into one chronological, percent-positioned event list. */
+/** Goals + cards (+ optional substitutions) merged into one chronological,
+ *  percent-positioned event list. Subs come from the lineups (summary endpoint),
+ *  so they're passed in separately from the scoreboard-derived goals/cards. */
 export function buildTimeline(
   match: Match,
   homeAccent: string,
   awayAccent: string,
+  subs: MatchSub[] = [],
 ): TimelineEvent[] {
   const pct = (clock: string) => `${Math.min(100, (eventMinute(clock) / 90) * 100).toFixed(1)}%`;
+  const sideColor = (side: Side) => (side === "home" ? homeAccent : awayAccent);
   const goals: TimelineEvent[] = match.goals.map((g) => ({
     minute: eventMinute(g.clock),
     leftPct: pct(g.clock),
@@ -81,7 +88,7 @@ export function buildTimeline(
     side: g.side,
     player: g.scorer,
     minLabel: g.clock,
-    color: g.side === "home" ? homeAccent : awayAccent,
+    color: sideColor(g.side),
   }));
   const cards: TimelineEvent[] = match.cards.map((c) => ({
     minute: eventMinute(c.clock),
@@ -92,14 +99,17 @@ export function buildTimeline(
     minLabel: c.clock,
     color: c.kind === "red" ? "#ff5a6a" : CARD_YELLOW,
   }));
-  return [...goals, ...cards].sort((a, b) => a.minute - b.minute);
-}
-
-/** Fraction of the match elapsed (for the timeline fill); finished → 100%. */
-export function elapsedPct(match: Match): string {
-  if (match.state === "post") return "100%";
-  const min = match.displayClock ? eventMinute(match.displayClock) : 0;
-  return `${Math.min(100, (min / 90) * 100).toFixed(1)}%`;
+  const subEvents: TimelineEvent[] = subs.map((s) => ({
+    minute: eventMinute(s.clock),
+    leftPct: pct(s.clock),
+    kind: "sub",
+    side: s.side,
+    player: s.playerIn,
+    playerOut: s.playerOut,
+    minLabel: s.clock,
+    color: sideColor(s.side),
+  }));
+  return [...goals, ...cards, ...subEvents].sort((a, b) => a.minute - b.minute);
 }
 
 /** The live match-clock label for the hero pill (e.g. "67'", "FIM"). */

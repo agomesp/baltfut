@@ -1,10 +1,9 @@
-import type { Match } from "@/lib/espn";
+import type { Match, MatchSub } from "@/lib/espn";
 import { teamNamePt } from "@/lib/team-names";
 import {
   BRIC,
   BfPulse,
   buildTimeline,
-  elapsedPct,
   FlagCrest,
   JB,
   LIME,
@@ -13,13 +12,16 @@ import {
   teamAccent,
   type TimelineEvent,
 } from "@/components/live/bf-ui";
+import { TimelineFill } from "@/components/live/timeline-bar";
 
-/** A goal (lime/team circle with ⚽) or a card (small colored rect) on the track. */
+/** A goal (⚽ circle), a card (colored rect), or a substitution (⇄ ring) marker. */
 function Marker({ ev, withLabel }: { ev: TimelineEvent; withLabel: boolean }) {
   return (
     <div style={{ position: "absolute", top: "50%", left: ev.leftPct, transform: "translate(-50%,-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
       {ev.kind === "goal" ? (
         <span style={{ width: 16, height: 16, borderRadius: "50%", background: ev.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, boxShadow: "0 0 0 3px #061509" }}>⚽</span>
+      ) : ev.kind === "sub" ? (
+        <span style={{ width: 15, height: 15, borderRadius: "50%", background: "#0b1c0e", border: `1.5px solid ${ev.color}`, color: ev.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, boxShadow: "0 0 0 3px #061509" }}>⇄</span>
       ) : (
         <span style={{ width: 11, height: 14, borderRadius: 3, background: ev.color, boxShadow: "0 0 0 3px #061509" }} />
       )}
@@ -27,6 +29,21 @@ function Marker({ ev, withLabel }: { ev: TimelineEvent; withLabel: boolean }) {
         <span style={{ fontFamily: JB, fontSize: 8.5, color: "#8fa898", marginTop: 5, whiteSpace: "nowrap" }}>{ev.minLabel}</span>
       ) : null}
     </div>
+  );
+}
+
+/** One event in the legend row below the track. */
+function EventChip({ ev }: { ev: TimelineEvent }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: JB, fontSize: 9.5, color: "#aebdb4", padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: ev.color }} />
+      {ev.minLabel}{" "}
+      {ev.kind === "sub" ? (
+        <span><span style={{ color: "#c8ff2d" }}>▲</span>{ev.player} <span style={{ color: "#6f8a78" }}>▼{ev.playerOut}</span></span>
+      ) : (
+        <>{ev.player}{ev.kind === "red" ? " 🟥" : ""}</>
+      )}
+    </span>
   );
 }
 
@@ -47,12 +64,17 @@ export interface HeroScoreboardProps {
   pre?: boolean;
   /** Smaller hero for narrower columns. */
   compact?: boolean;
+  /** Substitutions (from the lineups) to plot on the timeline. */
+  subs?: MatchSub[];
 }
 
-export function HeroScoreboard({ match, pre = false, compact = false }: HeroScoreboardProps) {
+export function HeroScoreboard({ match, pre = false, compact = false, subs = [] }: HeroScoreboardProps) {
   const homeAccent = teamAccent(match.home.abbreviation);
   const awayAccent = teamAccent(match.away.abbreviation);
-  const events = pre ? [] : buildTimeline(match, homeAccent, awayAccent);
+  const events = pre ? [] : buildTimeline(match, homeAccent, awayAccent, subs);
+  // Show the progress track for any started match — it fills with match time even
+  // before the first goal/card (a live 0–0 still shows the clock walking).
+  const showTimeline = !pre && match.state !== "pre";
   const crestSize = compact ? 58 : 74;
   const scoreFont = compact ? "clamp(34px,4.5vw,56px)" : "clamp(46px,6.5vw,84px)";
 
@@ -80,23 +102,21 @@ export function HeroScoreboard({ match, pre = false, compact = false }: HeroScor
         <TeamBlock code={match.away.abbreviation} accent={awayAccent} name={teamNamePt(match.away.abbreviation, match.away.name)} crestSize={crestSize} />
       </div>
 
-      {events.length > 0 ? (
+      {showTimeline ? (
         <div style={{ maxWidth: 580, margin: "12px auto 0" }}>
           <div style={{ position: "relative", height: 3, background: "rgba(255,255,255,0.1)", borderRadius: 2, margin: "0 4px" }}>
-            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: elapsedPct(match), background: "linear-gradient(90deg,#3a7d2c,#c8ff2d)", borderRadius: 2 }} />
+            <TimelineFill match={match} />
             {events.map((ev, i) => (
               <Marker key={i} ev={ev} withLabel />
             ))}
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10 }}>
-            {events.map((ev, i) => (
-              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: JB, fontSize: 9.5, color: "#aebdb4", padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: ev.color }} />
-                {ev.minLabel} {ev.player}
-                {ev.kind === "red" ? " 🟥" : ""}
-              </span>
-            ))}
-          </div>
+          {events.length > 0 ? (
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10 }}>
+              {events.map((ev, i) => (
+                <EventChip key={i} ev={ev} />
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

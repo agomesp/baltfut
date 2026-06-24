@@ -7,7 +7,6 @@ import {
   BRIC,
   BfPulse,
   buildTimeline,
-  elapsedPct,
   FlagCrest,
   JB,
   LIME,
@@ -17,6 +16,7 @@ import {
   teamAccent,
   type TimelineEvent,
 } from "@/components/live/bf-ui";
+import { TimelineFill } from "@/components/live/timeline-bar";
 
 function Marker({ ev }: { ev: TimelineEvent }) {
   return (
@@ -77,12 +77,13 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
         </div>
       </div>
 
-      {events.length > 0 ? (
+      {match.state !== "pre" ? (
         <>
           <div style={{ position: "relative", height: 3, background: "rgba(255,255,255,0.1)", borderRadius: 2, margin: "2px 4px" }}>
-            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: elapsedPct(match), background: "linear-gradient(90deg,#3a7d2c,#c8ff2d)", borderRadius: 2 }} />
+            <TimelineFill match={match} />
             {events.map((ev, i) => <Marker key={i} ev={ev} />)}
           </div>
+          {events.length > 0 ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 10px" }}>
             {events.map((ev, i) => (
               <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: JB, fontSize: 9, color: "#aebdb4" }}>
@@ -90,6 +91,7 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
               </span>
             ))}
           </div>
+          ) : null}
         </>
       ) : null}
 
