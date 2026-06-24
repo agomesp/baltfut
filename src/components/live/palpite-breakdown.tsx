@@ -1,6 +1,5 @@
 import type { LivePalpite, LivePalpiteBreakdown } from "@/lib/live-palpites";
-import { isReservedName } from "@shared/name-claim";
-import { BRIC, JB, SectionLabel } from "@/components/live/bf-ui";
+import { BRIC, JB, SectionLabel, nameStyle } from "@/components/live/bf-ui";
 
 const SKIN = {
   win: { statusColor: "#0f1f02", tagBg: "#c8ff2d", cardBg: "linear-gradient(120deg, rgba(200,255,45,0.17), rgba(200,255,45,0.03))", cardBorder: "1px solid rgba(200,255,45,0.55)", nameColor: "#eaffc0", pickColor: "#c2e69e", opacity: 1 },
@@ -10,11 +9,6 @@ const SKIN = {
 
 function pickStr(p: LivePalpite, homeCode: string, awayCode: string): string {
   return `${homeCode} [${p.predHome}] × [${p.predAway}] ${awayCode}`;
-}
-
-function nameStyle(name: string, fallback: string) {
-  // The house bot reads as "official" — give it a distinct color.
-  return isReservedName(name) ? { color: "#a99bff" } : { color: fallback };
 }
 
 export function PalpiteBreakdown({

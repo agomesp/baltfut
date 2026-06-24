@@ -23,6 +23,7 @@ import {
   GOLD,
   JB,
   LIME,
+  nameStyle,
   SAIRA,
   SectionLabel,
   teamAccent,
@@ -70,7 +71,7 @@ function SentList({ entries, homeCode, awayCode, myName, cols = 2 }: { entries: 
           const mine = myName != null && e.username.trim().toLowerCase() === myName.trim().toLowerCase();
           return (
             <div key={`${e.username}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 7, padding: "6px 8px", background: mine ? "rgba(200,255,45,0.1)" : "rgba(255,255,255,0.025)", border: mine ? "1px solid rgba(200,255,45,0.4)" : "1px solid rgba(255,255,255,0.05)" }}>
-              <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11.5, color: "#eef3ee", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.username}</span>
+              <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11.5, ...nameStyle(e.username, "#eef3ee"), flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.username}</span>
               {mine ? <span style={{ flex: "none", fontFamily: JB, fontSize: 7.5, letterSpacing: "0.06em", fontWeight: 700, color: "#0f1f02", background: LIME, padding: "2px 5px", borderRadius: 4 }}>VOCÊ</span> : null}
               <span style={{ flex: "none", fontFamily: JB, fontSize: 9.5, color: "#aebdb4" }}>{pickLine(e, homeCode, awayCode)}</span>
             </div>

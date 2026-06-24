@@ -11,6 +11,7 @@ import {
   JB,
   LIME,
   matchClockLabel,
+  nameStyle,
   SAIRA,
   SectionLabel,
   teamAccent,
@@ -120,7 +121,7 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
             const c = palpiteRowColor(p);
             return (
               <div key={i} style={{ opacity: c.opacity, borderRadius: 7, padding: "5px 9px", background: c.bg, border: c.border, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11, color: c.name, flex: "none", maxWidth: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.username}</span>
+                <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11, ...nameStyle(p.username, c.name), flex: "none", maxWidth: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.username}</span>
                 <span style={{ fontFamily: JB, fontSize: 9, color: c.pick, flex: 1, minWidth: 0 }}>{homeCode} {p.predHome} × {p.predAway} {awayCode}</span>
                 <span style={{ flex: "none", fontFamily: JB, fontSize: 8, letterSpacing: "0.04em", color: c.status }}>{p.status}</span>
               </div>

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Match, MatchSub, Side } from "@/lib/espn";
 import { flagFileBase } from "@/lib/team-names";
+import { isReservedName } from "@shared/name-claim";
 
 /** BaltFut v3 (AO VIVO) shared design kit: fonts, colors, team accents, the
  *  waving-flag crest, live-dot and the goal/card timeline builder. Kept in one
@@ -48,6 +49,23 @@ function hashHue(s: string): number {
 
 export function teamAccent(code: string): string {
   return TEAM_ACCENT[code] ?? `hsl(${hashHue(code)} 68% 62%)`;
+}
+
+/** The house bot (e.g. "ChatGPT") renders with a rainbow-gradient name so it reads
+ *  as "official", not a regular user. `background-clip: text` paints the gradient
+ *  through the glyphs; `color` is the fallback where clip isn't supported. */
+export const RAINBOW_NAME: CSSProperties = {
+  background: "linear-gradient(90deg,#ff3b30,#ff9500,#ffcc00,#34c759,#00c7be,#0a84ff,#bf5af2)",
+  WebkitBackgroundClip: "text",
+  backgroundClip: "text",
+  WebkitTextFillColor: "transparent",
+  color: "#0a84ff",
+};
+
+/** Username text style: the rainbow gradient for the reserved house bot (wherever
+ *  it appears — palpites and ranking), else a plain `color`. */
+export function nameStyle(name: string, color: string): CSSProperties {
+  return isReservedName(name) ? RAINBOW_NAME : { color };
 }
 
 /** Leading minute of an event clock ("45'+2'" → 47) for timeline positioning. */
