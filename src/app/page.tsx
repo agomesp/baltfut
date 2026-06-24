@@ -28,8 +28,6 @@ import { releasedMatchIds } from "@/lib/palpite";
 import { teamNamePt } from "@/lib/team-names";
 import { Header, type ViewKey, type LiveMode } from "@/components/header";
 import { LiveView } from "@/components/live-view";
-import { buildMockData } from "@/lib/mock-data";
-import type { Promo } from "@/components/live/rb-store-strip";
 import { FixturesView } from "@/components/fixtures-view";
 import { GroupsView } from "@/components/groups-view";
 import { ResultsView } from "@/components/results-view";
@@ -61,32 +59,6 @@ export default function Home() {
   const [lineups, setLineups] = useState<MatchLineups | null>(null);
   const [entries, setEntries] = useState<VoteEntry[]>([]);
   const [allEntries, setAllEntries] = useState<VoteEntry[]>([]);
-
-  // Dev-only visualization mode (`?mock=1`): seed rich fixtures and stop all live
-  // fetches from overwriting them. mockRef lets the fetch callbacks short-circuit
-  // without re-subscribing. Never active in normal use.
-  const [mock, setMock] = useState(false);
-  const [promos, setPromos] = useState<Promo[] | null>(null);
-  const mockRef = useRef(false);
-
-  // Detect ?mock=1 (client-only, post-mount to avoid a hydration mismatch), seed
-  // the fixtures and freeze live fetching. Declared first so mockRef is set before
-  // the other data effects run and short-circuit. Dev visualization only.
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!new URLSearchParams(window.location.search).has("mock")) return;
-    mockRef.current = true;
-    setMock(true);
-    const d = buildMockData(Date.now());
-    setMatches(d.matches);
-    setGroups(d.groups);
-    setVoteCounts(d.voteCounts);
-    setAllEntries(d.entries);
-    setPromos(d.promos);
-    setLoading(false);
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ---- theme + follow persistence -----------------------------------------
   // Read persisted prefs on mount. Lazy useState init can't be used: localStorage
@@ -125,7 +97,6 @@ export default function Home() {
   const VIEW_KEYS: ViewKey[] = ["live", "matches", "groups", "results", "bracket"];
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (mockRef.current) return;
     try {
       const v = sessionStorage.getItem("baltfut_view");
       if (v && (VIEW_KEYS as string[]).includes(v)) setView(v as ViewKey);
@@ -170,7 +141,6 @@ export default function Home() {
 
   // ---- data: scoreboard + standings + vote counts -------------------------
   const loadCounts = useCallback(async () => {
-    if (mockRef.current) return;
     const client = getSupabaseClient();
     if (!client) return;
     try {
@@ -182,7 +152,6 @@ export default function Home() {
 
   const loadAll = useCallback(
     async (signal?: AbortSignal) => {
-      if (mockRef.current) return;
       const [sb, st] = await Promise.allSettled([
         fetchScoreboard({ dates: FIFA_WORLD_DATE_RANGE, signal }),
         fetchStandings({ signal }),
@@ -203,7 +172,6 @@ export default function Home() {
   // Standings + vote counts refresh. The scoreboard is owned by the worker below,
   // so the periodic timer only needs these (which change rarely).
   const loadAux = useCallback(async () => {
-    if (mockRef.current) return;
     try {
       setGroups(await fetchStandings());
     } catch {
@@ -232,7 +200,6 @@ export default function Home() {
       scoreboardUrl(DEFAULT_LEAGUE, FIFA_WORLD_DATE_RANGE),
       SCORE_WORKER_MS,
       (json) => {
-        if (mockRef.current) return;
         const next = parseScoreboard(json, DEFAULT_LEAGUE);
         if (next.length) {
           setMatches(next);
@@ -285,14 +252,10 @@ export default function Home() {
       ? selectedId
       : defaultChipId(chips);
   const activeMatch = chips.find((c) => c.match.id === activeId)?.match ?? null;
-  // In mock mode the per-match palpite feed comes from the seeded set, not the
-  // (disabled) Supabase poll.
-  const liveEntries = mock ? allEntries.filter((e) => e.matchId === activeId) : entries;
   const prevActive = useRef<{ id?: string; state?: string }>({});
 
   // ---- votes + lineups for the selected chip ------------------------------
   const loadEntries = useCallback(async (matchId: string) => {
-    if (mockRef.current) return;
     const client = getSupabaseClient();
     if (!client) {
       setEntries([]);
@@ -306,7 +269,6 @@ export default function Home() {
   }, []);
 
   const loadAllEntries = useCallback(async () => {
-    if (mockRef.current) return;
     const client = getSupabaseClient();
     if (!client) {
       setAllEntries([]);
@@ -448,7 +410,7 @@ export default function Home() {
             panel={panel}
             onPanel={setPanel}
             lineups={lineups}
-            entries={liveEntries}
+            entries={entries}
             allEntries={allEntries}
             matches={matches}
             onVoted={onVoted}
@@ -456,7 +418,6 @@ export default function Home() {
             groupByTeam={groupByTeam}
             releasedIds={releasedIds}
             liveMode={liveMode}
-            promos={promos}
           />
         )}
         {!loading && view === "matches" && (

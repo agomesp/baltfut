@@ -7,8 +7,7 @@ import { ARCHIVO, BRIC, JB, LIME, SAIRA } from "@/components/live/bf-ui";
 /**
  * RB Store promo strip (v3 redesign): the streamer's affiliate deals from the
  * public `promos` table, lime-branded, auto-scrolling so all of them pass by. Left
- * label + right "VER TODAS →" link to the Telegram channel. `override` injects
- * fixtures for the mock visualization mode; otherwise it reads the live feed.
+ * label + right "VER TODAS →" link to the Telegram channel.
  */
 const CHANNEL = "https://t.me/rbstorenet";
 const POLL_MS = 4 * 60_000;
@@ -23,11 +22,10 @@ export interface Promo {
   coupon: string | null;
 }
 
-export function RbStoreStrip({ height = 64, override = null }: { height?: number; override?: Promo[] | null }) {
+export function RbStoreStrip({ height = 64 }: { height?: number }) {
   const [fetched, setFetched] = useState<Promo[]>([]);
 
   useEffect(() => {
-    if (override) return;
     const client = getSupabaseClient();
     if (!client) return;
     let alive = true;
@@ -38,9 +36,9 @@ export function RbStoreStrip({ height = 64, override = null }: { height?: number
     void load();
     const id = window.setInterval(() => void load(), POLL_MS);
     return () => { alive = false; window.clearInterval(id); };
-  }, [override]);
+  }, []);
 
-  const items = override ?? fetched;
+  const items = fetched;
   const loop = items.length ? [...items, ...items] : [];
   const thumb = height - 30;
 
