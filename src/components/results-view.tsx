@@ -1,7 +1,8 @@
 import type { Match } from "@/lib/espn";
-import { groupByDay, scoreText } from "@/lib/format";
-import { MONO, DISPLAY, cardStyle } from "@/components/primitives";
-import { teamLabel, groupLabelFor, rowTint } from "@/components/match-meta";
+import { groupByDay } from "@/lib/format";
+import { teamNamePt } from "@/lib/team-names";
+import { groupLabelFor } from "@/components/match-meta";
+import { BRIC, JB, SAIRA, LIME, FlagIcon, ViewHeader } from "@/components/live/bf-ui";
 
 export interface ResultsViewProps {
   matches: Match[]; // finished, sorted descending by kickoff
@@ -13,7 +14,8 @@ export function ResultsView({ matches, followCode, groupByTeam }: ResultsViewPro
   if (matches.length === 0) {
     return (
       <section>
-        <div style={{ ...cardStyle, padding: "40px 24px", textAlign: "center", color: "var(--ink-3)" }}>
+        <ViewHeader label="// RESULTADOS" sub="mais recentes" />
+        <div style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)", padding: "40px 24px", textAlign: "center", fontFamily: BRIC, color: "#7d9a86" }}>
           Nenhum resultado ainda.
         </div>
       </section>
@@ -24,37 +26,39 @@ export function ResultsView({ matches, followCode, groupByTeam }: ResultsViewPro
 
   return (
     <section>
-      <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--ink-2)", marginBottom: 14 }}>
-        Resultados · mais recentes
-      </div>
+      <ViewHeader label="// RESULTADOS" sub="mais recentes" />
+
       {days.map((day) => (
-        <div key={day.key} style={{ marginBottom: 26 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-            <span style={{ fontFamily: MONO, fontSize: 13, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink)" }}>{day.label}</span>
-            <span style={{ flex: 1, height: 1, background: "var(--line)" }} />
-          </div>
+        <div key={day.key} style={{ marginBottom: 10 }}>
+          <div style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.08em", color: "#9bb6a6", padding: "10px 4px 6px" }}>{(day.label || "").toUpperCase()}</div>
           {day.items.map((m) => {
             const hs = m.homeScore ?? 0;
             const as = m.awayScore ?? 0;
             const homeWin = hs > as;
             const awayWin = as > hs;
-            const homeCode = m.home.abbreviation === followCode ? "var(--signal-strong)" : homeWin ? "var(--ink)" : "var(--ink-3)";
-            const awayCode = m.away.abbreviation === followCode ? "var(--signal-strong)" : awayWin ? "var(--ink)" : "var(--ink-3)";
+            const homeCode = m.home.abbreviation === followCode ? LIME : homeWin ? "#f1f7f0" : "#6f8a78";
+            const awayCode = m.away.abbreviation === followCode ? LIME : awayWin ? "#f1f7f0" : "#6f8a78";
             return (
-              <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "11px 4px", borderBottom: "1px solid var(--line)", background: rowTint(m, followCode) }}>
-                <span style={{ flex: "0 0 52px", fontFamily: MONO, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink-3)" }}>{groupLabelFor(m, groupByTeam)}</span>
-                <div style={{ flex: "1 1 240px", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
-                  <div style={{ textAlign: "right", minWidth: 0 }}>
-                    <span style={{ fontSize: 15, color: homeWin ? "var(--ink)" : "var(--ink-2)" }}>{teamLabel(m.home.abbreviation, m.home.name)}</span>{" "}
-                    <span style={{ fontFamily: MONO, fontWeight: 500, fontSize: 15, color: homeCode }}>{m.home.abbreviation}</span>
+              <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "11px 6px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                <span style={{ flex: "0 0 70px", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78" }}>{(groupLabelFor(m, groupByTeam) || "").toUpperCase()}</span>
+                <div style={{ flex: "1 1 240px", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, minWidth: 0 }}>
+                    <span style={{ fontFamily: BRIC, fontSize: 14, color: homeWin ? "#cfd9d1" : "#7d9a86", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(m.home.abbreviation, m.home.name)}</span>
+                    <FlagIcon code={m.home.abbreviation} size={13} />
+                    <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: homeCode }}>{m.home.abbreviation}</span>
                   </div>
-                  <span style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: 20, letterSpacing: "-0.012em", color: "var(--ink)", minWidth: 54, textAlign: "center" }}>{scoreText(m) || "—"}</span>
-                  <div style={{ textAlign: "left", minWidth: 0 }}>
-                    <span style={{ fontFamily: MONO, fontWeight: 500, fontSize: 15, color: awayCode }}>{m.away.abbreviation}</span>{" "}
-                    <span style={{ fontSize: 15, color: awayWin ? "var(--ink)" : "var(--ink-2)" }}>{teamLabel(m.away.abbreviation, m.away.name)}</span>
+                  <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 26, color: "#fff", minWidth: 64, textAlign: "center", lineHeight: 0.9, whiteSpace: "nowrap" }}>
+                    <span style={{ color: homeWin ? "#fff" : "#9bb6a6" }}>{hs}</span>
+                    <span style={{ color: "#42565b", margin: "0 8px" }}>–</span>
+                    <span style={{ color: awayWin ? "#fff" : "#9bb6a6" }}>{as}</span>
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: awayCode }}>{m.away.abbreviation}</span>
+                    <FlagIcon code={m.away.abbreviation} size={13} />
+                    <span style={{ fontFamily: BRIC, fontSize: 14, color: awayWin ? "#cfd9d1" : "#7d9a86", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(m.away.abbreviation, m.away.name)}</span>
                   </div>
                 </div>
-                <span style={{ flex: "0 0 auto", fontFamily: MONO, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--ink-3)" }}>{m.venue ?? ""}</span>
+                <span style={{ flex: "0 0 auto", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78", textAlign: "right" }}>{(m.venue ?? "").toUpperCase()}</span>
               </div>
             );
           })}

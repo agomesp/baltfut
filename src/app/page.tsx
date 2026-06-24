@@ -432,7 +432,9 @@ export default function Home() {
         style={
           view === "live"
             ? { maxWidth: 1620, margin: "0 auto", padding: "8px 24px 10px" }
-            : { maxWidth: 1180, margin: "0 auto", padding: "10px 23px 60px" }
+            : view === "ranking"
+              ? { maxWidth: 1180, margin: "0 auto", padding: "10px 23px 60px" }
+              : { maxWidth: 1620, margin: "0 auto", padding: "14px 30px 64px" }
         }
       >
         {loading ? (
@@ -469,7 +471,7 @@ export default function Home() {
         {!loading && view === "results" && (
           <ResultsView matches={results} followCode={follow} groupByTeam={groupByTeam} />
         )}
-        {!loading && view === "bracket" && <BracketView columns={bracketColumns} />}
+        {!loading && view === "bracket" && <BracketView columns={bracketColumns} groups={groups} />}
         {!loading && view === "ranking" && (
           <RankingView entries={allEntries} matches={matches} />
         )}

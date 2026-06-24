@@ -136,6 +136,34 @@ export function SectionLabel({ children, color = LIME, style }: { children: Reac
   );
 }
 
+/** Page section header: `// LABEL` marker + a dim mono subtitle. */
+export function ViewHeader({ label, sub }: { label: string; sub: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+      <SectionLabel color={LIME}>{label}</SectionLabel>
+      <span style={{ fontFamily: JB, fontSize: 10, letterSpacing: "0.06em", color: DIM_2 }}>{sub}</span>
+    </div>
+  );
+}
+
+/** Small flat country flag (rounded rect) for list rows. Renders nothing when the
+ *  team has no vendored flag. */
+export function FlagIcon({ code, size = 14 }: { code: string; size?: number }) {
+  const base = flagFileBase(code);
+  if (!base) return null;
+  const w = Math.round(size * 1.36);
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`${ASSET_BASE}/flags/${base}.svg`}
+      alt=""
+      width={w}
+      height={size}
+      style={{ width: w, height: size, objectFit: "cover", borderRadius: 3, flex: "none", display: "inline-block", verticalAlign: "middle", boxShadow: "0 0 0 1px rgba(255,255,255,0.1)" }}
+    />
+  );
+}
+
 /**
  * The team crest: a circular waving national flag (bfwave) with a sweeping sheen
  * and a colored glow ring. Falls back to the team code (Archivo) when no flag
