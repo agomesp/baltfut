@@ -34,7 +34,6 @@ import { FixturesView } from "@/components/fixtures-view";
 import { GroupsView } from "@/components/groups-view";
 import { ResultsView } from "@/components/results-view";
 import { BracketView } from "@/components/bracket-view";
-import { RankingView } from "@/components/ranking-view";
 
 const REFRESH_MS = 30_000;
 // Scoreboard refresh, driven by a Web Worker so it stays full-rate even when the
@@ -123,7 +122,7 @@ export default function Home() {
   // Modo Streamer reloads the page periodically; hydrating from a sessionStorage
   // snapshot means it comes back on the same tab/match with content already shown
   // (no "Carregando…" flash, no jump to AO VIVO) before the fresh fetch lands.
-  const VIEW_KEYS: ViewKey[] = ["live", "matches", "groups", "results", "bracket", "ranking"];
+  const VIEW_KEYS: ViewKey[] = ["live", "matches", "groups", "results", "bracket"];
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (mockRef.current) return;
@@ -360,8 +359,8 @@ export default function Home() {
   }, [view, activeId]);
 
   useEffect(() => {
-    // The live tab shows a ranking sidebar too, so keep allEntries fresh there.
-    if (view !== "ranking" && view !== "live") return;
+    // The live tab shows the ranking sidebar, so keep allEntries fresh there.
+    if (view !== "live") return;
     void loadAllEntries();
     const id = setInterval(() => void loadAllEntries(), REFRESH_MS);
     return () => clearInterval(id);
@@ -389,7 +388,7 @@ export default function Home() {
       if (document.hidden) return;
       void loadAll();
       if (activeId) void loadEntries(activeId);
-      if (view === "live" || view === "ranking") void loadAllEntries();
+      if (view === "live") void loadAllEntries();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
@@ -432,9 +431,7 @@ export default function Home() {
         style={
           view === "live"
             ? { maxWidth: 1620, margin: "0 auto", padding: "8px 24px 10px" }
-            : view === "ranking"
-              ? { maxWidth: 1180, margin: "0 auto", padding: "10px 23px 60px" }
-              : { maxWidth: 1620, margin: "0 auto", padding: "14px 30px 64px" }
+            : { maxWidth: 1620, margin: "0 auto", padding: "14px 30px 64px" }
         }
       >
         {loading ? (
@@ -472,9 +469,6 @@ export default function Home() {
           <ResultsView matches={results} followCode={follow} groupByTeam={groupByTeam} />
         )}
         {!loading && view === "bracket" && <BracketView columns={bracketColumns} groups={groups} />}
-        {!loading && view === "ranking" && (
-          <RankingView entries={allEntries} matches={matches} />
-        )}
       </main>
     </>
   );

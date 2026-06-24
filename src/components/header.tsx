@@ -3,7 +3,7 @@
 import { useNow } from "@/lib/use-now";
 import { wcProgress } from "@/lib/wc-progress";
 
-export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket" | "ranking";
+export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket";
 export type LiveMode = "placar" | "duo";
 
 const BRIC = "var(--font-bric)";
@@ -15,7 +15,6 @@ const NAV: { key: ViewKey; label: string }[] = [
   { key: "groups", label: "GRUPOS" },
   { key: "results", label: "RESULTADOS" },
   { key: "bracket", label: "CHAVEAMENTO" },
-  { key: "ranking", label: "RANKING" },
 ];
 
 export interface HeaderProps {
@@ -52,12 +51,10 @@ export function Header({ view, onView, dark, onToggleTheme, followCode, followNa
         <div style={{ display: "flex", gap: 18, fontFamily: JB, fontSize: 11, letterSpacing: "0.04em", alignItems: "center", flexWrap: "wrap" }}>
           {NAV.map((t) => {
             const active = t.key === view;
-            const isRank = t.key === "ranking";
-            const color = active ? "#f1f7f0" : isRank ? "#ffb347" : "#6f8a78";
             return (
-              <button key={t.key} onClick={() => onView(t.key)} style={{ position: "relative", background: "transparent", border: "none", padding: "2px 0 6px", cursor: "pointer", fontFamily: JB, fontSize: 11, letterSpacing: "0.04em", color }}>
+              <button key={t.key} onClick={() => onView(t.key)} style={{ position: "relative", background: "transparent", border: "none", padding: "2px 0 6px", cursor: "pointer", fontFamily: JB, fontSize: 11, letterSpacing: "0.04em", color: active ? "#f1f7f0" : "#6f8a78" }}>
                 {t.label}
-                {active ? <span style={{ position: "absolute", left: 0, bottom: -1, width: "100%", height: 2, background: isRank ? "#ffb347" : "#c8ff2d" }} /> : null}
+                {active ? <span style={{ position: "absolute", left: 0, bottom: -1, width: "100%", height: 2, background: "#c8ff2d" }} /> : null}
               </button>
             );
           })}
