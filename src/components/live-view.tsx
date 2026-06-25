@@ -64,7 +64,7 @@ function segBtn(active: boolean) {
   };
 }
 
-/** Small pill button for the live toolbar (view toggle + mock triggers). */
+/** Small pill button for the live toolbar (1 jogo / auto view toggle). */
 function toolBtn(active: boolean): React.CSSProperties {
   return {
     fontFamily: JB,
@@ -117,7 +117,7 @@ function PlacarStage({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
-      <HeroWithCinematic match={match} />
+      <HeroWithCinematic match={match} subs={lineups?.subs ?? []} />
       <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
         <div style={{ flex: 1.5, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flex: "none" }}>

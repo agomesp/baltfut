@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
-import type { Match, Side } from "@/lib/espn";
+import type { Match, MatchSub, Side } from "@/lib/espn";
 import { flagFileBase } from "@/lib/team-names";
+import { isReservedName } from "@shared/name-claim";
 
 /** BaltFut v3 (AO VIVO) shared design kit: fonts, colors, team accents, the
  *  waving-flag crest, live-dot and the goal/card timeline builder. Kept in one
@@ -50,6 +51,37 @@ export function teamAccent(code: string): string {
   return TEAM_ACCENT[code] ?? `hsl(${hashHue(code)} 68% 62%)`;
 }
 
+/** The house bot (e.g. "ChatGPT") renders with a rainbow-gradient name so it reads
+ *  as "official", not a regular user. `background-clip: text` paints the gradient
+ *  through the glyphs; `color` is the fallback where clip isn't supported. */
+export const RAINBOW_NAME: CSSProperties = {
+  background: "linear-gradient(90deg,#ff3b30,#ff9500,#ffcc00,#34c759,#00c7be,#0a84ff,#bf5af2)",
+  WebkitBackgroundClip: "text",
+  backgroundClip: "text",
+  WebkitTextFillColor: "transparent",
+  color: "#0a84ff",
+};
+
+/** Username text style: the rainbow gradient for the reserved house bot (wherever
+ *  it appears — palpites and ranking), else a plain `color`. */
+export function nameStyle(name: string, color: string): CSSProperties {
+  return isReservedName(name) ? RAINBOW_NAME : { color };
+}
+
+/** True when `name` is the viewer's own nickname (case-insensitive). */
+export function isMe(name: string, myName: string | null): boolean {
+  return myName != null && name.trim().toLowerCase() === myName.trim().toLowerCase();
+}
+
+/** The small lime "VOCÊ" badge marking the viewer's own palpite / ranking row. */
+export function VoceTag() {
+  return (
+    <span style={{ flex: "none", fontFamily: JB, fontSize: 7.5, letterSpacing: "0.06em", fontWeight: 700, color: "#0f1f02", background: LIME, padding: "2px 5px", borderRadius: 4 }}>
+      VOCÊ
+    </span>
+  );
+}
+
 /** Leading minute of an event clock ("45'+2'" → 47) for timeline positioning. */
 export function eventMinute(clock: string): number {
   const m = clock.match(/(\d+)(?:'?\s*\+\s*(\d+))?/);
@@ -60,20 +92,27 @@ export function eventMinute(clock: string): number {
 export interface TimelineEvent {
   minute: number;
   leftPct: string;
-  kind: "goal" | "yellow" | "red";
+  kind: "goal" | "yellow" | "red" | "sub";
   side: Side;
+  /** Scorer / carded player / the player coming ON for a substitution. */
   player: string;
+  /** The player going OFF (substitutions only). */
+  playerOut?: string;
   minLabel: string;
   color: string;
 }
 
-/** Goals + cards merged into one chronological, percent-positioned event list. */
+/** Goals + cards (+ optional substitutions) merged into one chronological,
+ *  percent-positioned event list. Subs come from the lineups (summary endpoint),
+ *  so they're passed in separately from the scoreboard-derived goals/cards. */
 export function buildTimeline(
   match: Match,
   homeAccent: string,
   awayAccent: string,
+  subs: MatchSub[] = [],
 ): TimelineEvent[] {
   const pct = (clock: string) => `${Math.min(100, (eventMinute(clock) / 90) * 100).toFixed(1)}%`;
+  const sideColor = (side: Side) => (side === "home" ? homeAccent : awayAccent);
   const goals: TimelineEvent[] = match.goals.map((g) => ({
     minute: eventMinute(g.clock),
     leftPct: pct(g.clock),
@@ -81,7 +120,7 @@ export function buildTimeline(
     side: g.side,
     player: g.scorer,
     minLabel: g.clock,
-    color: g.side === "home" ? homeAccent : awayAccent,
+    color: sideColor(g.side),
   }));
   const cards: TimelineEvent[] = match.cards.map((c) => ({
     minute: eventMinute(c.clock),
@@ -92,14 +131,17 @@ export function buildTimeline(
     minLabel: c.clock,
     color: c.kind === "red" ? "#ff5a6a" : CARD_YELLOW,
   }));
-  return [...goals, ...cards].sort((a, b) => a.minute - b.minute);
-}
-
-/** Fraction of the match elapsed (for the timeline fill); finished → 100%. */
-export function elapsedPct(match: Match): string {
-  if (match.state === "post") return "100%";
-  const min = match.displayClock ? eventMinute(match.displayClock) : 0;
-  return `${Math.min(100, (min / 90) * 100).toFixed(1)}%`;
+  const subEvents: TimelineEvent[] = subs.map((s) => ({
+    minute: eventMinute(s.clock),
+    leftPct: pct(s.clock),
+    kind: "sub",
+    side: s.side,
+    player: s.playerIn,
+    playerOut: s.playerOut,
+    minLabel: s.clock,
+    color: sideColor(s.side),
+  }));
+  return [...goals, ...cards, ...subEvents].sort((a, b) => a.minute - b.minute);
 }
 
 /** The live match-clock label for the hero pill (e.g. "67'", "FIM"). */

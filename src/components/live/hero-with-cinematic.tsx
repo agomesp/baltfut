@@ -5,8 +5,8 @@ import { GoalFoulCinematic, type CineMode } from "@/components/live/goal-foul-ci
 import { resolveCraquePair, CRAQUE_CLIPS, ANIMATED_SQUAD, SQUAD_CLIPS } from "@/data/craque-map";
 
 // Wraps the single-game AO VIVO hero with the goal/foul cinematic: it fires on a
-// real score/card delta (and a dev "mock" window event), hides the static hero,
-// and overlays the cinematic + a full-screen blur backdrop.
+// real score/card delta, hides the static hero, and overlays the cinematic + a
+// full-screen blur backdrop.
 
 const CINE_MS = 6200;
 

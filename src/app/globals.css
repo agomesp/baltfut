@@ -178,6 +178,87 @@ body {
     transform: translate(-50%, -6px) scale(1.02);
   }
 }
+
+/* Event-chip "traveling beam" border (goals = green, yellow card = yellow, red
+   card = red). A glowing arc runs around the chip easing slow→fast→slow each
+   loop, with a soft glow that walks with it. Color is set per-kind below. The
+   `@property` makes the conic angle animatable; where it (or animations) are
+   unsupported the border simply sits static. Disabled under reduced-motion via
+   the global rule. */
+@property --bf-evt-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: true;
+}
+@keyframes bfEvtSpin {
+  to {
+    --bf-evt-angle: 360deg;
+  }
+}
+.bf-evt {
+  position: relative;
+  isolation: isolate;
+  animation: bfEvtSpin 3.6s ease-in-out infinite;
+}
+/* The travelling border ring (mask trick: gradient shows only in the 1.5px edge). */
+.bf-evt::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--bf-evt-angle),
+    transparent 0deg 250deg,
+    var(--bf-evt-color) 312deg,
+    #fff 336deg,
+    var(--bf-evt-color) 350deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+/* The glow that travels with the beam (blurred, bleeding just outside the edge). */
+.bf-evt::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--bf-evt-angle),
+    transparent 0deg 252deg,
+    var(--bf-evt-color) 330deg,
+    transparent 360deg
+  );
+  filter: blur(4px);
+  opacity: 0.5;
+  z-index: -1;
+  pointer-events: none;
+}
+.bf-evt-goal {
+  --bf-evt-color: #3ee65f;
+}
+.bf-evt-yellow {
+  --bf-evt-color: #ffce3a;
+}
+.bf-evt-red {
+  --bf-evt-color: #ff4d5e;
+}
+/* Desync neighbouring chips so the beams don't all sweep in unison. */
+.bf-evt:nth-child(3n) {
+  animation-delay: -1.2s;
+}
+.bf-evt:nth-child(3n + 1) {
+  animation-delay: -2.4s;
+}
+
 /* Bottom fade for the single-column ranking / palpite lists (mask the overflow). */
 .bf-fade-y {
   -webkit-mask-image: linear-gradient(180deg, #000 78%, transparent 100%);

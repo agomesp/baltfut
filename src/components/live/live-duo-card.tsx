@@ -1,22 +1,25 @@
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
-import { teamNamePt } from "@/lib/team-names";
 import { communityConsensus } from "@/lib/consensus";
 import { classifyLivePalpites, type LivePalpite } from "@/lib/live-palpites";
 import {
   BRIC,
   BfPulse,
   buildTimeline,
-  elapsedPct,
   FlagCrest,
   JB,
   LIME,
   matchClockLabel,
+  nameStyle,
   SAIRA,
   SectionLabel,
   teamAccent,
+  VoceTag,
+  isMe,
   type TimelineEvent,
 } from "@/components/live/bf-ui";
+import { TimelineFill } from "@/components/live/timeline-bar";
+import { useMyName } from "@/lib/use-my-name";
 
 function Marker({ ev }: { ev: TimelineEvent }) {
   return (
@@ -38,6 +41,7 @@ function palpiteRowColor(p: LivePalpite) {
 
 /** One live match in the 2 JOGOS view: score, timeline, consensus + a compact palpite list. */
 export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entries: VoteEntry[]; groupLabel: string }) {
+  const myName = useMyName();
   const homeCode = match.home.abbreviation;
   const awayCode = match.away.abbreviation;
   const homeAccent = teamAccent(homeCode);
@@ -63,7 +67,7 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, minWidth: 0 }}>
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(12px,1.4vw,17px)", color: homeAccent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(homeCode, match.home.name).toUpperCase()}</span>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(13px,1.5vw,18px)", color: homeAccent, whiteSpace: "nowrap" }}>{homeCode}</span>
           <FlagCrest code={homeCode} accent={homeAccent} size={46} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 11, flex: "none" }}>
@@ -73,16 +77,17 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <FlagCrest code={awayCode} accent={awayAccent} size={46} />
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(12px,1.4vw,17px)", color: awayAccent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(awayCode, match.away.name).toUpperCase()}</span>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(13px,1.5vw,18px)", color: awayAccent, whiteSpace: "nowrap" }}>{awayCode}</span>
         </div>
       </div>
 
-      {events.length > 0 ? (
+      {match.state !== "pre" ? (
         <>
           <div style={{ position: "relative", height: 3, background: "rgba(255,255,255,0.1)", borderRadius: 2, margin: "2px 4px" }}>
-            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: elapsedPct(match), background: "linear-gradient(90deg,#3a7d2c,#c8ff2d)", borderRadius: 2 }} />
+            <TimelineFill match={match} />
             {events.map((ev, i) => <Marker key={i} ev={ev} />)}
           </div>
+          {events.length > 0 ? (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 10px" }}>
             {events.map((ev, i) => (
               <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: JB, fontSize: 9, color: "#aebdb4" }}>
@@ -90,6 +95,7 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
               </span>
             ))}
           </div>
+          ) : null}
         </>
       ) : null}
 
@@ -118,7 +124,8 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
             const c = palpiteRowColor(p);
             return (
               <div key={i} style={{ opacity: c.opacity, borderRadius: 7, padding: "5px 9px", background: c.bg, border: c.border, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11, color: c.name, flex: "none", maxWidth: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.username}</span>
+                <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11, ...nameStyle(p.username, c.name), flex: "none", maxWidth: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.username}</span>
+                {isMe(p.username, myName) ? <VoceTag /> : null}
                 <span style={{ fontFamily: JB, fontSize: 9, color: c.pick, flex: 1, minWidth: 0 }}>{homeCode} {p.predHome} × {p.predAway} {awayCode}</span>
                 <span style={{ flex: "none", fontFamily: JB, fontSize: 8, letterSpacing: "0.04em", color: c.status }}>{p.status}</span>
               </div>
