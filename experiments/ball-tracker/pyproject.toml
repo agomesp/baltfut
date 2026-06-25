@@ -1,0 +1,18 @@
+[project]
+name = "balltrack"
+version = "0.0.1"
+description = "Experiment: detect the match ball in broadcast video and project it onto a 2D pitch. Isolated from the baltfut app."
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python>=4.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+# No [build-system]: this package is run in-place (via pythonpath), not installed.
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

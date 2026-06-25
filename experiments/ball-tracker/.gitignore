@@ -1,0 +1,15 @@
+# Python / venv
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# heavy artifacts — never commit (clips, model weights, exports)
+models/
+clips/
+*.mp4
+*.mkv
+*.mov
+*.npz
+*.pt
+*.onnx
