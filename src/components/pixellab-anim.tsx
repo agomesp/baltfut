@@ -27,6 +27,7 @@ export function PixelLabAnim({
   scale = 2,
   fps = 9,
   playing = true,
+  loop = true,
 }: {
   /** Folder under public/ holding 0.png..(frames-1).png (no trailing slash). */
   dir: string;
@@ -35,6 +36,8 @@ export function PixelLabAnim({
   scale?: number;
   fps?: number;
   playing?: boolean;
+  /** When false, stop (hold) on the last frame instead of cycling. */
+  loop?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [imgs, setImgs] = useState<HTMLImageElement[]>([]);
@@ -63,13 +66,17 @@ export function PixelLabAnim({
     };
     const tick = (t: number) => {
       if (!last) last = t;
-      if (playing && !reduce && t - last >= 1000 / fps) { i = (i + 1) % imgs.length; last = t; draw(); }
+      if (playing && !reduce && t - last >= 1000 / fps) {
+        i = loop ? (i + 1) % imgs.length : Math.min(i + 1, imgs.length - 1);
+        last = t;
+        draw();
+      }
       raf = requestAnimationFrame(tick);
     };
     draw();
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [imgs, size, scale, fps, playing]);
+  }, [imgs, size, scale, fps, playing, loop]);
 
   return (
     <canvas ref={ref} width={size * scale} height={size * scale} aria-hidden style={{ imageRendering: "pixelated", display: "block" }} />

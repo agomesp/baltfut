@@ -1,11 +1,13 @@
 import type { Match } from "@/lib/espn";
 import { teamNamePt } from "@/lib/team-names";
+import { SwitchingCrest } from "@/components/live/switching-crest";
+import { SquadWall } from "@/components/live/squad-wall";
+import { resolveCraquePair, type CraqueBase } from "@/data/craque-map";
 import {
   BRIC,
   BfPulse,
   buildTimeline,
   elapsedPct,
-  FlagCrest,
   JB,
   LIME,
   matchClockLabel,
@@ -30,10 +32,10 @@ function Marker({ ev, withLabel }: { ev: TimelineEvent; withLabel: boolean }) {
   );
 }
 
-function TeamBlock({ code, accent, name, crestSize }: { code: string; accent: string; name: string; crestSize: number }) {
+function TeamBlock({ code, accent, name, crestSize, enter, craque }: { code: string; accent: string; name: string; crestSize: number; enter: "l" | "r"; craque: CraqueBase | null }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
-      <FlagCrest code={code} accent={accent} size={crestSize} />
+    <div className={enter === "l" ? "hero-tin-l" : "hero-tin-r"} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
+      <SwitchingCrest code={code} accent={accent} size={crestSize} craque={craque} flip={enter === "r"} />
       <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(15px,1.9vw,24px)", letterSpacing: "-0.02em", color: accent, textAlign: "center", lineHeight: 1, whiteSpace: "nowrap" }}>
         {name.toUpperCase()}
       </div>
@@ -55,11 +57,16 @@ export function HeroScoreboard({ match, pre = false, compact = false }: HeroScor
   const events = pre ? [] : buildTimeline(match, homeAccent, awayAccent);
   const crestSize = compact ? 58 : 74;
   const scoreFont = compact ? "clamp(34px,4.5vw,56px)" : "clamp(46px,6.5vw,84px)";
+  // If both teams map to the same craque color, one switches to its alternate.
+  const craquePair = resolveCraquePair(match.home.abbreviation, match.away.abbreviation);
 
   return (
     <div style={{ position: "relative", flex: "none", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(200,255,45,0.12)", background: "linear-gradient(180deg, rgba(200,255,45,0.04), transparent)", padding: compact ? "16px 18px 10px" : "22px 22px 12px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(12px,2.2vw,24px)" }}>
-        <TeamBlock code={match.home.abbreviation} accent={homeAccent} name={teamNamePt(match.home.abbreviation, match.home.name)} crestSize={crestSize} />
+      <style>{"@keyframes heroTeamL{0%{opacity:0;transform:translateX(-46px)}100%{opacity:1;transform:translateX(0)}}@keyframes heroTeamR{0%{opacity:0;transform:translateX(46px)}100%{opacity:1;transform:translateX(0)}}.hero-tin-l{animation:heroTeamL .6s 1.25s ease-out both}.hero-tin-r{animation:heroTeamR .6s 1.25s ease-out both}"}</style>
+      <SquadWall base={craquePair.home} side="home" delayBase={0} />
+      <SquadWall base={craquePair.away} side="away" delayBase={0.6} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(12px,2.2vw,24px)" }}>
+        <TeamBlock code={match.home.abbreviation} accent={homeAccent} name={teamNamePt(match.home.abbreviation, match.home.name)} crestSize={crestSize} enter="l" craque={craquePair.home} />
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, flex: "none" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: JB, fontSize: 11.5, fontWeight: 600, color: LIME, background: "rgba(200,255,45,0.12)", border: "1px solid rgba(200,255,45,0.38)", borderRadius: 999, padding: "4px 11px", whiteSpace: "nowrap" }}>
@@ -77,11 +84,11 @@ export function HeroScoreboard({ match, pre = false, compact = false }: HeroScor
           )}
         </div>
 
-        <TeamBlock code={match.away.abbreviation} accent={awayAccent} name={teamNamePt(match.away.abbreviation, match.away.name)} crestSize={crestSize} />
+        <TeamBlock code={match.away.abbreviation} accent={awayAccent} name={teamNamePt(match.away.abbreviation, match.away.name)} crestSize={crestSize} enter="r" craque={craquePair.away} />
       </div>
 
       {events.length > 0 ? (
-        <div style={{ maxWidth: 580, margin: "12px auto 0" }}>
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 580, margin: "12px auto 0" }}>
           <div style={{ position: "relative", height: 3, background: "rgba(255,255,255,0.1)", borderRadius: 2, margin: "0 4px" }}>
             <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: elapsedPct(match), background: "linear-gradient(90deg,#3a7d2c,#c8ff2d)", borderRadius: 2 }} />
             {events.map((ev, i) => (

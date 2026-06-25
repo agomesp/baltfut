@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Match, MatchLineups } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
@@ -11,7 +11,7 @@ import { isPalpiteOpen, palpiteDeadline } from "@/lib/palpite";
 import { Reactions } from "@/components/reactions";
 import { RbStoreStrip } from "@/components/live/rb-store-strip";
 import { BfChipRail } from "@/components/live/bf-chip-rail";
-import { HeroScoreboard } from "@/components/live/hero-scoreboard";
+import { HeroWithCinematic } from "@/components/live/hero-with-cinematic";
 import { CommunityBar } from "@/components/live/community-bar";
 import { PalpiteBreakdown } from "@/components/live/palpite-breakdown";
 import { RankingSubs } from "@/components/live/ranking-subs";
@@ -64,6 +64,22 @@ function segBtn(active: boolean) {
   };
 }
 
+/** Small pill button for the live toolbar (view toggle + mock triggers). */
+function toolBtn(active: boolean): React.CSSProperties {
+  return {
+    fontFamily: JB,
+    fontSize: 10,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    background: active ? LIME : "rgba(255,255,255,0.04)",
+    color: active ? "#0f1f02" : "#9bb6a6",
+    border: active ? `1px solid ${LIME}` : "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 8,
+    padding: "5px 9px",
+    cursor: "pointer",
+  };
+}
+
 /** PLACAR: hero + (palpites breakdown | escalação) on the left, consensus + ranking on the right. */
 function PlacarStage({
   match,
@@ -101,7 +117,7 @@ function PlacarStage({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
-      <HeroScoreboard match={match} />
+      <HeroWithCinematic match={match} />
       <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
         <div style={{ flex: 1.5, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flex: "none" }}>
@@ -175,12 +191,15 @@ export function LiveView({
 }: LiveViewProps) {
   const now = useNow(15_000);
   const selected = chips.find((c) => c.match.id === selectedId) ?? chips[0];
+  const [forceSingle, setForceSingle] = useState(false);
 
   // Auto-decide 1 vs 2 concurrent games. Ticks with `now`, so the pair opens 10
   // min before an overlapping game and collapses to the survivor when one ends.
   const decision = selected ? decideConcurrent(selected.match, matches, now) : null;
   const primary = decision?.primary ?? null;
-  const partner = decision?.partner ?? null;
+  // "1 JOGO / AUTO" toggle: forceSingle drops the concurrent partner so the
+  // single big hero (with the goal/foul cinematic) is shown even when 2 overlap.
+  const partner = forceSingle ? null : (decision?.partner ?? null);
   const primaryPhase = primary ? matchPhase(primary) : undefined;
   // Palpites for the shown game: the fresh `entries` feed when it's the selected
   // chip, else filtered from the all-matches feed (e.g. after following a survivor).
@@ -232,6 +251,16 @@ export function LiveView({
       <Reactions matchId={primary.id} />
       <KickLiveChip />
       <div ref={fillRef} style={{ display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
+        {/* Toolbar: 1 jogo / auto view toggle. */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flex: "none" }}>
+          <button
+            onClick={() => setForceSingle((s) => !s)}
+            title="Alternar entre 1 jogo e visão automática (2 jogos)"
+            style={toolBtn(forceSingle)}
+          >
+            {forceSingle ? "1 JOGO" : "AUTO"}
+          </button>
+        </div>
         <BfChipRail chips={chips} selectedId={selected.match.id} onSelect={onSelect} releasedIds={releasedIds} />
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>

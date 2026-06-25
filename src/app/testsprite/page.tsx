@@ -5,6 +5,8 @@ import { LpcSprite } from "@/components/lpc-sprite";
 import { LAYERS, ANIMS, PRESETS, resolveUrls, type Anim, type Choice } from "@/data/lpc";
 import { RiggedFootballer, KITS, ACTIONS, type Action } from "@/components/rigged-footballer";
 import { PixelLabAnim } from "@/components/pixellab-anim";
+import { GoalFoulCinematic, type CineMode } from "@/components/live/goal-foul-cinematic";
+import { craqueForTeam, CRAQUE_CLIPS } from "@/data/craque-map";
 
 // Phase-1 PixelLab animations (England craque). `frames: 0` = still rendering.
 const PIXELLAB_ANIMS: { key: string; label: string; frames: number; fps: number }[] = [
@@ -116,6 +118,20 @@ export default function TestSprite() {
   const [playing, setPlaying] = useState(true);
   const [act, setAct] = useState<Action>("kick");
   const [kitIdx, setKitIdx] = useState(0);
+  // Goal/foul cinematic preview state. cineRun bumps to replay.
+  const [cineRun, setCineRun] = useState(0);
+  const [cineMode, setCineMode] = useState<CineMode>("goal");
+  const [cineSide, setCineSide] = useState<"home" | "away">("home");
+  const CINE_HOME = "BRA";
+  const CINE_AWAY = "ARG";
+  const fire = (mode: CineMode, side: "home" | "away") => {
+    setCineMode(mode);
+    setCineSide(side);
+    setCineRun((n) => n + 1);
+  };
+  const cineCode = cineSide === "home" ? CINE_HOME : CINE_AWAY;
+  const cineBase = craqueForTeam(cineCode) ?? "england-craque-test";
+  const cineClip = cineMode === "goal" ? CRAQUE_CLIPS[cineBase].kick : CRAQUE_CLIPS[cineBase].slide;
 
   const urls = resolveUrls(choices, anim);
   const setLayer = (key: string, ch: Choice) => setChoices((c) => ({ ...c, [key]: ch }));
@@ -127,6 +143,23 @@ export default function TestSprite() {
       <p style={{ fontSize: 14, color: "var(--ink-2)", maxWidth: 700, marginBottom: 22, lineHeight: 1.5 }}>
         Universal LPC Spritesheet — personagens genéricos montados por camadas (corpo · pernas · roupa · cabeça · cabelo) e animados. Troque tipos, variações e animações ao vivo.
       </p>
+
+      {/* Goal/foul cinematic preview (AO VIVO hero). */}
+      <section style={{ ...cardStyle, marginBottom: 24, padding: 18, border: "1px solid var(--signal)" }}>
+        <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--signal-strong)", marginBottom: 4 }}>Cinematic de gol / falta — AO VIVO ({CINE_HOME} × {CINE_AWAY})</div>
+        <p style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 14, maxWidth: 760, lineHeight: 1.5 }}>
+          Times saem + placar some → o craque (ou genérico) entra no meio chutando/dando carrinho → bola/cartão vem do ângulo do espectador, encolhendo até o pé → impacto com tremor + pulso → personagem sai e o placar volta. Clique para disparar.
+        </p>
+        <div style={{ maxWidth: 620, margin: "0 auto 14px" }}>
+          <GoalFoulCinematic runId={cineRun} mode={cineMode} side={cineSide} homeCode={CINE_HOME} awayCode={CINE_AWAY} scorerBase={cineBase} scorerClip={cineClip} homeScore={cineSide === "home" && cineMode === "goal" ? 1 : 0} awayScore={cineSide === "away" && cineMode === "goal" ? 1 : 0} />
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+          <Chip active={false} onClick={() => fire("goal", "home")}>⚽ Gol {CINE_HOME}</Chip>
+          <Chip active={false} onClick={() => fire("goal", "away")}>⚽ Gol {CINE_AWAY}</Chip>
+          <Chip active={false} onClick={() => fire("yellow", "home")}>🟨 Falta {CINE_HOME}</Chip>
+          <Chip active={false} onClick={() => fire("red", "away")}>🟥 Vermelho {CINE_AWAY}</Chip>
+        </div>
+      </section>
 
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap", alignItems: "flex-start" }}>
         {/* Preview + live controls */}
