@@ -18,6 +18,7 @@ import {
   type MatchLineups,
 } from "@/lib/espn";
 import { startScoreboardWorker } from "@/lib/scoreboard-worker";
+import { subscribeHeartbeat } from "@/lib/heartbeat";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   fetchVoteEntries,
@@ -173,24 +174,27 @@ export default function Home() {
     [loadCounts],
   );
 
-  // Vote counts refresh. The scoreboard AND standings are owned by Web Workers
-  // (below), which escape the hidden-tab timer throttle, so this main-thread
-  // timer only carries the Supabase vote counts.
-  const loadAux = useCallback(async () => {
-    await loadCounts();
-  }, [loadCounts]);
-
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const controller = new AbortController();
     void loadAll(controller.signal); // initial: scoreboard + standings + counts
-    const id = setInterval(() => void loadAux(), REFRESH_MS); // periodic: aux only
-    return () => {
-      controller.abort();
-      clearInterval(id);
-    };
-  }, [loadAll, loadAux]);
+    return () => controller.abort();
+  }, [loadAll]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Vote counts refresh. Heartbeat-driven (the shared worker tick), not a
+  // main-thread timer, so the counts stay fresh while the tab is hidden — matching
+  // the scoreboard + standings workers. (The Supabase fetch needs the client's
+  // auth headers, so it can't ride the bare URL-poll worker; the heartbeat is the
+  // hidden-safe trigger and the main-thread fetch itself isn't timer-throttled.)
+  useEffect(() => {
+    let last = Date.now();
+    return subscribeHeartbeat(() => {
+      if (Date.now() - last < REFRESH_MS) return;
+      last = Date.now();
+      void loadCounts();
+    });
+  }, [loadCounts]);
 
   // Scoreboard via a Web Worker: worker timers escape the hidden-tab throttle, so
   // the score stays full-rate even while the streamer's window is hidden (the
@@ -300,9 +304,14 @@ export default function Home() {
   useEffect(() => {
     if (view !== "live" || !activeId) return;
     void loadEntries(activeId);
-    // Poll so palpites others submit appear without a manual refresh.
-    const id = setInterval(() => void loadEntries(activeId), ENTRIES_REFRESH_MS);
-    return () => clearInterval(id);
+    // Poll so palpites others submit appear without a manual refresh — driven by
+    // the worker heartbeat so it survives a hidden/backgrounded tab.
+    let last = Date.now();
+    return subscribeHeartbeat(() => {
+      if (Date.now() - last < ENTRIES_REFRESH_MS) return;
+      last = Date.now();
+      void loadEntries(activeId);
+    });
   }, [view, activeId, loadEntries]);
 
   // Realtime push: the cast-vote function broadcasts a dataless "new" nudge for a
@@ -339,8 +348,13 @@ export default function Home() {
     // The live tab shows the ranking sidebar, so keep allEntries fresh there.
     if (view !== "live") return;
     void loadAllEntries();
-    const id = setInterval(() => void loadAllEntries(), REFRESH_MS);
-    return () => clearInterval(id);
+    // Heartbeat-driven so the ranking stays fresh while the tab is hidden.
+    let last = Date.now();
+    return subscribeHeartbeat(() => {
+      if (Date.now() - last < REFRESH_MS) return;
+      last = Date.now();
+      void loadAllEntries();
+    });
   }, [view, loadAllEntries]);
 
   // When the match being watched flips live -> finished, auto-advance to the
