@@ -22,11 +22,12 @@ box for live (CUDA).
 - `balltrack/detection.py` — Detector iface + `select_ball` + FakeDetector *(done; real YOLO adapter pending a model/clip)*
 - `balltrack/sink.py` — injectable publisher: MemorySink + JsonlSink *(done, tested)*
 - `balltrack/pipeline.py` — orchestrates detect -> select -> map -> smooth -> sink *(done, tested)*
-- `balltrack/source.py` — frame source: video file (dev) / live stream (prod) *(later; pipeline takes any `(t, frame)` iterable for now)*
+- `balltrack/source.py` — `VideoFileSource`: decode + downsample to target fps + cap frames *(done, tested; live StreamSource later)*
 
-**Status:** the offline skeleton runs **end-to-end on a fake detector**, emitting a
-pitch-coordinate timeline. Remaining real-world edges: a **YOLO adapter** and a
-**VideoFileSource** (both need torch/ultralytics + a model + a sample clip).
+**Status:** the offline pipeline runs **end-to-end on real decoded video**
+(`VideoFileSource` → pipeline → pitch-coordinate timeline), proven on a fake detector.
+The one remaining real-world edge is the **YOLO adapter** (`detection.YoloBallDetector`)
+— it needs torch/ultralytics + a model + a sample clip.
 
 ## Setup & test (Mac dev)
 
