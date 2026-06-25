@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { BUILD_ID, hasNewVersion } from "@/lib/version";
+import { isStreamerMode, subscribeStreamerMode } from "@/lib/streamer-mode";
+import { shouldAutoReload } from "@/lib/auto-reload";
 import { MONO } from "@/components/primitives";
 
 const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -15,6 +17,8 @@ const AUTO_APPLY_MS = 8_000; // grace before auto-reloading
  */
 export function UpdateBanner() {
   const [available, setAvailable] = useState(false);
+  // Modo Streamer suppresses the force-reload — it would blank the live capture.
+  const streaming = useSyncExternalStore(subscribeStreamerMode, isStreamerMode, () => false);
 
   useEffect(() => {
     if (BUILD_ID === "dev") return;
@@ -40,18 +44,22 @@ export function UpdateBanner() {
   }, []);
 
   useEffect(() => {
-    if (!available) return;
+    if (!available || streaming) return;
     const id = setInterval(() => {
       const el = document.activeElement;
       const typing =
         el instanceof HTMLElement &&
         (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
-      if (!typing) window.location.reload();
+      // Never reload a broadcasting, hidden/occluded, or mid-palpite tab — each
+      // of those turns the "update" into a blank screen.
+      if (shouldAutoReload({ typing, streaming, hidden: document.hidden })) {
+        window.location.reload();
+      }
     }, AUTO_APPLY_MS);
     return () => clearInterval(id);
-  }, [available]);
+  }, [available, streaming]);
 
-  if (!available) return null;
+  if (!available || streaming) return null;
 
   return (
     <div

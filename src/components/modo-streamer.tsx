@@ -5,6 +5,7 @@ import { Tv } from "lucide-react";
 import { parseScoreboard, scoreboardUrl, DEFAULT_LEAGUE, FIFA_WORLD_DATE_RANGE } from "@/lib/espn";
 import { startScoreboardWorker } from "@/lib/scoreboard-worker";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
+import { setStreamerMode } from "@/lib/streamer-mode";
 import { pickMatch } from "@/components/pip/resolve";
 import { streamerClock } from "@/components/streamer-clock";
 
@@ -43,6 +44,13 @@ export function ModoStreamer() {
   const dataRef = useRef<{ clock: string | null; fetchedAt: number }>({ clock: null, fetchedAt: 0 });
   const stopWorkerRef = useRef<(() => void) | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
+
+  // Mirror on/off into the shared streamer flag so the update-banner can suppress
+  // its force-reload while a broadcast is live (a reload would blank the capture).
+  const applyOn = useCallback((v: boolean) => {
+    setOn(v);
+    setStreamerMode(v);
+  }, []);
 
   // Repaint the PiP clock from the last-fetched minute + seconds elapsed since.
   const paint = useCallback(() => {
@@ -88,14 +96,14 @@ export function ModoStreamer() {
   const toggle = useCallback(() => {
     if (on) {
       stop();
-      setOn(false);
+      applyOn(false);
       return;
     }
     const dpip = (window as unknown as { documentPictureInPicture?: DocumentPiP }).documentPictureInPicture;
     if (!dpip) {
       // No Document PiP (e.g. Firefox/Safari): just flag it on; the keep-alive
       // video + worker still run. Nothing to open.
-      setOn(true);
+      applyOn(true);
       return;
     }
     // Must be called during this click's user activation. Request the smallest
@@ -118,15 +126,15 @@ export function ModoStreamer() {
         pip.document.body.appendChild(hint);
         pip.addEventListener("pagehide", () => {
           stop();
-          setOn(false);
+          applyOn(false);
         });
         startFeed();
-        setOn(true);
+        applyOn(true);
       })
       .catch(() => {
-        setOn(false);
+        applyOn(false);
       });
-  }, [on, stop, startFeed]);
+  }, [on, stop, startFeed, applyOn]);
 
   // Close the PiP if this ever unmounts.
   useEffect(() => () => stop(), [stop]);

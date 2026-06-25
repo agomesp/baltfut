@@ -11,6 +11,7 @@ import {
 import localFont from "next/font/local";
 import "./globals.css";
 import { UpdateBanner } from "@/components/update-banner";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { ModoStreamer } from "@/components/modo-streamer";
 import { PipView } from "@/components/pip-view";
 import { KickChatReactions } from "@/components/kick-chat-reactions";
@@ -99,7 +100,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: chunkGuardScript }} />
       </head>
       <body style={{ minHeight: "100vh" }}>
-        {children}
+        <ErrorBoundary>{children}</ErrorBoundary>
         <KickChatReactions />
         <UpdateBanner />
         <div
