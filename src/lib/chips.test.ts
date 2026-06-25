@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildChipGames, defaultChipId } from "@/lib/chips";
+import { buildChipGames, defaultChipId, groupConcurrentChips, groupPrimaryId, type ChipGame } from "@/lib/chips";
 import type { Match, MatchState } from "@/lib/espn";
 
 function m(id: string, state: MatchState, startsAt: string, isLive = false): Match {
@@ -64,6 +64,45 @@ describe("buildChipGames", () => {
     expect(chips.filter((c) => c.phase === "post")).toHaveLength(1);
     // pastLimit keeps the most recent finished
     expect(chips.find((c) => c.phase === "post")?.match.id).toBe("postVotesNew");
+  });
+});
+
+describe("groupConcurrentChips", () => {
+  const T0 = Date.parse("2026-06-24T19:00:00Z");
+  const MIN = 60_000;
+  const iso = (offMin: number) => new Date(T0 + offMin * MIN).toISOString();
+  const chip = (id: string, state: MatchState, offMin: number, isLive = false): ChipGame => ({
+    match: m(id, state, iso(offMin), isLive),
+    votes: 0,
+    phase: isLive ? "live" : state === "post" ? "post" : "pre",
+  });
+  const ids = (groups: ChipGame[][]) => groups.map((g) => g.map((c) => c.match.id));
+
+  it("merges two simultaneous pre games into one group", () => {
+    const groups = groupConcurrentChips([chip("a", "pre", 60), chip("b", "pre", 60)], T0);
+    expect(ids(groups)).toEqual([["a", "b"]]);
+  });
+
+  it("keeps non-overlapping games as separate single groups", () => {
+    const groups = groupConcurrentChips([chip("a", "pre", 0), chip("b", "pre", 300)], T0 - 60 * MIN);
+    expect(ids(groups)).toEqual([["a"], ["b"]]);
+  });
+
+  it("merges a live game with its overlapping upcoming neighbour at kickoff", () => {
+    const groups = groupConcurrentChips([chip("live", "in", 0, true), chip("next", "pre", 30)], T0);
+    expect(ids(groups)).toEqual([["live", "next"]]);
+  });
+
+  it("never merges finished games", () => {
+    const groups = groupConcurrentChips([chip("done", "post", 0), chip("live", "in", 0, true)], T0 + 30 * MIN);
+    expect(ids(groups)).toEqual([["done"], ["live"]]);
+  });
+
+  it("groupPrimaryId picks the live game regardless of order", () => {
+    const live = chip("live", "in", 0, true);
+    const next = chip("next", "pre", 30);
+    expect(groupPrimaryId([live, next])).toBe("live");
+    expect(groupPrimaryId([next, live])).toBe("live");
   });
 });
 

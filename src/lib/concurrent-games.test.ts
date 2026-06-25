@@ -56,16 +56,28 @@ describe("decideConcurrent", () => {
     const a = mk("a", 0, "in");
     const b = mk("b", 60, "pre");
 
-    it("shows one game before 10 min ahead of the later kickoff", () => {
-      const d = decideConcurrent(a, [a, b], T0 + 45 * MIN); // 15 min before b
+    it("shows one game until the lead window before the later kickoff", () => {
+      const d = decideConcurrent(a, [a, b], T0 + 20 * MIN); // 40 min before b, before the lead
       expect(d.partner).toBeNull();
       expect(d.primary).toBe(a);
     });
 
-    it("opens the pair 10 min before the later kickoff", () => {
+    it("opens the pair LEAD_MS before the later kickoff", () => {
       const d = decideConcurrent(a, [a, b], T0 + 60 * MIN - LEAD_MS);
       expect(d.partner).toBe(b);
     });
+  });
+
+  it("co-shows the upcoming partner once the live game is underway (30-min stagger)", () => {
+    // The user-facing rule: when a match begins, its ~30-min-later overlapping
+    // neighbour appears alongside it (so its palpite opens as the first kicks off).
+    const live = mk("live", 0, "in");
+    const next = mk("next", 30, "pre");
+    expect(decideConcurrent(live, [live, next], T0).partner).toBe(next);
+  });
+
+  it("LEAD_MS is 30 minutes", () => {
+    expect(LEAD_MS).toBe(30 * MIN);
   });
 
   it("concurrentPartner ignores finished games and picks the closest kickoff", () => {

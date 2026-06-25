@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { Match, MatchLineups } from "@/lib/espn";
-import type { VoteEntry } from "@/lib/votes";
+import { supabaseCastVote, type VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
 import { useNow } from "@/lib/use-now";
 import { communityConsensus } from "@/lib/consensus";
@@ -16,9 +16,9 @@ import { CommunityBar } from "@/components/live/community-bar";
 import { PalpiteBreakdown } from "@/components/live/palpite-breakdown";
 import { RankingSubs } from "@/components/live/ranking-subs";
 import { LiveDuoCard } from "@/components/live/live-duo-card";
-import { PreMatchPanel } from "@/components/live/prematch-panel";
+import { PreMatchPanel, DuoGameCard } from "@/components/live/prematch-panel";
 import { LineupPanel } from "@/components/live/lineup-panel";
-import { PalpiteForm } from "@/components/live/palpite-form";
+import { PalpiteForm, NameField, useNameLock } from "@/components/live/palpite-form";
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
 import { decideConcurrent } from "@/lib/concurrent-games";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -136,15 +136,56 @@ function PlacarStage({
   );
 }
 
-/** Two concurrent games side by side + a full-height ranking column. */
-function DuoStage({ games, allEntries, matches, groupByTeam }: { games: Match[]; allEntries: VoteEntry[]; matches: Match[]; groupByTeam: Record<string, string> }) {
+/**
+ * Two concurrent games side by side + a full-height ranking column. Each game
+ * renders by its own phase: a live/finished game shows its live card; an
+ * upcoming-but-released game (e.g. the next match while this one is live) shows
+ * a submittable palpite form, so you can predict it before it kicks off — then
+ * it flips to a live card at kickoff. When any card is a form, a shared name
+ * field sits above the pair (mirrors the pre-match duo).
+ */
+function DuoStage({ games, allEntries, matches, groupByTeam, releasedIds, onVoted }: { games: Match[]; allEntries: VoteEntry[]; matches: Match[]; groupByTeam: Record<string, string>; releasedIds: Set<string>; onVoted: () => void }) {
   const narrow = useIsNarrow();
+  const { name, setName, locked, confirm, unlock } = useNameLock();
+  const isForm = (m: Match) => m.state === "pre" && releasedIds.has(m.id);
+  const anyForm = games.some(isForm);
+
+  const card = (m: Match) => {
+    const entries = allEntries.filter((e) => e.matchId === m.id);
+    return isForm(m) ? (
+      <DuoGameCard key={m.id} match={m} entries={entries} groupByTeam={groupByTeam} name={name} confirm={confirm} released borderColor="rgba(200,255,45,0.18)" transport={supabaseCastVote} onVoted={onVoted} />
+    ) : (
+      <LiveDuoCard key={m.id} match={m} entries={entries} groupLabel={groupVenueLabel(m, groupByTeam)} />
+    );
+  };
+
+  const ranking = <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: narrow ? "100%" : 250 }} />;
+
+  // Both live (or finished): the original inline layout, unchanged.
+  if (!anyForm) {
+    return (
+      <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 12, flex: 1, minHeight: 0 }}>
+        {games.map(card)}
+        {ranking}
+      </div>
+    );
+  }
+
+  // Mixed: a live game beside the upcoming game's palpite form, shared name field.
   return (
     <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 12, flex: 1, minHeight: 0 }}>
-      {games.map((m) => (
-        <LiveDuoCard key={m.id} match={m} entries={allEntries.filter((e) => e.matchId === m.id)} groupLabel={groupVenueLabel(m, groupByTeam)} />
-      ))}
-      <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: narrow ? "100%" : 250 }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: narrow ? "none" : 1, minWidth: 0, minHeight: 0 }}>
+        <div style={{ flex: "none", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, borderRadius: 14, border: "1px solid rgba(200,255,45,0.16)", background: "rgba(255,255,255,0.02)", padding: "12px 20px" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <NameField name={name} setName={setName} locked={locked} onUnlock={unlock} />
+          </div>
+          <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: "#6f8a78" }}>palpite o próximo jogo</span>
+        </div>
+        <div style={{ flex: narrow ? "none" : 1, minHeight: 0, display: "flex", flexDirection: narrow ? "column" : "row", gap: 12 }}>
+          {games.map(card)}
+        </div>
+      </div>
+      {ranking}
     </div>
   );
 }
@@ -255,7 +296,7 @@ export function LiveView({
               onVoted={onVoted}
             />
           ) : partner ? (
-            <DuoStage games={[primary, partner]} allEntries={allEntries} matches={matches} groupByTeam={groupByTeam} />
+            <DuoStage games={[primary, partner]} allEntries={allEntries} matches={matches} groupByTeam={groupByTeam} releasedIds={releasedIds} onVoted={onVoted} />
           ) : (
             <PlacarStage
               match={primary}

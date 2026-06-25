@@ -222,7 +222,7 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
   );
 }
 
-function DuoGameCard({ match, entries, groupByTeam, name, confirm, released, borderColor, transport, onVoted }: {
+export function DuoGameCard({ match, entries, groupByTeam, name, confirm, released, borderColor, transport, onVoted }: {
   match: Match;
   entries: VoteEntry[];
   groupByTeam: Record<string, string>;

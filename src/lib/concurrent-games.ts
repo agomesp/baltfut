@@ -14,8 +14,12 @@ import type { Match } from "@/lib/espn";
 
 /** Wall-clock span of a match for overlap detection (90 + halftime + stoppage). */
 export const MATCH_SPAN_MS = 120 * 60_000;
-/** A game appears this long before kickoff (the duo "warms up" 10 min early). */
-export const LEAD_MS = 10 * 60_000;
+/**
+ * A staggered game's palpite appears this long before its kickoff — so when a
+ * match begins, an overlapping neighbour up to 30 min away shows up alongside it
+ * (its palpite opens as the first kicks off). Bumped from 10→30 min.
+ */
+export const LEAD_MS = 30 * 60_000;
 
 export interface ConcurrentDecision {
   /** The main game to show. */

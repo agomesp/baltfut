@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { ChipGame } from "@/lib/chips";
+import { groupConcurrentChips, groupPrimaryId, type ChipGame } from "@/lib/chips";
+import { useNow } from "@/lib/use-now";
 import { JB } from "@/components/live/bf-ui";
 
 function chipLabel(chip: ChipGame): string {
@@ -23,6 +24,12 @@ export function BfChipRail({ chips, selectedId, onSelect, releasedIds }: { chips
   const [overflowing, setOverflowing] = useState(false);
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(false);
+
+  // Two games that are co-shown right now collapse into one combined pill
+  // (CUW vs CIV | ECU vs GER). Ticks with `now` so a pair forms/dissolves in
+  // step with the live stage (decideConcurrent drives both).
+  const now = useNow(15_000);
+  const groups = groupConcurrentChips(chips, now);
 
   const measure = useCallback(() => {
     const el = scrollRef.current;
@@ -100,26 +107,27 @@ export function BfChipRail({ chips, selectedId, onSelect, releasedIds }: { chips
       <button aria-label="Jogos anteriores" disabled={!canPrev} onClick={() => scroll(-1)} style={arrow(canPrev)}>‹</button>
       <div style={{ position: "relative", flex: 1, minWidth: 0, overflow: "hidden", WebkitMaskImage: overflowing ? EDGE_MASK : undefined, maskImage: overflowing ? EDGE_MASK : undefined }}>
         <div ref={scrollRef} className="no-scrollbar" onScroll={measure} style={{ display: "flex", gap: 8, justifyContent: overflowing ? "flex-start" : "center", overflowX: "auto", padding: "2px 6px" }}>
-          {chips.map((chip) => {
-            const active = chip.match.id === selectedId;
-            const isLive = chip.phase === "live";
-            const isNext = chip.phase === "pre" && releasedIds.has(chip.match.id);
-            const isDone = chip.phase === "post";
+          {groups.map((group) => {
+            // A group is one game, or two co-shown concurrent games as one pill.
+            const active = group.some((c) => c.match.id === selectedId);
+            const anyLive = group.some((c) => c.phase === "live");
+            const anyNext = group.some((c) => c.phase === "pre" && releasedIds.has(c.match.id));
+            const allDone = group.every((c) => c.phase === "post");
             let bg = "transparent";
             let border = "1px solid rgba(255,255,255,0.10)";
-            let color = isDone ? "#6f8a78" : "#cfd3ce";
+            let color = allDone ? "#6f8a78" : "#cfd3ce";
             let dot = "";
             if (active) {
               bg = GREEN;
               border = `1px solid ${GREEN}`;
               color = "#0f1f02";
               dot = "#0f1f02";
-            } else if (isLive) {
+            } else if (anyLive) {
               border = `1px dashed ${GREEN}`;
               color = "#cdeec0";
               bg = "rgba(200,255,45,0.08)";
               dot = GREEN;
-            } else if (isNext) {
+            } else if (anyNext) {
               // Released-but-not-started games (the closest upcoming) get a green
               // outline so they read as "open for palpites" — distinct from the
               // dashed+pulsing live chip and the solid-green selected one.
@@ -128,13 +136,18 @@ export function BfChipRail({ chips, selectedId, onSelect, releasedIds }: { chips
             }
             return (
               <button
-                key={chip.match.id}
+                key={group.map((c) => c.match.id).join("+")}
                 data-active={active}
-                onClick={() => onSelect(chip.match.id)}
+                onClick={() => onSelect(groupPrimaryId(group))}
                 style={{ flex: "none", display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, fontFamily: JB, fontSize: 11, whiteSpace: "nowrap", cursor: "pointer", background: bg, border, color }}
               >
-                {dot ? <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, animation: isLive && !active ? "bfpulse 1.5s infinite" : undefined }} /> : null}
-                {chipLabel(chip)}
+                {dot ? <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot, animation: anyLive && !active ? "bfpulse 1.5s infinite" : undefined }} /> : null}
+                {group.map((c, i) => (
+                  <span key={c.match.id} style={{ display: "inline-flex", alignItems: "center" }}>
+                    {i > 0 ? <span style={{ opacity: 0.4, padding: "0 7px", fontWeight: 400 }}>|</span> : null}
+                    {chipLabel(c)}
+                  </span>
+                ))}
               </button>
             );
           })}
