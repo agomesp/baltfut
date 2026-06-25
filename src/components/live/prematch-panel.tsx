@@ -203,7 +203,6 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
           groupByTeam={groupByTeam}
           released1={releasedIds.has(match.id)}
           released2={releasedIds.has(second!.id)}
-          myName={myName}
           onVoted={onVoted}
           transport={transport}
         />
@@ -212,22 +211,51 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
   );
 }
 
-function DuoGameCard({ match, entries, groupByTeam, home, away, setHome, setAway, myName, borderColor, released }: {
+function DuoGameCard({ match, entries, groupByTeam, name, confirm, released, borderColor, transport, onVoted }: {
   match: Match;
   entries: VoteEntry[];
   groupByTeam: Record<string, string>;
-  home: number;
-  away: number;
-  setHome: (n: number) => void;
-  setAway: (n: number) => void;
-  myName: string | null;
-  borderColor: string;
+  /** Shared (locked/typed) name from the panel header. */
+  name: string;
+  confirm: (n: string) => void;
   released: boolean;
+  borderColor: string;
+  transport: CastVoteTransport;
+  onVoted: () => void;
 }) {
   const homeCode = match.home.abbreviation;
   const awayCode = match.away.abbreviation;
   const homeAccent = teamAccent(homeCode);
   const awayAccent = teamAccent(awayCode);
+  const [home, setHome] = useState(0);
+  const [away, setAway] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(null);
+  const myName = name.trim() || null;
+
+  useEffect(() => {
+    if (!outcome || outcome.ok) return;
+    const id = window.setTimeout(() => setOutcome(null), 5000);
+    return () => window.clearTimeout(id);
+  }, [outcome]);
+
+  const lowerName = name.trim().toLowerCase();
+  const alreadySent = lowerName !== "" && entries.some((x) => x.username.trim().toLowerCase() === lowerName);
+
+  async function submit() {
+    setSubmitting(true);
+    setOutcome(null);
+    const r = await castPalpite(match, name, home, away, entries, transport);
+    setSubmitting(false);
+    if (!r.ok) {
+      setOutcome({ ok: false, text: r.message });
+      return;
+    }
+    setOutcome({ ok: true, text: "Palpite enviado!" });
+    confirm(name.trim());
+    onVoted();
+  }
+
   return (
     <div style={{ flex: 1, minWidth: 0, borderRadius: 12, border: `1px solid ${borderColor}`, background: "rgba(255,255,255,0.02)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -249,11 +277,20 @@ function DuoGameCard({ match, entries, groupByTeam, home, away, setHome, setAway
         </div>
       </div>
       {released ? (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>
-          <Stepper label={homeCode} accent="var(--bf-text)" value={home} onChange={setHome} />
-          <span style={{ fontFamily: SAIRA, fontSize: 22, color: "#42565b", paddingTop: 26 }}>×</span>
-          <Stepper label={awayCode} accent="var(--bf-text)" value={away} onChange={setAway} />
-        </div>
+        <>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>
+            <Stepper label={homeCode} accent="var(--bf-text)" value={home} onChange={setHome} />
+            <span style={{ fontFamily: SAIRA, fontSize: 22, color: "#42565b", paddingTop: 26 }}>×</span>
+            <Stepper label={awayCode} accent="var(--bf-text)" value={away} onChange={setAway} />
+          </div>
+          {/* Per-game send button, right below this card's score steppers. */}
+          <button type="button" onClick={submit} disabled={submitting || alreadySent} style={{ flex: "none", textAlign: "center", background: LIME, color: "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 13, padding: "11px 12px", borderRadius: 10, border: "none", boxShadow: "0 0 22px -10px rgba(200,255,45,0.6)", opacity: submitting || alreadySent ? 0.55 : 1, cursor: submitting || alreadySent ? "not-allowed" : "pointer" }}>
+            {submitting ? "ENVIANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : "ENVIAR PALPITE →"}
+          </button>
+          {outcome ? (
+            <div style={{ textAlign: "center", fontFamily: BRIC, fontSize: 11.5, color: outcome.ok ? LIME : "#ff6b6b" }}>{outcome.text}</div>
+          ) : null}
+        </>
       ) : (
         <div style={{ borderRadius: 9, border: "1px solid rgba(255,179,71,0.25)", background: "rgba(255,179,71,0.05)", padding: "10px 12px", textAlign: "center" }}>
           <span style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "#ffb347" }}>Palpites não liberados ainda</span>
@@ -268,7 +305,7 @@ function DuoGameCard({ match, entries, groupByTeam, home, away, setHome, setAway
   );
 }
 
-function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, released1, released2, myName, onVoted, transport }: {
+function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, released1, released2, onVoted, transport }: {
   match: Match;
   second: Match;
   entries: VoteEntry[];
@@ -276,66 +313,11 @@ function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, relea
   groupByTeam: Record<string, string>;
   released1: boolean;
   released2: boolean;
-  myName: string | null;
   onVoted: () => void;
   transport: CastVoteTransport;
 }) {
+  // One shared name; each game card sends its own palpite independently.
   const { name, setName, locked, confirm, unlock } = useNameLock();
-  const [h1, setH1] = useState(0);
-  const [a1, setA1] = useState(0);
-  const [h2, setH2] = useState(0);
-  const [a2, setA2] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(null);
-
-  useEffect(() => {
-    if (!outcome || outcome.ok) return;
-    const id = window.setTimeout(() => setOutcome(null), 5000);
-    return () => window.clearTimeout(id);
-  }, [outcome]);
-
-  const noneReleased = !released1 && !released2;
-  // Only submit the games the viewer hasn't palpitated yet: if their palpite is
-  // already in one game, just the missing one is sent — so a partial state
-  // doesn't make the whole pair error out on the duplicate.
-  const lowerName = name.trim().toLowerCase();
-  const sentIn = (es: VoteEntry[]) => lowerName !== "" && es.some((x) => x.username.trim().toLowerCase() === lowerName);
-  const pending1 = released1 && !sentIn(entries);
-  const pending2 = released2 && !sentIn(secondEntries);
-  const pendingCount = (pending1 ? 1 : 0) + (pending2 ? 1 : 0);
-  const nothingToSend = !noneReleased && pendingCount === 0;
-
-  async function submitBoth() {
-    setSubmitting(true);
-    setOutcome(null);
-    let count = 0;
-    if (pending1) {
-      const r1 = await castPalpite(match, name, h1, a1, entries, transport);
-      if (!r1.ok) {
-        setOutcome({ ok: false, text: r1.message });
-        setSubmitting(false);
-        return;
-      }
-      count += 1;
-    }
-    if (pending2) {
-      const r2 = await castPalpite(second, name, h2, a2, secondEntries, transport);
-      if (!r2.ok) {
-        setOutcome({ ok: false, text: r2.message });
-        setSubmitting(false);
-        return;
-      }
-      count += 1;
-    }
-    setSubmitting(false);
-    if (count === 0) {
-      setOutcome({ ok: false, text: "Você já palpitou nesses jogos." });
-      return;
-    }
-    setOutcome({ ok: true, text: count === 2 ? "Palpites enviados!" : "Palpite enviado!" });
-    confirm(name.trim());
-    onVoted();
-  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0 }}>
@@ -343,18 +325,12 @@ function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, relea
         <div style={{ flex: 1, minWidth: 0 }}>
           <NameField name={name} setName={setName} locked={locked} onUnlock={unlock} />
         </div>
-        <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: "#6f8a78" }}>palpite nos 2 jogos de uma vez</span>
+        <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: "#6f8a78" }}>envie um palpite para cada jogo</span>
       </div>
       <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16 }}>
-        <DuoGameCard match={match} entries={entries} groupByTeam={groupByTeam} home={h1} away={a1} setHome={setH1} setAway={setA1} myName={myName} borderColor="rgba(229,68,59,0.18)" released={released1} />
-        <DuoGameCard match={second} entries={secondEntries} groupByTeam={groupByTeam} home={h2} away={a2} setHome={setH2} setAway={setA2} myName={myName} borderColor="rgba(63,164,95,0.18)" released={released2} />
+        <DuoGameCard match={match} entries={entries} groupByTeam={groupByTeam} name={name} confirm={confirm} released={released1} borderColor="rgba(229,68,59,0.18)" transport={transport} onVoted={onVoted} />
+        <DuoGameCard match={second} entries={secondEntries} groupByTeam={groupByTeam} name={name} confirm={confirm} released={released2} borderColor="rgba(63,164,95,0.18)" transport={transport} onVoted={onVoted} />
       </div>
-      {outcome ? (
-        <div style={{ textAlign: "center", fontFamily: BRIC, fontSize: 12, color: outcome.ok ? LIME : "#ff6b6b" }}>{outcome.text}</div>
-      ) : null}
-      <button type="button" onClick={submitBoth} disabled={submitting || noneReleased || nothingToSend} style={{ flex: "none", textAlign: "center", background: LIME, color: "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 15, padding: 15, borderRadius: 12, border: "none", boxShadow: "0 0 26px -8px rgba(200,255,45,0.6)", opacity: submitting || noneReleased || nothingToSend ? 0.55 : 1, cursor: noneReleased || nothingToSend ? "not-allowed" : "pointer" }}>
-        {submitting ? "ENVIANDO…" : noneReleased ? "PALPITES NÃO LIBERADOS" : nothingToSend ? "PALPITES JÁ ENVIADOS" : pendingCount === 2 ? "ENVIAR OS 2 PALPITES →" : "ENVIAR PALPITE →"}
-      </button>
     </div>
   );
 }
