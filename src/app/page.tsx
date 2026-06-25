@@ -8,7 +8,9 @@ import {
   teamGroupMap,
   buildBracket,
   parseScoreboard,
+  parseStandings,
   scoreboardUrl,
+  standingsUrl,
   DEFAULT_LEAGUE,
   FIFA_WORLD_DATE_RANGE,
   type Match,
@@ -37,6 +39,10 @@ const REFRESH_MS = 30_000;
 // Scoreboard refresh, driven by a Web Worker so it stays full-rate even when the
 // tab is hidden (main-thread timers get throttled to ~1/min after 5 min hidden).
 const SCORE_WORKER_MS = 20_000;
+// Standings drive the bracket (chaveamento) seeds — also worker-polled so they
+// stay current while the tab is hidden. Gentler than the score: table positions
+// change far less often than the live clock.
+const STANDINGS_WORKER_MS = 30_000;
 // The selected match's palpites poll faster so new ones appear near-live.
 const ENTRIES_REFRESH_MS = 12_000;
 const DEFAULT_LETTERS = "ABCDEFGHIJKL".split("");
@@ -167,14 +173,10 @@ export default function Home() {
     [loadCounts],
   );
 
-  // Standings + vote counts refresh. The scoreboard is owned by the worker below,
-  // so the periodic timer only needs these (which change rarely).
+  // Vote counts refresh. The scoreboard AND standings are owned by Web Workers
+  // (below), which escape the hidden-tab timer throttle, so this main-thread
+  // timer only carries the Supabase vote counts.
   const loadAux = useCallback(async () => {
-    try {
-      setGroups(await fetchStandings());
-    } catch {
-      /* non-fatal */
-    }
     await loadCounts();
   }, [loadCounts]);
 
@@ -203,6 +205,21 @@ export default function Home() {
           setMatches(next);
           setError(null);
         }
+      },
+    );
+  }, []);
+
+  // Standings via the same worker primitive, so the bracket (chaveamento) seeds
+  // stay current while the tab is hidden. Without this the throttled main-thread
+  // timer froze the table and the bracket showed stale qualifiers on a backgrounded
+  // (e.g. streamer) tab — the scoreboard stayed live while the bracket did not.
+  useEffect(() => {
+    return startScoreboardWorker(
+      standingsUrl(DEFAULT_LEAGUE),
+      STANDINGS_WORKER_MS,
+      (json) => {
+        const next = parseStandings(json);
+        if (next.length) setGroups(next);
       },
     );
   }, []);
