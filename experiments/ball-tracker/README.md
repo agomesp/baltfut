@@ -19,10 +19,14 @@ box for live (CUDA).
 
 - `balltrack/pitch.py` — pitch geometry + image->pitch homography *(done, tested)*
 - `balltrack/tracking.py` — Kalman ball smoothing + outlier gating *(done, tested)*
-- `balltrack/detection.py` — YOLO ball-detector wrapper *(next)*
-- `balltrack/source.py` — frame source: video file (dev) / live stream (prod) *(later)*
-- `balltrack/sink.py` — injectable publisher *(later)*
-- `balltrack/pipeline.py` — orchestrates source -> detect -> track -> map -> sink *(later)*
+- `balltrack/detection.py` — Detector iface + `select_ball` + FakeDetector *(done; real YOLO adapter pending a model/clip)*
+- `balltrack/sink.py` — injectable publisher: MemorySink + JsonlSink *(done, tested)*
+- `balltrack/pipeline.py` — orchestrates detect -> select -> map -> smooth -> sink *(done, tested)*
+- `balltrack/source.py` — frame source: video file (dev) / live stream (prod) *(later; pipeline takes any `(t, frame)` iterable for now)*
+
+**Status:** the offline skeleton runs **end-to-end on a fake detector**, emitting a
+pitch-coordinate timeline. Remaining real-world edges: a **YOLO adapter** and a
+**VideoFileSource** (both need torch/ultralytics + a model + a sample clip).
 
 ## Setup & test (Mac dev)
 
