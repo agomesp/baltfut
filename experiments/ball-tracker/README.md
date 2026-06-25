@@ -18,8 +18,8 @@ box for live (CUDA).
 ## Layout
 
 - `balltrack/pitch.py` — pitch geometry + image->pitch homography *(done, tested)*
-- `balltrack/tracking.py` — Kalman ball smoothing + outlier gating *(next)*
-- `balltrack/detection.py` — YOLO ball-detector wrapper *(later)*
+- `balltrack/tracking.py` — Kalman ball smoothing + outlier gating *(done, tested)*
+- `balltrack/detection.py` — YOLO ball-detector wrapper *(next)*
 - `balltrack/source.py` — frame source: video file (dev) / live stream (prod) *(later)*
 - `balltrack/sink.py` — injectable publisher *(later)*
 - `balltrack/pipeline.py` — orchestrates source -> detect -> track -> map -> sink *(later)*
