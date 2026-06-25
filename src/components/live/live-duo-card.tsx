@@ -4,34 +4,15 @@ import { communityConsensus } from "@/lib/consensus";
 import { classifyLivePalpites, type LivePalpite } from "@/lib/live-palpites";
 import {
   BRIC,
-  BfPulse,
-  buildTimeline,
-  FlagCrest,
   JB,
-  LIME,
-  matchClockLabel,
   nameStyle,
-  SAIRA,
   SectionLabel,
   teamAccent,
   VoceTag,
   isMe,
-  type TimelineEvent,
 } from "@/components/live/bf-ui";
-import { TimelineFill } from "@/components/live/timeline-bar";
+import { HeroWithCinematic } from "@/components/live/hero-with-cinematic";
 import { useMyName } from "@/lib/use-my-name";
-
-function Marker({ ev }: { ev: TimelineEvent }) {
-  return (
-    <div style={{ position: "absolute", top: "50%", left: ev.leftPct, transform: "translate(-50%,-50%)" }}>
-      {ev.kind === "goal" ? (
-        <span style={{ width: 18, height: 18, borderRadius: "50%", background: ev.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, boxShadow: "0 0 0 3px #061509" }}>⚽</span>
-      ) : (
-        <span style={{ display: "block", width: 11, height: 15, borderRadius: 2, background: ev.color, boxShadow: "0 0 0 3px #061509" }} />
-      )}
-    </div>
-  );
-}
 
 function palpiteRowColor(p: LivePalpite) {
   if (p.bucket === "win") return { name: "#eaffc0", pick: "#c2e69e", status: "#c8ff2d", bg: "rgba(200,255,45,0.08)", border: "1px solid rgba(200,255,45,0.4)", opacity: 1 };
@@ -46,7 +27,6 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
   const awayCode = match.away.abbreviation;
   const homeAccent = teamAccent(homeCode);
   const awayAccent = teamAccent(awayCode);
-  const events = buildTimeline(match, homeAccent, awayAccent);
   const consensus = communityConsensus(entries);
   const final = match.state === "post";
   // The staggered duo can pair a live game with one that hasn't kicked off yet
@@ -57,47 +37,13 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
 
   return (
     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 11, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, background: "rgba(255,255,255,0.015)", padding: "14px 16px", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: JB, fontSize: 10 }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: pre ? "#9bb6a6" : "#9ef01f" }}>
-          {pre ? null : <BfPulse color="#9ef01f" />}
-          {pre ? "EM BREVE" : `${final ? "ENCERRADO" : "AO VIVO"} · ${matchClockLabel(match)}`}
-        </span>
+      <div style={{ display: "flex", justifyContent: "flex-end", fontFamily: JB, fontSize: 10 }}>
         <span style={{ color: "#6f8a78", letterSpacing: "0.05em" }}>{groupLabel}</span>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18 }}>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, minWidth: 0 }}>
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(13px,1.5vw,18px)", color: homeAccent, whiteSpace: "nowrap" }}>{homeCode}</span>
-          <FlagCrest code={homeCode} accent={homeAccent} size={46} />
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 11, flex: "none" }}>
-          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: "clamp(30px,4vw,46px)", lineHeight: 0.74, color: "#fff" }}>{match.homeScore ?? 0}</span>
-          <span style={{ width: 15, height: 4, borderRadius: 3, background: LIME, boxShadow: "0 0 11px rgba(200,255,45,0.5)", flex: "0 0 auto" }} />
-          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: "clamp(30px,4vw,46px)", lineHeight: 0.74, color: "#fff" }}>{match.awayScore ?? 0}</span>
-        </div>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-          <FlagCrest code={awayCode} accent={awayAccent} size={46} />
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(13px,1.5vw,18px)", color: awayAccent, whiteSpace: "nowrap" }}>{awayCode}</span>
-        </div>
-      </div>
-
-      {match.state !== "pre" ? (
-        <>
-          <div style={{ position: "relative", height: 3, background: "rgba(255,255,255,0.1)", borderRadius: 2, margin: "2px 4px" }}>
-            <TimelineFill match={match} />
-            {events.map((ev, i) => <Marker key={i} ev={ev} />)}
-          </div>
-          {events.length > 0 ? (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "5px 10px" }}>
-            {events.map((ev, i) => (
-              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: JB, fontSize: 9, color: "#aebdb4" }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: ev.color }} />{ev.minLabel} {ev.player}
-              </span>
-            ))}
-          </div>
-          ) : null}
-        </>
-      ) : null}
+      {/* Same score panel + effects as the 1-game hero (SwitchingCrest, SquadWall,
+          goal/foul cinematic), compact + without the event legend to fit the card. */}
+      <HeroWithCinematic match={match} pre={pre} compact showLegend={false} />
 
       {consensus.total > 0 ? (
         <div>

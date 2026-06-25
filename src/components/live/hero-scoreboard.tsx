@@ -69,9 +69,11 @@ export interface HeroScoreboardProps {
   compact?: boolean;
   /** Substitutions (from the lineups) to plot on the timeline. */
   subs?: MatchSub[];
+  /** Hide the per-event chip legend below the track (e.g. the tight duo cards). */
+  showLegend?: boolean;
 }
 
-export function HeroScoreboard({ match, pre = false, compact = false, subs = [] }: HeroScoreboardProps) {
+export function HeroScoreboard({ match, pre = false, compact = false, subs = [], showLegend = true }: HeroScoreboardProps) {
   const homeAccent = teamAccent(match.home.abbreviation);
   const awayAccent = teamAccent(match.away.abbreviation);
   const events = pre ? [] : buildTimeline(match, homeAccent, awayAccent, subs);
@@ -118,7 +120,7 @@ export function HeroScoreboard({ match, pre = false, compact = false, subs = [] 
               <Marker key={i} ev={ev} withLabel />
             ))}
           </div>
-          {events.length > 0 ? (
+          {showLegend && events.length > 0 ? (
             <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10 }}>
               {events.map((ev, i) => (
                 <EventChip key={i} ev={ev} />
