@@ -201,6 +201,8 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
           second={second!}
           entries={entries}
           secondEntries={secondEntries}
+          allEntries={allEntries}
+          matches={matches}
           groupByTeam={groupByTeam}
           released1={releasedIds.has(match.id)}
           released2={releasedIds.has(second!.id)}
@@ -319,11 +321,13 @@ function DuoGameCard({ match, entries, groupByTeam, name, confirm, released, bor
   );
 }
 
-function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, released1, released2, onVoted, transport }: {
+function PreMatchDuo({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, released1, released2, onVoted, transport }: {
   match: Match;
   second: Match;
   entries: VoteEntry[];
   secondEntries: VoteEntry[];
+  allEntries: VoteEntry[];
+  matches: Match[];
   groupByTeam: Record<string, string>;
   released1: boolean;
   released2: boolean;
@@ -334,17 +338,22 @@ function PreMatchDuo({ match, second, entries, secondEntries, groupByTeam, relea
   const { name, setName, locked, confirm, unlock } = useNameLock();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minHeight: 0 }}>
-      <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 16, borderRadius: 14, border: "1px solid rgba(200,255,45,0.16)", background: "rgba(255,255,255,0.02)", padding: "12px 20px" }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <NameField name={name} setName={setName} locked={locked} onUnlock={unlock} />
+    <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minWidth: 0, minHeight: 0 }}>
+        <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 16, borderRadius: 14, border: "1px solid rgba(200,255,45,0.16)", background: "rgba(255,255,255,0.02)", padding: "12px 20px" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <NameField name={name} setName={setName} locked={locked} onUnlock={unlock} />
+          </div>
+          <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: "#6f8a78" }}>envie um palpite para cada jogo</span>
         </div>
-        <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: "#6f8a78" }}>envie um palpite para cada jogo</span>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16 }}>
+          <DuoGameCard key={match.id} match={match} entries={entries} groupByTeam={groupByTeam} name={name} confirm={confirm} released={released1} borderColor="rgba(229,68,59,0.18)" transport={transport} onVoted={onVoted} />
+          <DuoGameCard key={second.id} match={second} entries={secondEntries} groupByTeam={groupByTeam} name={name} confirm={confirm} released={released2} borderColor="rgba(63,164,95,0.18)" transport={transport} onVoted={onVoted} />
+        </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16 }}>
-        <DuoGameCard key={match.id} match={match} entries={entries} groupByTeam={groupByTeam} name={name} confirm={confirm} released={released1} borderColor="rgba(229,68,59,0.18)" transport={transport} onVoted={onVoted} />
-        <DuoGameCard key={second.id} match={second} entries={secondEntries} groupByTeam={groupByTeam} name={name} confirm={confirm} released={released2} borderColor="rgba(63,164,95,0.18)" transport={transport} onVoted={onVoted} />
-      </div>
+      {/* Ranking dos Subs on the right, full height — from the name-field row down
+          to the bottom of the palpite cards. */}
+      <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: 230 }} />
     </div>
   );
 }
