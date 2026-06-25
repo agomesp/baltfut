@@ -7,10 +7,12 @@ import { supabaseCastVote, type CastVoteTransport } from "@/lib/votes";
 import { teamNamePt } from "@/lib/team-names";
 import { fmtTime } from "@/lib/format";
 import { teamCupHistory, type TeamHistoryGame } from "@/lib/team-history";
+import { communityConsensus } from "@/lib/consensus";
 import { palpiteDeadline, formatCountdown, formatCountdownLong } from "@/lib/palpite";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { Countdown } from "@/components/countdown";
 import { RankingSubs } from "@/components/live/ranking-subs";
+import { CommunityBar } from "@/components/live/community-bar";
 import {
   PalpiteForm,
   Stepper,
@@ -257,6 +259,9 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
   const meInEntries = lowerName !== "" && entries.some((x) => x.username.trim().toLowerCase() === lowerName);
   const alreadySent = meInEntries || sent != null;
   const shownEntries = sent && !meInEntries ? [sent, ...entries] : entries;
+  // Live home/draw/away split for this game — recomputes whenever palpites change
+  // (the entries prop refreshes via polling/realtime), like the single-match view.
+  const consensus = communityConsensus(shownEntries);
 
   async function submit() {
     const trimmed = name.trim();
@@ -336,6 +341,8 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
           <span style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "#ffb347" }}>Palpites não liberados ainda</span>
         </div>
       )}
+      {/* "A comunidade palpita" — this game's live home/draw/away split. */}
+      <CommunityBar consensus={consensus} homeCode={homeCode} awayCode={awayCode} homeAccent={homeAccent} awayAccent={awayAccent} />
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginTop: 2 }}>
         <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.1em", color: "#6f8a78" }}>PALPITES ENVIADOS</span>
         <span style={{ fontFamily: JB, fontSize: 9, color: "#4d6353" }}>{shownEntries.length}</span>
