@@ -5,6 +5,7 @@ import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import { supabaseCastVote, type CastVoteTransport } from "@/lib/votes";
 import { teamNamePt } from "@/lib/team-names";
+import { fmtTime } from "@/lib/format";
 import { teamCupHistory, type TeamHistoryGame } from "@/lib/team-history";
 import { palpiteDeadline, formatCountdownLong } from "@/lib/palpite";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -124,7 +125,10 @@ function PreHero({ match, groupByTeam }: { match: Match; groupByTeam: Record<str
         <div style={{ flex: "none", textAlign: "center" }}>
           <div style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.2em", color: GOLD, marginBottom: 6 }}>COMEÇA EM</div>
           <KickoffClock startsAt={match.startsAt} />
-          <div style={{ fontFamily: JB, fontSize: 9, color: "#6f8a78", marginTop: 9, letterSpacing: "0.05em" }}>{groupVenue(match, groupByTeam) || "COPA DO MUNDO"}</div>
+          {/* Exact kickoff time leads the meta line beneath the countdown. */}
+          <div style={{ fontFamily: JB, fontSize: 9, color: "#6f8a78", marginTop: 9, letterSpacing: "0.05em" }}>
+            <span style={{ color: "#8fae99" }}>{fmtTime(match.startsAt)}</span> · {groupVenue(match, groupByTeam) || "COPA DO MUNDO"}
+          </div>
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <FlagCrest code={match.away.abbreviation} accent={awayAccent} size={50} />
@@ -280,9 +284,11 @@ function DuoGameCard({ match, entries, groupByTeam, name, confirm, released, bor
     <div className="bf-stack-card" style={{ flex: 1, minWidth: 0, borderRadius: 12, border: `1px solid ${borderColor}`, background: "rgba(255,255,255,0.02)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78" }}>{groupVenue(match, groupByTeam) || "COPA DO MUNDO"}</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: JB, fontSize: 10, color: "#cdeec0", background: "rgba(200,255,45,0.1)", border: "1px solid rgba(200,255,45,0.3)", borderRadius: 999, padding: "4px 10px" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, flexShrink: 0, whiteSpace: "nowrap", fontFamily: JB, fontSize: 10, color: "#cdeec0", background: "rgba(200,255,45,0.1)", border: "1px solid rgba(200,255,45,0.3)", borderRadius: 999, padding: "4px 10px" }}>
           <BfPulse />
           <Countdown targetMs={Date.parse(match.startsAt)} render={(ms) => (ms > 0 ? formatCountdownLong(ms) : "00:00")} />
+          {/* Exact kickoff time, trailing the countdown as small dim text. */}
+          <span style={{ fontSize: 9, color: "#8fae99", letterSpacing: "0.02em" }}>· {fmtTime(match.startsAt)}</span>
         </span>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
