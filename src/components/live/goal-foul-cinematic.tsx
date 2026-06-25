@@ -43,7 +43,7 @@ const CSS = `
 .cine .c-flash{position:absolute;inset:0;z-index:5;pointer-events:none;opacity:0}
 .cine.play .c-flash{animation:cineFlash ${T} ease-out both}
 
-.c-proj-fix{position:fixed;left:0;top:0;z-index:80;opacity:0;transform-origin:center;pointer-events:none;will-change:transform;animation:cineProjFix ${T} cubic-bezier(.45,0,.55,1) both}
+.c-proj-fix{position:fixed;left:50vw;top:112vh;z-index:80;opacity:0;transform-origin:center;pointer-events:none;animation:cineProjFix ${T} cubic-bezier(.45,0,.55,1) both}
 .c-proj-fix .c-ball{width:34px;height:34px}
 .c-proj-fix .c-card{width:28px;height:40px;border-radius:4px;box-shadow:0 6px 18px rgba(0,0,0,.55)}
 
@@ -53,7 +53,7 @@ const CSS = `
 @keyframes cinePlayer{0%,6%{opacity:0;transform:translateY(26px) scale(.32)}15%{opacity:1;transform:translateY(-10px) scale(1.08)}19%,85%{opacity:1;transform:translateY(0) scale(1)}91%{opacity:0;transform:translateY(-14px) scale(.66)}100%{opacity:0}}
 @keyframes cineFlash{0%,82%{opacity:0}${IMPACT_FRAC * 100}%{opacity:.9}90%{opacity:0}100%{opacity:0}}
 @keyframes cineShake{0%,82%{transform:translate(0,0) scale(1)}83%{transform:translate(-8px,4px) scale(1.03)}85%{transform:translate(9px,-4px) scale(1.03)}87%{transform:translate(-6px,-3px) scale(1.02)}89%{transform:translate(5px,3px) scale(1.01)}91%{transform:translate(0,0) scale(1)}100%{transform:translate(0,0)}}
-@keyframes cineProjFix{0%{opacity:0;transform:translate(50vw,112vh) translate(-50%,-50%) scale(9) rotate(0deg);filter:blur(5px)}5%{opacity:1;filter:blur(2px)}18%{transform:translate(36vw,36vh) translate(-50%,-50%) scale(4) rotate(420deg);filter:blur(0)}36%{transform:translate(82vw,6vh) translate(-50%,-50%) scale(1.8) rotate(1000deg)}54%{transform:translate(100vw,22vh) translate(-50%,-50%) scale(1) rotate(1640deg)}73%{transform:translate(62vw,${LAND_VH + 8}vh) translate(-50%,-50%) scale(.6) rotate(2360deg)}82%{opacity:1;transform:translate(50vw,${LAND_VH}vh) translate(-50%,-50%) scale(.4) rotate(2880deg)}${IMPACT_FRAC * 100}%{opacity:0;transform:translate(50vw,${LAND_VH + 3}vh) translate(-50%,-50%) scale(.26) rotate(2940deg)}100%{opacity:0}}
+@keyframes cineProjFix{0%{opacity:0;left:50vw;top:112vh;transform:translate(-50%,-50%) scale(9) rotate(0deg);filter:blur(5px)}5%{opacity:1;filter:blur(2px)}18%{left:36vw;top:36vh;transform:translate(-50%,-50%) scale(4) rotate(420deg);filter:blur(0)}36%{left:82vw;top:6vh;transform:translate(-50%,-50%) scale(1.8) rotate(1000deg)}54%{left:100vw;top:22vh;transform:translate(-50%,-50%) scale(1) rotate(1640deg)}73%{left:62vw;top:${LAND_VH + 8}vh;transform:translate(-50%,-50%) scale(.6) rotate(2360deg)}82%{opacity:1;left:50vw;top:${LAND_VH}vh;transform:translate(-50%,-50%) scale(.4) rotate(2880deg)}${IMPACT_FRAC * 100}%{opacity:0;left:50vw;top:${LAND_VH + 3}vh;transform:translate(-50%,-50%) scale(.26) rotate(2940deg)}100%{opacity:0}}
 `;
 
 function Ball() {

@@ -69,7 +69,6 @@ export function HeroWithCinematic(props: HeroScoreboardProps) {
           <style>{"@keyframes cineBackdrop{0%,66%{opacity:0}80%{opacity:1}90%{opacity:1}100%{opacity:0}}"}</style>
           <div
             aria-hidden
-            className="cine-backdrop"
             style={{ position: "fixed", inset: 0, zIndex: 1, background: "rgba(7,22,12,0.5)", backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)", animation: "cineBackdrop 6s ease-out both", pointerEvents: "none" }}
           />
         </>

@@ -12,7 +12,6 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { UpdateBanner } from "@/components/update-banner";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { LiteMode } from "@/components/lite-mode";
 import { ModoStreamer } from "@/components/modo-streamer";
 import { PipView } from "@/components/pip-view";
 import { KickChatReactions } from "@/components/kick-chat-reactions";
@@ -104,7 +103,6 @@ export default function RootLayout({
         <ErrorBoundary>{children}</ErrorBoundary>
         <KickChatReactions />
         <UpdateBanner />
-        <LiteMode />
         <div
           style={{
             position: "fixed",

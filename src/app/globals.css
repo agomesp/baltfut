@@ -292,21 +292,6 @@ body {
   }
 }
 
-/* Lite mode — Modo Streamer drops the idle decorative animations (squad-wall glow
-   halos, crest sheen/wave sweeps) + the cinematic's full-screen backdrop blur, so a
-   broadcast machine keeps GPU headroom for OBS. The goal cinematic itself + the
-   score/clock stay. Toggled by <LiteMode> via the <html data-lite> attribute. */
-:root[data-lite] .swall-aura,
-:root[data-lite] .screst-sheen,
-:root[data-lite] .screst-wave {
-  display: none !important;
-}
-:root[data-lite] .cine-backdrop {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  background: rgba(7, 22, 12, 0.85) !important;
-}
-
 /* Streamer "rec" indicator: a deliberate full-opacity blink. Kept even under
    prefers-reduced-motion (it's a functional recording/live cue), so the !important
    here intentionally outranks the reduce rule above. */
