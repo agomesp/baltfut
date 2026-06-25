@@ -286,6 +286,24 @@ body {
   background: transparent;
 }
 
+/* "Saving" shimmer: a soft highlight sweeps left→right over an element while an
+   optimistic palpite is being written to the DB. Pair with a faint grey
+   background-color (longhand, so this background-image isn't reset by it). */
+@keyframes bfSaveShimmer {
+  0% {
+    background-position: -60% 0;
+  }
+  100% {
+    background-position: 160% 0;
+  }
+}
+.bf-saving {
+  background-image: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  background-size: 55% 100%;
+  background-repeat: no-repeat;
+  animation: bfSaveShimmer 1.15s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

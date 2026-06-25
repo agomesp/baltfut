@@ -61,7 +61,7 @@ function KickoffClock({ startsAt }: { startsAt: string }) {
   );
 }
 
-function SentList({ entries, homeCode, awayCode, myName, cols = 2 }: { entries: VoteEntry[]; homeCode: string; awayCode: string; myName: string | null; cols?: number }) {
+function SentList({ entries, homeCode, awayCode, myName, cols = 2, pendingName = null }: { entries: VoteEntry[]; homeCode: string; awayCode: string; myName: string | null; cols?: number; pendingName?: string | null }) {
   return (
     <div className="bf-scroll" style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "7px 8px", alignContent: "start", flex: 1, minHeight: 0, paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
       {entries.length === 0 ? (
@@ -69,10 +69,11 @@ function SentList({ entries, homeCode, awayCode, myName, cols = 2 }: { entries: 
       ) : (
         entries.map((e, i) => {
           const mine = myName != null && e.username.trim().toLowerCase() === myName.trim().toLowerCase();
+          const saving = pendingName != null && e.username.trim().toLowerCase() === pendingName;
           return (
-            <div key={`${e.username}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 7, padding: "6px 8px", background: mine ? "rgba(200,255,45,0.1)" : "rgba(255,255,255,0.025)", border: mine ? "1px solid rgba(200,255,45,0.4)" : "1px solid rgba(255,255,255,0.05)" }}>
+            <div key={`${e.username}-${i}`} className={saving ? "bf-saving" : undefined} style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 7, padding: "6px 8px", backgroundColor: saving ? "rgba(255,255,255,0.04)" : mine ? "rgba(200,255,45,0.1)" : "rgba(255,255,255,0.025)", border: saving ? "1px solid rgba(255,255,255,0.08)" : mine ? "1px solid rgba(200,255,45,0.4)" : "1px solid rgba(255,255,255,0.05)", opacity: saving ? 0.55 : 1 }}>
               <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11.5, ...nameStyle(e.username, "#eef3ee"), flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.username}</span>
-              {mine ? <span style={{ flex: "none", fontFamily: JB, fontSize: 7.5, letterSpacing: "0.06em", fontWeight: 700, color: "#0f1f02", background: LIME, padding: "2px 5px", borderRadius: 4 }}>VOCÊ</span> : null}
+              {mine && !saving ? <span style={{ flex: "none", fontFamily: JB, fontSize: 7.5, letterSpacing: "0.06em", fontWeight: 700, color: "#0f1f02", background: LIME, padding: "2px 5px", borderRadius: 4 }}>VOCÊ</span> : null}
               <span style={{ flex: "none", fontFamily: JB, fontSize: 9.5, color: "#aebdb4" }}>{pickLine(e, homeCode, awayCode)}</span>
             </div>
           );
@@ -229,15 +230,15 @@ function DuoGameCard({ match, entries, groupByTeam, name, confirm, released, bor
   const awayAccent = teamAccent(awayCode);
   const [home, setHome] = useState(0);
   const [away, setAway] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(null);
-  // Optimistic lock: on a successful send, hold the palpite locally so the name
-  // shows in the list + the card greys out immediately, before the refetch lands.
+  // `saving` = the write is in-flight; `sent` = the optimistic palpite, shown the
+  // instant you click and reverted if the server rejects it.
+  const [saving, setSaving] = useState(false);
   const [sent, setSent] = useState<VoteEntry | null>(null);
+  const [outcome, setOutcome] = useState<string | null>(null);
   const myName = name.trim() || null;
 
   useEffect(() => {
-    if (!outcome || outcome.ok) return;
+    if (!outcome) return;
     const id = window.setTimeout(() => setOutcome(null), 5000);
     return () => window.clearTimeout(id);
   }, [outcome]);
@@ -248,16 +249,24 @@ function DuoGameCard({ match, entries, groupByTeam, name, confirm, released, bor
   const shownEntries = sent && !meInEntries ? [sent, ...entries] : entries;
 
   async function submit() {
-    setSubmitting(true);
-    setOutcome(null);
-    const r = await castPalpite(match, name, home, away, entries, transport);
-    setSubmitting(false);
-    if (!r.ok) {
-      setOutcome({ ok: false, text: r.message });
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setOutcome("Digite seu nome.");
       return;
     }
-    setSent({ matchId: match.id, league: match.league, username: name.trim(), predHome: home, predAway: away, createdAt: new Date().toISOString() });
-    confirm(name.trim());
+    // Optimistic: show the palpite right away (greyed + shimmering), write in the
+    // background, and revert it if the server rejects.
+    setSent({ matchId: match.id, league: match.league, username: trimmed, predHome: home, predAway: away, createdAt: new Date().toISOString() });
+    setSaving(true);
+    setOutcome(null);
+    const r = await castPalpite(match, name, home, away, entries, transport);
+    setSaving(false);
+    if (!r.ok) {
+      setSent(null);
+      setOutcome(r.message);
+      return;
+    }
+    confirm(trimmed);
     onVoted();
   }
 
@@ -289,11 +298,11 @@ function DuoGameCard({ match, entries, groupByTeam, name, confirm, released, bor
             <Stepper label={awayCode} accent="var(--bf-text)" value={away} onChange={setAway} disabled={alreadySent} />
           </div>
           {/* Per-game send button, right below this card's score steppers. */}
-          <button type="button" onClick={submit} disabled={submitting || alreadySent} style={{ flex: "none", textAlign: "center", background: alreadySent ? "rgba(255,255,255,0.05)" : LIME, color: alreadySent ? "#7d9a86" : "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 13, padding: "11px 12px", borderRadius: 10, border: alreadySent ? "1px solid rgba(255,255,255,0.1)" : "none", boxShadow: alreadySent ? "none" : "0 0 22px -10px rgba(200,255,45,0.6)", opacity: submitting ? 0.6 : 1, cursor: submitting || alreadySent ? "not-allowed" : "pointer" }}>
-            {submitting ? "ENVIANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : "ENVIAR PALPITE →"}
+          <button type="button" onClick={submit} disabled={alreadySent} className={saving ? "bf-saving" : undefined} style={{ flex: "none", textAlign: "center", backgroundColor: alreadySent ? "rgba(255,255,255,0.05)" : LIME, color: alreadySent ? "#7d9a86" : "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 13, padding: "11px 12px", borderRadius: 10, border: alreadySent ? "1px solid rgba(255,255,255,0.1)" : "none", boxShadow: alreadySent ? "none" : "0 0 22px -10px rgba(200,255,45,0.6)", cursor: alreadySent ? "not-allowed" : "pointer" }}>
+            {saving ? "SALVANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : "ENVIAR PALPITE →"}
           </button>
           {outcome ? (
-            <div style={{ textAlign: "center", fontFamily: BRIC, fontSize: 11.5, color: outcome.ok ? LIME : "#ff6b6b" }}>{outcome.text}</div>
+            <div style={{ textAlign: "center", fontFamily: BRIC, fontSize: 11.5, color: "#ff6b6b" }}>{outcome}</div>
           ) : null}
         </>
       ) : (
@@ -305,7 +314,7 @@ function DuoGameCard({ match, entries, groupByTeam, name, confirm, released, bor
         <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.1em", color: "#6f8a78" }}>PALPITES ENVIADOS</span>
         <span style={{ fontFamily: JB, fontSize: 9, color: "#4d6353" }}>{shownEntries.length}</span>
       </div>
-      <SentList entries={shownEntries} homeCode={homeCode} awayCode={awayCode} myName={myName} />
+      <SentList entries={shownEntries} homeCode={homeCode} awayCode={awayCode} myName={myName} pendingName={saving ? lowerName : null} />
     </div>
   );
 }
