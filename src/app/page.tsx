@@ -6,7 +6,7 @@ import {
   fetchStandings,
   fetchLineups,
   teamGroupMap,
-  buildBracket,
+  buildKnockout,
   parseScoreboard,
   parseStandings,
   scoreboardUrl,
@@ -46,7 +46,6 @@ const SCORE_WORKER_MS = 20_000;
 const STANDINGS_WORKER_MS = 30_000;
 // The selected match's palpites poll faster so new ones appear near-live.
 const ENTRIES_REFRESH_MS = 12_000;
-const DEFAULT_LETTERS = "ABCDEFGHIJKL".split("");
 
 export default function Home() {
   const [view, setView] = useState<ViewKey>("live");
@@ -258,10 +257,7 @@ export default function Home() {
     [matches],
   );
   const groupByTeam = useMemo(() => teamGroupMap(groups), [groups]);
-  const bracketColumns = useMemo(
-    () => buildBracket(groups.length ? groups.map((g) => g.letter) : DEFAULT_LETTERS),
-    [groups],
-  );
+  const knockout = useMemo(() => buildKnockout(matches), [matches]);
   const chips = useMemo(() => buildChipGames(matches, voteCounts), [matches, voteCounts]);
   const releasedIds = useMemo(() => releasedMatchIds(matches), [matches]);
 
@@ -443,7 +439,7 @@ export default function Home() {
         {!loading && view === "results" && (
           <ResultsView matches={results} followCode={follow} groupByTeam={groupByTeam} />
         )}
-        {!loading && view === "bracket" && <BracketView columns={bracketColumns} groups={groups} />}
+        {!loading && view === "bracket" && <BracketView stages={knockout} />}
       </main>
     </>
   );

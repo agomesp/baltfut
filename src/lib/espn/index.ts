@@ -33,4 +33,9 @@ export {
   type LineupPlayer,
   type FetchLineupsOptions,
 } from "@/lib/espn/lineups";
-export { buildBracket, type BracketColumn, type BracketSlot } from "@/lib/espn/bracket";
+export {
+  buildKnockout,
+  seedLabel,
+  isPlaceholderTeam,
+  type KnockoutColumn,
+} from "@/lib/espn/bracket";

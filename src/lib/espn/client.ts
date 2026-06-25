@@ -16,7 +16,9 @@ const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
 /** Build the scoreboard URL, encoding inputs so they can't escape the path/query. */
 export function scoreboardUrl(league: string, dates?: string): string {
   const base = `${ESPN_BASE}/${encodeURIComponent(league)}/scoreboard`;
-  return dates ? `${base}?dates=${encodeURIComponent(dates)}` : base;
+  // limit=400 lifts ESPN's default 100-event cap so the full 104-match schedule
+  // (incl. the late knockout rounds) comes back — the bracket needs them.
+  return dates ? `${base}?dates=${encodeURIComponent(dates)}&limit=400` : base;
 }
 
 export interface FetchScoreboardOptions {

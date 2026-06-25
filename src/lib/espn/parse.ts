@@ -63,6 +63,7 @@ const rawEventSchema = z.object({
     }),
   }),
   competitions: z.array(rawCompetitionSchema).min(1),
+  season: z.object({ slug: z.string().optional() }).optional(),
 });
 
 const rawScoreboardSchema = z.object({ events: z.array(z.unknown()) });
@@ -159,6 +160,7 @@ function parseEvent(raw: unknown, league: string): Match | null {
   return {
     id: event.id,
     league,
+    stage: event.season?.slug ?? "",
     name: event.name ?? "",
     shortName: event.shortName ?? "",
     startsAt: event.date ?? "",

@@ -23,7 +23,7 @@ describe("scoreboardUrl", () => {
 
   it("appends a dates range when provided", () => {
     expect(scoreboardUrl("fifa.world", "20260611-20260719")).toBe(
-      "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719",
+      "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=400",
     );
   });
 });

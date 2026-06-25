@@ -1,40 +1,63 @@
-export interface BracketSlot {
-  a: string;
-  b: string;
-}
+import type { Match } from "@/lib/espn/types";
 
-export interface BracketColumn {
+/** Knockout stage slugs ESPN uses, in bracket order. */
+const STAGE_ORDER = [
+  "round-of-32",
+  "round-of-16",
+  "quarterfinals",
+  "semifinals",
+  "3rd-place-match",
+  "final",
+] as const;
+
+const STAGE_LABEL: Record<string, string> = {
+  "round-of-32": "32-avos",
+  "round-of-16": "Oitavas",
+  quarterfinals: "Quartas",
+  semifinals: "Semifinais",
+  "3rd-place-match": "3º lugar",
+  final: "Final",
+};
+
+export interface KnockoutColumn {
+  slug: string;
   label: string;
-  matches: BracketSlot[];
+  matches: Match[];
 }
 
 /**
- * Schematic knockout bracket (Round of 32 -> Final). Slots are placeholders
- * ("1A", "2B", "3·1", "W1"…) that resolve once the group stage finishes — the
- * design renders this as a static diagram, so no live data is needed.
+ * Real knockout bracket from ESPN's fixtures. The knockout matches already live
+ * in the scoreboard (tagged by `stage` = season slug), with real teams where the
+ * slot is decided and placeholders ("Group H 2nd Place", "Round of 32 1 Winner")
+ * where not. Groups them into ordered columns and drops empty stages.
  */
-export function buildBracket(groupLetters: string[]): BracketColumn[] {
-  const seeds: string[] = [];
-  groupLetters.forEach((l) => seeds.push("1" + l)); // group winners
-  groupLetters.forEach((l) => seeds.push("2" + l)); // runners-up
-  for (let i = 1; i <= 8; i++) seeds.push("3·" + i); // best third-placed
+export function buildKnockout(matches: Match[]): KnockoutColumn[] {
+  return STAGE_ORDER.map((slug) => ({
+    slug,
+    label: STAGE_LABEL[slug],
+    matches: matches
+      .filter((m) => m.stage === slug)
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
+  })).filter((col) => col.matches.length > 0);
+}
 
-  const r32: BracketSlot[] = [];
-  for (let i = 0; i < 16; i++) {
-    r32.push({ a: seeds[i * 2] ?? "—", b: seeds[i * 2 + 1] ?? "—" });
-  }
+/** A slot is a placeholder ("Group H 2nd Place", "Round of 32 1 Winner") rather
+ *  than a decided team — these resolve as the tournament progresses. */
+export function isPlaceholderTeam(name: string): boolean {
+  return /\b(Group|Place|Winner|Loser|Round of|Quarterfinal|Semifinal|Third)\b/i.test(name);
+}
 
-  const mk = (prefix: string, n: number): BracketSlot[] =>
-    Array.from({ length: n }, (_, i) => ({
-      a: prefix + (i * 2 + 1),
-      b: prefix + (i * 2 + 2),
-    }));
-
-  return [
-    { label: "32-avos", matches: r32 },
-    { label: "Oitavas", matches: mk("V", 8) },
-    { label: "Quartas", matches: mk("R", 4) },
-    { label: "Semifinais", matches: mk("Q", 2) },
-    { label: "Final", matches: [{ a: "S1", b: "S2" }] },
-  ];
+/** Short pt-BR label for a placeholder slot's ESPN name. Returns the input
+ *  unchanged when it doesn't match a known pattern (incl. a real team name). */
+export function seedLabel(name: string): string {
+  let m: RegExpMatchArray | null;
+  if ((m = name.match(/^Group ([A-L]) (\d+)(?:st|nd|rd|th) Place$/i))) return `${m[2]}º Grupo ${m[1]}`;
+  if ((m = name.match(/^Group ([A-L]) Winner$/i))) return `1º Grupo ${m[1]}`;
+  if ((m = name.match(/^Third Place Group ([A-Z/]+)$/i))) return `3º (${m[1]})`;
+  if ((m = name.match(/^Round of 32 (\d+) Winner$/i))) return `Venc. 32-avos ${m[1]}`;
+  if ((m = name.match(/^Round of 16 (\d+) Winner$/i))) return `Venc. oitavas ${m[1]}`;
+  if ((m = name.match(/^Quarterfinal (\d+) Winner$/i))) return `Venc. quartas ${m[1]}`;
+  if ((m = name.match(/^Semifinal (\d+) Winner$/i))) return `Venc. semi ${m[1]}`;
+  if ((m = name.match(/^Semifinal (\d+) Loser$/i))) return `Perd. semi ${m[1]}`;
+  return name;
 }

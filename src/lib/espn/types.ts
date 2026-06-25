@@ -46,6 +46,9 @@ export interface Match {
   id: string;
   /** League slug we queried, e.g. "fifa.world". */
   league: string;
+  /** ESPN season stage slug, e.g. "group-stage", "round-of-32", "final". Set by
+   *  the parser; optional only because some test fixtures predate it. */
+  stage?: string;
   /** e.g. "Brazil at Argentina". */
   name: string;
   /** e.g. "BRA @ ARG". */
