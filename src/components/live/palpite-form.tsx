@@ -19,8 +19,9 @@ import { BRIC, JB, LIME, SAIRA } from "@/components/live/bf-ui";
 
 const clampScore = (n: number) => Math.max(SCORE_MIN, Math.min(SCORE_MAX, n));
 
-/** − value + score stepper (Saira numeral). */
-export function Stepper({ label, accent, value, onChange }: { label: string; accent: string; value: number; onChange: (n: number) => void }) {
+/** − value + score stepper (Saira numeral). `disabled` greys it out (e.g. once
+ *  the palpite for this game is locked in). */
+export function Stepper({ label, accent, value, onChange, disabled = false }: { label: string; accent: string; value: number; onChange: (n: number) => void; disabled?: boolean }) {
   const btn = {
     width: 30,
     height: 30,
@@ -30,9 +31,10 @@ export function Stepper({ label, accent, value, onChange }: { label: string; acc
     alignItems: "center",
     justifyContent: "center",
     fontSize: 18,
-    color: "#cfe3d6",
-    cursor: "pointer",
+    color: disabled ? "#3d4f44" : "#cfe3d6",
+    cursor: disabled ? "not-allowed" : "pointer",
     background: "rgba(255,255,255,0.04)",
+    opacity: disabled ? 0.5 : 1,
     flex: "none",
     userSelect: "none" as const,
   };
@@ -40,9 +42,9 @@ export function Stepper({ label, accent, value, onChange }: { label: string; acc
     <div style={{ textAlign: "center" }}>
       <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: accent, marginBottom: 6 }}>{label}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button type="button" aria-label={`Menos ${label}`} style={btn} onClick={() => onChange(clampScore(value - 1))}>−</button>
-        <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: "#fff", width: 42, textAlign: "center", lineHeight: 0.8 }}>{value}</span>
-        <button type="button" aria-label={`Mais ${label}`} style={btn} onClick={() => onChange(clampScore(value + 1))}>+</button>
+        <button type="button" disabled={disabled} aria-label={`Menos ${label}`} style={btn} onClick={() => onChange(clampScore(value - 1))}>−</button>
+        <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: disabled ? "#6f8a78" : "#fff", width: 42, textAlign: "center", lineHeight: 0.8 }}>{value}</span>
+        <button type="button" disabled={disabled} aria-label={`Mais ${label}`} style={btn} onClick={() => onChange(clampScore(value + 1))}>+</button>
       </div>
     </div>
   );
