@@ -104,6 +104,7 @@ export default function RootLayout({
         <KickChatReactions />
         <UpdateBanner />
         <div
+          className="bf-streamer-only"
           style={{
             position: "fixed",
             bottom: 14,

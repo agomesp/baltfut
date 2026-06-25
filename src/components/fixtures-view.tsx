@@ -1,6 +1,9 @@
+"use client";
+
 import type { Match } from "@/lib/espn";
 import { fmtTime, groupByDay } from "@/lib/format";
 import { teamNamePt } from "@/lib/team-names";
+import { useIsNarrow } from "@/lib/use-is-narrow";
 import { groupLabelFor } from "@/components/match-meta";
 import { BRIC, JB, SAIRA, LIME, FlagIcon, ViewHeader } from "@/components/live/bf-ui";
 
@@ -15,6 +18,7 @@ function codeColor(code: string, followCode: string | null): string {
 }
 
 export function FixturesView({ matches, followCode, groupByTeam }: FixturesViewProps) {
+  const narrow = useIsNarrow();
   if (matches.length === 0) {
     return (
       <section>
@@ -86,9 +90,13 @@ export function FixturesView({ matches, followCode, groupByTeam }: FixturesViewP
                   <span style={{ fontFamily: BRIC, fontSize: 14, color: "#9bb6a6", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(m.away.abbreviation, m.away.name)}</span>
                 </div>
               </div>
-              <span style={{ flex: "0 0 auto", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78", textAlign: "right" }}>
-                {[groupLabelFor(m, groupByTeam), m.venue].filter(Boolean).join(" · ").toUpperCase()}
-              </span>
+              {/* Group + venue is secondary detail that overflows a phone row —
+                  hidden on mobile (the próximo-jogo hero still shows it). */}
+              {!narrow && (
+                <span style={{ flex: "0 0 auto", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78", textAlign: "right" }}>
+                  {[groupLabelFor(m, groupByTeam), m.venue].filter(Boolean).join(" · ").toUpperCase()}
+                </span>
+              )}
             </div>
           ))}
         </div>

@@ -304,6 +304,64 @@ body {
   animation: bfSaveShimmer 1.15s ease-in-out infinite;
 }
 
+/* ======================================================================
+   Responsive — narrow screens (phones / small tablets). The dense desktop
+   dashboard collapses to a single scrolling column. The app shell + header
+   live here in CSS (not the useIsNarrow hook) because they render during
+   SSR / hydration, where a JS width read would mismatch the server markup.
+   The client-only live stages — which only mount AFTER the data load — stack
+   via useIsNarrow instead.
+   ====================================================================== */
+.bf-main {
+  max-width: 1620px;
+  margin: 0 auto;
+  padding: 14px 30px 64px;
+}
+:root[data-view="live"] .bf-main {
+  padding: 8px 24px 10px;
+}
+.bf-headbar {
+  max-width: 1620px;
+  margin: 0 auto;
+  padding: 9px 30px;
+}
+.bf-nav {
+  gap: 18px;
+}
+@media (max-width: 768px) {
+  .bf-main {
+    padding: 12px 14px 48px;
+  }
+  :root[data-view="live"] .bf-main {
+    /* Extra bottom room so the last card clears the fixed reactions bar. */
+    padding: 8px 11px 64px;
+  }
+  .bf-headbar {
+    padding: 9px 14px;
+  }
+  .bf-nav {
+    gap: 13px;
+  }
+  /* Streamer/OBS-only floating tools add clutter on a phone — hide them. */
+  .bf-streamer-only {
+    display: none !important;
+  }
+  /* The dense dashboard's inner scrollers are sized for a fixed-height desktop
+     layout (flex:1 + internal scroll). In the mobile single-column flow the page
+     itself scrolls, so an `flex:1` panel inside an auto-height column collapses to
+     0. Let these grow to their content instead. Applies to every `.bf-scroll`
+     list (palpites, ranking, history, sent) and the stacked game cards. */
+  .bf-scroll {
+    overflow: visible !important;
+    flex: 0 1 auto !important;
+    min-height: 0 !important;
+  }
+  .bf-stack-card {
+    flex: 0 1 auto !important;
+    width: 100% !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

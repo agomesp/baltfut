@@ -7,6 +7,7 @@ import { supabaseCastVote, type CastVoteTransport } from "@/lib/votes";
 import { teamNamePt } from "@/lib/team-names";
 import { teamCupHistory, type TeamHistoryGame } from "@/lib/team-history";
 import { palpiteDeadline, formatCountdownLong } from "@/lib/palpite";
+import { useIsNarrow } from "@/lib/use-is-narrow";
 import { Countdown } from "@/components/countdown";
 import { RankingSubs } from "@/components/live/ranking-subs";
 import {
@@ -159,6 +160,7 @@ export interface PreMatchPanelProps {
 export function PreMatchPanel({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, releasedIds, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
   const { name } = useNameLock();
   const myName = name || null;
+  const narrow = useIsNarrow();
   const homeCode = match.home.abbreviation;
   const awayCode = match.away.abbreviation;
   const homeAccent = teamAccent(homeCode);
@@ -176,9 +178,11 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
       {!showDuo ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
           <PreHero match={match} groupByTeam={groupByTeam} />
-          <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
-            <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: 170 }} />
-            <div style={{ ...cardWrap, flex: 1.35, minWidth: 0, minHeight: 0, overflow: "hidden", border: "1px solid rgba(200,255,45,0.16)", padding: "13px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* On mobile this 3-column row stacks: form first, sent palpites next,
+              the ranking last (via flex `order`). */}
+          <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 12, flex: 1, minHeight: 0 }}>
+            <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: narrow ? "100%" : 170, order: narrow ? 3 : 0 }} />
+            <div style={{ ...cardWrap, flex: narrow ? "none" : 1.35, order: narrow ? 1 : 0, minWidth: 0, minHeight: 0, overflow: narrow ? "visible" : "hidden", border: "1px solid rgba(200,255,45,0.16)", padding: "13px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
               <SectionLabel>{"// FAÇA SEU PALPITE"}</SectionLabel>
               <PalpiteForm match={match} entries={entries} closesAt={palpiteDeadline(match.startsAt)} released={releasedIds.has(match.id)} onVoted={onVoted} transport={transport} />
               <div className="bf-scroll" style={{ display: "flex", gap: 12, flex: 1, minHeight: 0, alignItems: "flex-start", paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
@@ -186,7 +190,7 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
                 <HistoryColumn code={awayCode} accent={awayAccent} games={teamCupHistory(matches, awayCode)} />
               </div>
             </div>
-            <div style={{ ...cardWrap, flex: 1.05, minWidth: 0, padding: 14, display: "flex", flexDirection: "column" }}>
+            <div style={{ ...cardWrap, flex: narrow ? "none" : 1.05, order: narrow ? 2 : 0, minWidth: 0, padding: 14, display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 11 }}>
                 <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14 }}>Palpites enviados</span>
                 <span style={{ fontFamily: JB, fontSize: 9.5, color: "#6f8a78" }}>{entries.length} no total</span>
@@ -273,7 +277,7 @@ function DuoGameCard({ match, entries, groupByTeam, name, confirm, released, bor
   }
 
   return (
-    <div style={{ flex: 1, minWidth: 0, borderRadius: 12, border: `1px solid ${borderColor}`, background: "rgba(255,255,255,0.02)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
+    <div className="bf-stack-card" style={{ flex: 1, minWidth: 0, borderRadius: 12, border: `1px solid ${borderColor}`, background: "rgba(255,255,255,0.02)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78" }}>{groupVenue(match, groupByTeam) || "COPA DO MUNDO"}</span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: JB, fontSize: 10, color: "#cdeec0", background: "rgba(200,255,45,0.1)", border: "1px solid rgba(200,255,45,0.3)", borderRadius: 999, padding: "4px 10px" }}>
@@ -336,24 +340,25 @@ function PreMatchDuo({ match, second, entries, secondEntries, allEntries, matche
 }) {
   // One shared name; each game card sends its own palpite independently.
   const { name, setName, locked, confirm, unlock } = useNameLock();
+  const narrow = useIsNarrow();
 
   return (
-    <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, minWidth: 0, minHeight: 0 }}>
-        <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 16, borderRadius: 14, border: "1px solid rgba(200,255,45,0.16)", background: "rgba(255,255,255,0.02)", padding: "12px 20px" }}>
+    <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 16, flex: 1, minHeight: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: narrow ? "none" : 1, minWidth: 0, minHeight: 0 }}>
+        <div style={{ flex: "none", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, borderRadius: 14, border: "1px solid rgba(200,255,45,0.16)", background: "rgba(255,255,255,0.02)", padding: "12px 20px" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <NameField name={name} setName={setName} locked={locked} onUnlock={unlock} />
           </div>
           <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: "#6f8a78" }}>envie um palpite para cada jogo</span>
         </div>
-        <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16 }}>
+        {/* The two game cards sit side by side on desktop, stacked on mobile. */}
+        <div style={{ flex: narrow ? "none" : 1, minHeight: 0, display: "flex", flexDirection: narrow ? "column" : "row", gap: 16 }}>
           <DuoGameCard key={match.id} match={match} entries={entries} groupByTeam={groupByTeam} name={name} confirm={confirm} released={released1} borderColor="rgba(229,68,59,0.18)" transport={transport} onVoted={onVoted} />
           <DuoGameCard key={second.id} match={second} entries={secondEntries} groupByTeam={groupByTeam} name={name} confirm={confirm} released={released2} borderColor="rgba(63,164,95,0.18)" transport={transport} onVoted={onVoted} />
         </div>
       </div>
-      {/* Ranking dos Subs on the right, full height — from the name-field row down
-          to the bottom of the palpite cards. */}
-      <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: 230 }} />
+      {/* Ranking dos Subs on the right (desktop) / below the cards (mobile). */}
+      <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: narrow ? "100%" : 230 }} />
     </div>
   );
 }

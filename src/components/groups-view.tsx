@@ -18,7 +18,10 @@ export function GroupsView({ groups, followCode, onFollow }: GroupsViewProps) {
           Tabelas indisponíveis no momento.
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(440px, 1fr))", gap: 16 }}>
+        // `min(100%, 440px)` keeps each card from forcing horizontal scroll on a
+        // phone (it shrinks to the viewport) while still tiling multi-column on
+        // wider screens.
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 440px), 1fr))", gap: 16 }}>
           {groups.map((g) => (
             <div key={g.letter} style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)", overflow: "hidden" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>

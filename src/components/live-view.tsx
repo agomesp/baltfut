@@ -21,6 +21,7 @@ import { LineupPanel } from "@/components/live/lineup-panel";
 import { PalpiteForm } from "@/components/live/palpite-form";
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
 import { decideConcurrent } from "@/lib/concurrent-games";
+import { useIsNarrow } from "@/lib/use-is-narrow";
 
 /** A match's display phase (pre / live / post). */
 function matchPhase(m: Match): ChipPhase {
@@ -40,6 +41,10 @@ function KickLiveChip() {
       target="_blank"
       rel="noopener noreferrer"
       title="Assistir ao vivo na Kick"
+      // Hidden on phones (the bf-streamer-only rule): it's a fixed bottom-left
+      // chip that would overlap the stacked cards, and each live card already
+      // carries its own "AO VIVO NA K" badge inline.
+      className="bf-streamer-only"
       style={{ position: "fixed", left: 16, bottom: 16, zIndex: 56, display: "inline-flex", alignItems: "center", gap: 9, background: "rgba(0,0,0,0.45)", borderRadius: 999, padding: "8px 13px", fontFamily: JB, fontSize: 11, color: "#cbdcd0", textDecoration: "none" }}
     >
       <span className="rec-blink" style={{ width: 7, height: 7, borderRadius: "50%", background: "#ff4d4d" }} />
@@ -91,6 +96,7 @@ function PlacarStage({
   released: boolean;
 }) {
   const now = useNow(1000);
+  const narrow = useIsNarrow();
   const homeCode = match.home.abbreviation;
   const awayCode = match.away.abbreviation;
   const current = { home: match.homeScore ?? 0, away: match.awayScore ?? 0 };
@@ -102,8 +108,8 @@ function PlacarStage({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
       <HeroWithCinematic match={match} subs={lineups?.subs ?? []} />
-      <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
-        <div style={{ flex: 1.5, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 12, flex: 1, minHeight: 0 }}>
+        <div style={{ flex: narrow ? "none" : 1.5, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flex: "none" }}>
             <button onClick={() => onPanel("predict")} style={segBtn(panel === "predict")}>Palpites</button>
             <button onClick={() => onPanel("lineup")} style={segBtn(panel === "lineup")}>Escalação</button>
@@ -121,9 +127,9 @@ function PlacarStage({
             </>
           )}
         </div>
-        <div style={{ flex: 0.82, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ flex: narrow ? "none" : 0.82, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <CommunityBar consensus={consensus} homeCode={homeCode} awayCode={awayCode} homeAccent={teamAccent(homeCode)} awayAccent={teamAccent(awayCode)} />
-          <RankingSubs entries={allEntries} matches={matches} variant="grid" style={{ flex: 1, minHeight: 0 }} />
+          <RankingSubs entries={allEntries} matches={matches} variant={narrow ? "column" : "grid"} style={narrow ? { flex: "none" } : { flex: 1, minHeight: 0 }} />
         </div>
       </div>
     </div>
@@ -132,12 +138,13 @@ function PlacarStage({
 
 /** Two concurrent games side by side + a full-height ranking column. */
 function DuoStage({ games, allEntries, matches, groupByTeam }: { games: Match[]; allEntries: VoteEntry[]; matches: Match[]; groupByTeam: Record<string, string> }) {
+  const narrow = useIsNarrow();
   return (
-    <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 12, flex: 1, minHeight: 0 }}>
       {games.map((m) => (
         <LiveDuoCard key={m.id} match={m} entries={allEntries.filter((e) => e.matchId === m.id)} groupLabel={groupVenueLabel(m, groupByTeam)} />
       ))}
-      <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: 250 }} />
+      <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: narrow ? "100%" : 250 }} />
     </div>
   );
 }

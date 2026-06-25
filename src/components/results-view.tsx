@@ -1,6 +1,9 @@
+"use client";
+
 import type { Match } from "@/lib/espn";
 import { groupByDay } from "@/lib/format";
 import { teamNamePt } from "@/lib/team-names";
+import { useIsNarrow } from "@/lib/use-is-narrow";
 import { groupLabelFor } from "@/components/match-meta";
 import { BRIC, JB, SAIRA, LIME, FlagIcon, ViewHeader } from "@/components/live/bf-ui";
 
@@ -11,6 +14,7 @@ export interface ResultsViewProps {
 }
 
 export function ResultsView({ matches, followCode, groupByTeam }: ResultsViewProps) {
+  const narrow = useIsNarrow();
   if (matches.length === 0) {
     return (
       <section>
@@ -40,7 +44,9 @@ export function ResultsView({ matches, followCode, groupByTeam }: ResultsViewPro
             const awayCode = m.away.abbreviation === followCode ? LIME : awayWin ? "#f1f7f0" : "#6f8a78";
             return (
               <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "11px 6px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                <span style={{ flex: "0 0 70px", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78" }}>{(groupLabelFor(m, groupByTeam) || "").toUpperCase()}</span>
+                {/* Group + venue labels are dropped on a phone so the teams + score
+                    fill the row without overlap. */}
+                {!narrow && <span style={{ flex: "0 0 70px", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78" }}>{(groupLabelFor(m, groupByTeam) || "").toUpperCase()}</span>}
                 <div style={{ flex: "1 1 240px", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, minWidth: 0 }}>
                     <span style={{ fontFamily: BRIC, fontSize: 14, color: homeWin ? "#cfd9d1" : "#7d9a86", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(m.home.abbreviation, m.home.name)}</span>
@@ -58,7 +64,7 @@ export function ResultsView({ matches, followCode, groupByTeam }: ResultsViewPro
                     <span style={{ fontFamily: BRIC, fontSize: 14, color: awayWin ? "#cfd9d1" : "#7d9a86", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(m.away.abbreviation, m.away.name)}</span>
                   </div>
                 </div>
-                <span style={{ flex: "0 0 auto", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78", textAlign: "right" }}>{(m.venue ?? "").toUpperCase()}</span>
+                {!narrow && <span style={{ flex: "0 0 auto", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78", textAlign: "right" }}>{(m.venue ?? "").toUpperCase()}</span>}
               </div>
             );
           })}

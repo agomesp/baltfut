@@ -36,7 +36,7 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
   const palps = [...winners, ...open, ...lost];
 
   return (
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 11, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, background: "rgba(255,255,255,0.015)", padding: "14px 16px", minHeight: 0 }}>
+    <div className="bf-stack-card" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 11, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, background: "rgba(255,255,255,0.015)", padding: "14px 16px", minHeight: 0 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", fontFamily: JB, fontSize: 10 }}>
         <span style={{ color: "#6f8a78", letterSpacing: "0.05em" }}>{groupLabel}</span>
       </div>

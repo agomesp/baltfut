@@ -400,13 +400,9 @@ export default function Home() {
         followName={followName}
         onClearFollow={() => setFollow(null)}
       />
-      <main
-        style={
-          view === "live"
-            ? { maxWidth: 1620, margin: "0 auto", padding: "8px 24px 10px" }
-            : { maxWidth: 1620, margin: "0 auto", padding: "14px 30px 64px" }
-        }
-      >
+      {/* Shell padding (incl. the live-view variant + mobile sizes) lives in
+          globals.css `.bf-main`, keyed off the html `data-view` attribute. */}
+      <main className="bf-main">
         {loading ? (
           <p style={{ color: "var(--ink-3)" }}>Carregando…</p>
         ) : error && matches.length === 0 ? (

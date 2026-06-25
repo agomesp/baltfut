@@ -37,7 +37,7 @@ export function Header({ view, onView, dark, onToggleTheme, followCode, followNa
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(wc.ratio * 100).toFixed(1)}%`, background: "linear-gradient(90deg,#3a7d2c,#c8ff2d)", boxShadow: "0 0 12px rgba(200,255,45,0.5)" }} />
       </div>
 
-      <div style={{ maxWidth: 1620, margin: "0 auto", padding: "9px 30px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+      <div className="bf-headbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 22, letterSpacing: "-0.02em", color: "#f1f7f0" }}>BaltFut</span>
           <span style={{ fontFamily: JB, fontSize: 10.5, letterSpacing: "0.1em", color: "#7d9a86" }}>
@@ -45,7 +45,7 @@ export function Header({ view, onView, dark, onToggleTheme, followCode, followNa
           </span>
         </div>
 
-        <div style={{ display: "flex", gap: 18, fontFamily: JB, fontSize: 11, letterSpacing: "0.04em", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="bf-nav" style={{ display: "flex", fontFamily: JB, fontSize: 11, letterSpacing: "0.04em", alignItems: "center", flexWrap: "wrap" }}>
           {NAV.map((t) => {
             const active = t.key === view;
             return (
