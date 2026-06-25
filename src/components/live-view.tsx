@@ -7,7 +7,7 @@ import type { ChipGame, ChipPhase } from "@/lib/chips";
 import { useNow } from "@/lib/use-now";
 import { communityConsensus } from "@/lib/consensus";
 import { classifyLivePalpites } from "@/lib/live-palpites";
-import { isPalpiteOpen, palpiteDeadline } from "@/lib/palpite";
+import { palpiteFormOpen, palpiteDeadline } from "@/lib/palpite";
 import { Reactions } from "@/components/reactions";
 import { RbStoreStrip } from "@/components/live/rb-store-strip";
 import { BfChipRail } from "@/components/live/bf-chip-rail";
@@ -81,7 +81,7 @@ function PlacarStage({
   lineups,
   onVoted,
   followCode,
-  released,
+  releasedIds,
 }: {
   match: Match;
   phase: ChipPhase;
@@ -93,7 +93,7 @@ function PlacarStage({
   lineups: MatchLineups | null;
   onVoted: () => void;
   followCode: string | null;
-  released: boolean;
+  releasedIds: Set<string>;
 }) {
   const now = useNow(1000);
   const narrow = useIsNarrow();
@@ -103,7 +103,7 @@ function PlacarStage({
   const final = phase === "post";
   const breakdown = classifyLivePalpites(entries, current, final);
   const consensus = communityConsensus(entries);
-  const formOpen = phase === "live" && released && isPalpiteOpen(palpiteDeadline(match.startsAt), now);
+  const formOpen = phase === "live" && palpiteFormOpen(match, releasedIds, now);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
@@ -146,8 +146,13 @@ function PlacarStage({
  */
 function DuoStage({ games, allEntries, matches, groupByTeam, releasedIds, onVoted }: { games: Match[]; allEntries: VoteEntry[]; matches: Match[]; groupByTeam: Record<string, string>; releasedIds: Set<string>; onVoted: () => void }) {
   const narrow = useIsNarrow();
+  const now = useNow(1000);
   const { name, setName, locked, confirm, unlock } = useNameLock();
-  const isForm = (m: Match) => m.state === "pre" && releasedIds.has(m.id);
+  // A card shows the palpite form whenever palpites are OPEN for it — pre-match,
+  // and through the first 5 live minutes (kickoff+grace). So a game that kicks
+  // off keeps its form for those 5 minutes here, exactly like the 1-game view;
+  // after the grace it falls back to the live card.
+  const isForm = (m: Match) => palpiteFormOpen(m, releasedIds, now);
   const anyForm = games.some(isForm);
 
   const card = (m: Match) => {
@@ -179,7 +184,7 @@ function DuoStage({ games, allEntries, matches, groupByTeam, releasedIds, onVote
           <div style={{ flex: 1, minWidth: 0 }}>
             <NameField name={name} setName={setName} locked={locked} onUnlock={unlock} />
           </div>
-          <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: "#6f8a78" }}>palpite o próximo jogo</span>
+          <span style={{ flex: "none", fontFamily: JB, fontSize: 9, color: "#6f8a78" }}>palpites abertos · feche antes de 5 min de jogo</span>
         </div>
         <div style={{ flex: narrow ? "none" : 1, minHeight: 0, display: "flex", flexDirection: narrow ? "column" : "row", gap: 12 }}>
           {games.map(card)}
@@ -309,7 +314,7 @@ export function LiveView({
               lineups={lineups}
               onVoted={onVoted}
               followCode={followCode}
-              released={releasedIds.has(primary.id)}
+              releasedIds={releasedIds}
             />
           )}
         </div>

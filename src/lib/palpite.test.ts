@@ -3,6 +3,7 @@ import {
   PALPITE_GRACE_MS,
   palpiteDeadline,
   isPalpiteOpen,
+  palpiteFormOpen,
   formatCountdown,
   formatCountdownLong,
   releasedMatchIds,
@@ -52,14 +53,32 @@ describe("formatCountdownLong", () => {
   });
 });
 
-describe("releasedMatchIds", () => {
-  const m = (id: string, state: Match["state"], startsAt: string): Match => ({
-    id, league: "fifa.world", name: id, shortName: id, startsAt, state,
-    isLive: state === "in", statusDetail: "", displayClock: null, venue: null,
-    home: { id: "h", name: "H", abbreviation: "H", logo: null },
-    away: { id: "a", name: "A", abbreviation: "A", logo: null },
-    homeScore: null, awayScore: null, goals: [], cards: [],
+const mkMatch = (id: string, state: Match["state"], startsAt: string): Match => ({
+  id, league: "fifa.world", name: id, shortName: id, startsAt, state,
+  isLive: state === "in", statusDetail: "", displayClock: null, venue: null,
+  home: { id: "h", name: "H", abbreviation: "H", logo: null },
+  away: { id: "a", name: "A", abbreviation: "A", logo: null },
+  homeScore: null, awayScore: null, goals: [], cards: [],
+});
+
+describe("palpiteFormOpen (open pre-match + the first 5 live minutes)", () => {
+  const released = new Set(["x"]);
+  it("is open for a released live match inside the 5-min grace", () => {
+    expect(palpiteFormOpen(mkMatch("x", "in", KICK), released, kickMs + 4 * 60_000)).toBe(true);
   });
+  it("closes once the grace expires, even though still released", () => {
+    expect(palpiteFormOpen(mkMatch("x", "in", KICK), released, kickMs + 5 * 60_000)).toBe(false);
+  });
+  it("is open pre-kickoff for a released match", () => {
+    expect(palpiteFormOpen(mkMatch("x", "pre", KICK), released, kickMs - 60_000)).toBe(true);
+  });
+  it("is closed for an unreleased match", () => {
+    expect(palpiteFormOpen(mkMatch("x", "in", KICK), new Set(), kickMs)).toBe(false);
+  });
+});
+
+describe("releasedMatchIds", () => {
+  const m = mkMatch;
 
   it("releases the current + next kickoff-hour group, grouping same-hour matches", () => {
     const matches = [

@@ -41,6 +41,17 @@ export function isPalpiteOpen(deadline: number, now: number): boolean {
   return !Number.isNaN(deadline) && now < deadline;
 }
 
+/**
+ * Whether the palpite FORM should be available for `match` now: it's released
+ * (current/next kickoff group) AND still inside the kickoff+grace window. So it's
+ * open pre-match and for the first 5 live minutes, then closes. Both the single
+ * (PlacarStage) and 2-game (DuoStage) live views gate on this, so a live match
+ * keeps its form for exactly the grace period in either layout.
+ */
+export function palpiteFormOpen(match: Match, releasedIds: Set<string>, now: number): boolean {
+  return releasedIds.has(match.id) && isPalpiteOpen(palpiteDeadline(match.startsAt), now);
+}
+
 /** Remaining ms -> "M:SS" (minutes may exceed 59), clamped at 0:00. */
 export function formatCountdown(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));

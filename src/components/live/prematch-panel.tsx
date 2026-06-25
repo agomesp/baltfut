@@ -7,7 +7,7 @@ import { supabaseCastVote, type CastVoteTransport } from "@/lib/votes";
 import { teamNamePt } from "@/lib/team-names";
 import { fmtTime } from "@/lib/format";
 import { teamCupHistory, type TeamHistoryGame } from "@/lib/team-history";
-import { palpiteDeadline, formatCountdownLong } from "@/lib/palpite";
+import { palpiteDeadline, formatCountdown, formatCountdownLong } from "@/lib/palpite";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { Countdown } from "@/components/countdown";
 import { RankingSubs } from "@/components/live/ranking-subs";
@@ -284,19 +284,33 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
     <div className="bf-stack-card" style={{ flex: 1, minWidth: 0, borderRadius: 12, border: `1px solid ${borderColor}`, background: "rgba(255,255,255,0.02)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", color: "#6f8a78" }}>{groupVenue(match, groupByTeam) || "COPA DO MUNDO"}</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, flexShrink: 0, whiteSpace: "nowrap", fontFamily: JB, fontSize: 10, color: "#cdeec0", background: "rgba(200,255,45,0.1)", border: "1px solid rgba(200,255,45,0.3)", borderRadius: 999, padding: "4px 10px" }}>
-          <BfPulse />
-          <Countdown targetMs={Date.parse(match.startsAt)} render={(ms) => (ms > 0 ? formatCountdownLong(ms) : "00:00")} />
-          {/* Exact kickoff time, trailing the countdown as small dim text. */}
-          <span style={{ fontSize: 9, color: "#8fae99", letterSpacing: "0.02em" }}>· {fmtTime(match.startsAt)}</span>
-        </span>
+        {match.state === "in" ? (
+          // Live: this card renders only during the kickoff+5min grace, so show
+          // a live badge + how long palpites stay open (instead of a 00:00 clock).
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, flexShrink: 0, whiteSpace: "nowrap", fontFamily: JB, fontSize: 10, color: "#ffd9d9", background: "rgba(255,77,77,0.12)", border: "1px solid rgba(255,77,77,0.4)", borderRadius: 999, padding: "4px 10px" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ff4d4d", animation: "bfpulse 1.5s infinite" }} />
+            AO VIVO
+            <span style={{ fontSize: 9, color: "#e7b3b3", letterSpacing: "0.02em" }}>· fecha em <Countdown targetMs={palpiteDeadline(match.startsAt)} render={(ms) => formatCountdown(Math.max(0, ms))} /></span>
+          </span>
+        ) : (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, flexShrink: 0, whiteSpace: "nowrap", fontFamily: JB, fontSize: 10, color: "#cdeec0", background: "rgba(200,255,45,0.1)", border: "1px solid rgba(200,255,45,0.3)", borderRadius: 999, padding: "4px 10px" }}>
+            <BfPulse />
+            <Countdown targetMs={Date.parse(match.startsAt)} render={(ms) => (ms > 0 ? formatCountdownLong(ms) : "00:00")} />
+            {/* Exact kickoff time, trailing the countdown as small dim text. */}
+            <span style={{ fontSize: 9, color: "#8fae99", letterSpacing: "0.02em" }}>· {fmtTime(match.startsAt)}</span>
+          </span>
+        )}
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <FlagCrest code={homeCode} accent={homeAccent} size={34} />
           <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 16, color: homeAccent }}>{teamNamePt(homeCode, match.home.name).toUpperCase()}</span>
         </div>
-        <span style={{ fontFamily: SAIRA, fontSize: 16, color: "#42565b" }}>×</span>
+        {match.state === "in" ? (
+          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 22, color: "#fff", whiteSpace: "nowrap", lineHeight: 1 }}>{match.homeScore ?? 0} <span style={{ color: "#42565b" }}>×</span> {match.awayScore ?? 0}</span>
+        ) : (
+          <span style={{ fontFamily: SAIRA, fontSize: 16, color: "#42565b" }}>×</span>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 16, color: awayAccent }}>{teamNamePt(awayCode, match.away.name).toUpperCase()}</span>
           <FlagCrest code={awayCode} accent={awayAccent} size={34} />
