@@ -2,6 +2,7 @@
 
 import { useNow } from "@/lib/use-now";
 import { wcProgress } from "@/lib/wc-progress";
+import { RAINBOW_NAME } from "@/components/live/bf-ui";
 
 export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket" | "ai";
 
@@ -49,8 +50,11 @@ export function Header({ view, onView, dark, onToggleTheme, followCode, followNa
         <div className="bf-nav" style={{ display: "flex", fontFamily: JB, fontSize: 11, letterSpacing: "0.04em", alignItems: "center", flexWrap: "wrap" }}>
           {NAV.map((t) => {
             const active = t.key === view;
+            // The AI tab wears the same rainbow-gradient text as the house bot's
+            // name in the palpites, so it reads as the "AI" feature.
+            const rainbow = t.key === "ai";
             return (
-              <button key={t.key} onClick={() => onView(t.key)} style={{ position: "relative", background: "transparent", border: "none", padding: "2px 0 6px", cursor: "pointer", fontFamily: JB, fontSize: 11, letterSpacing: "0.04em", color: active ? "#f1f7f0" : "#6f8a78" }}>
+              <button key={t.key} onClick={() => onView(t.key)} style={{ position: "relative", background: "transparent", border: "none", padding: "2px 0 6px", cursor: "pointer", fontFamily: JB, fontSize: 11, fontWeight: rainbow ? 700 : 400, letterSpacing: "0.04em", color: active ? "#f1f7f0" : "#6f8a78", ...(rainbow ? RAINBOW_NAME : null) }}>
                 {t.label}
                 {active ? <span style={{ position: "absolute", left: 0, bottom: -1, width: "100%", height: 2, background: "#c8ff2d" }} /> : null}
               </button>
