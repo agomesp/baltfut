@@ -17,6 +17,7 @@ import {
   JB,
   SAIRA,
   LIME,
+  GOLD,
   DIM,
   DIM_2,
   FlagIcon,
@@ -110,6 +111,15 @@ export function AiPalpitesView({ matches, groups, groupByTeam }: AiPalpitesViewP
   return (
     <section>
       <ViewHeader label="// AI PALPITES" sub="previsões da IA do BaltFut · placar, mata-mata completo e campeão · geradas por força das seleções" />
+
+      {/* Entertainment-only disclaimer. The projections are a deterministic
+          strength model, not betting tips — make that explicit up front. */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, borderRadius: 10, border: `1px solid ${GOLD}44`, background: `${GOLD}10`, padding: "10px 14px", marginBottom: 18 }}>
+        <span aria-hidden style={{ fontSize: 14, lineHeight: 1.3, flex: "none" }}>⚠️</span>
+        <span style={{ fontFamily: JB, fontSize: 10, lineHeight: 1.6, letterSpacing: "0.02em", color: "#d8c9a0" }}>
+          <strong style={{ color: GOLD }}>Apenas diversão.</strong> Projeções geradas automaticamente por um modelo de força das seleções — <strong>não são conselho de apostas</strong>, recomendação financeira nem garantia de resultado.
+        </span>
+      </div>
 
       {/* Projected knockout — full simulation (lead element of the screen) */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", margin: "4px 4px 8px" }}>
