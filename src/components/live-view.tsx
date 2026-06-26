@@ -323,7 +323,7 @@ export function LiveView({
         {/* Entertainment-only notice — the palpites are a free fan game with a
             ranking but no prize. Sits right under the store strip. */}
         <p style={{ margin: 0, textAlign: "center", fontFamily: "var(--font-jb)", fontSize: 8, letterSpacing: "0.03em", lineHeight: 1.5, color: "var(--ink-3)" }}>
-          Palpites grátis · sem cadastro · sem premiação · apenas para diversão · dados via ESPN.
+          Palpites grátis · sem cadastro · sem premiação · apenas para diversão.
         </p>
       </div>
     </section>
