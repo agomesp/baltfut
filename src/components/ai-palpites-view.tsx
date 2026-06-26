@@ -114,10 +114,10 @@ export function AiPalpitesView({ matches, groups, groupByTeam }: AiPalpitesViewP
 
       {/* Entertainment-only disclaimer. The projections are a deterministic
           strength model, not betting tips — make that explicit up front. */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, borderRadius: 10, border: `1px solid ${GOLD}44`, background: `${GOLD}10`, padding: "10px 14px", marginBottom: 18 }}>
-        <span aria-hidden style={{ fontSize: 14, lineHeight: 1.3, flex: "none" }}>⚠️</span>
-        <span style={{ fontFamily: JB, fontSize: 10, lineHeight: 1.6, letterSpacing: "0.02em", color: "#d8c9a0" }}>
-          <strong style={{ color: GOLD }}>Apenas diversão.</strong> Projeções geradas automaticamente por um modelo de força das seleções — <strong>não são conselho de apostas</strong>, recomendação financeira nem garantia de resultado.
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 2px", marginBottom: 12 }}>
+        <span aria-hidden style={{ fontSize: 9, flex: "none" }}>⚠️</span>
+        <span style={{ fontFamily: JB, fontSize: 8.5, lineHeight: 1.5, letterSpacing: "0.02em", color: `${GOLD}cc` }}>
+          <strong>Apenas diversão</strong> · projeção automática por força das seleções — não é conselho de apostas nem garantia de resultado.
         </span>
       </div>
 
