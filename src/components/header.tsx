@@ -3,7 +3,7 @@
 import { useNow } from "@/lib/use-now";
 import { wcProgress } from "@/lib/wc-progress";
 
-export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket";
+export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket" | "ai";
 
 const BRIC = "var(--font-bric)";
 const JB = "var(--font-jb)";
@@ -14,6 +14,7 @@ const NAV: { key: ViewKey; label: string }[] = [
   { key: "groups", label: "GRUPOS" },
   { key: "results", label: "RESULTADOS" },
   { key: "bracket", label: "CHAVEAMENTO" },
+  { key: "ai", label: "AI PALPITES" },
 ];
 
 export interface HeaderProps {

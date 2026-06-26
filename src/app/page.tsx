@@ -35,6 +35,7 @@ import { FixturesView } from "@/components/fixtures-view";
 import { GroupsView } from "@/components/groups-view";
 import { ResultsView } from "@/components/results-view";
 import { BracketView } from "@/components/bracket-view";
+import { AiPalpitesView } from "@/components/ai-palpites-view";
 
 const REFRESH_MS = 30_000;
 // Scoreboard refresh, driven by a Web Worker so it stays full-rate even when the
@@ -98,7 +99,7 @@ export default function Home() {
   // Modo Streamer reloads the page periodically; hydrating from a sessionStorage
   // snapshot means it comes back on the same tab/match with content already shown
   // (no "Carregando…" flash, no jump to AO VIVO) before the fresh fetch lands.
-  const VIEW_KEYS: ViewKey[] = ["live", "matches", "groups", "results", "bracket"];
+  const VIEW_KEYS: ViewKey[] = ["live", "matches", "groups", "results", "bracket", "ai"];
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     try {
@@ -436,6 +437,9 @@ export default function Home() {
           <ResultsView matches={results} followCode={follow} groupByTeam={groupByTeam} />
         )}
         {!loading && view === "bracket" && <BracketView stages={knockout} />}
+        {!loading && view === "ai" && (
+          <AiPalpitesView matches={matches} groupByTeam={groupByTeam} />
+        )}
       </main>
     </>
   );
