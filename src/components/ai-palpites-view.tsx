@@ -111,6 +111,59 @@ export function AiPalpitesView({ matches, groups, groupByTeam }: AiPalpitesViewP
     <section>
       <ViewHeader label="// AI PALPITES" sub="previsões da IA do BaltFut · placar, mata-mata completo e campeão · geradas por força das seleções" />
 
+      {/* Projected knockout — full simulation (lead element of the screen) */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", margin: "4px 4px 8px" }}>
+        <span style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.1em", color: "#9bb6a6" }}>MATA-MATA PROJETADO</span>
+        <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: DIM_2 }}>▸ avança · times em itálico = previsão de classificação · ᵖ = pênaltis</span>
+      </div>
+      {bracket.columns.length === 0 ? (
+        <div style={{ ...card, padding: "28px 24px", textAlign: "center", fontFamily: BRIC, color: DIM, marginBottom: 26 }}>
+          O mata-mata ainda não foi sorteado — a projeção aparece assim que as chaves saírem.
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", paddingBottom: 12, marginBottom: 26 }}>
+          <div style={{ display: "flex", gap: 16, minWidth: "max-content" }}>
+            {bracket.columns.map((col) => (
+              <div key={col.slug} style={{ flex: "0 0 248px", display: "flex", flexDirection: "column" }}>
+                <div style={{ ...colHead, color: col.slug === "final" ? LIME : "#9bb6a6" }}>{col.label}</div>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+                  {col.ties.map((tie) => (
+                    <TieCard key={tie.id} tie={tie} />
+                  ))}
+                  {/* 3rd-place match rides under the final column. */}
+                  {col.slug === "final" && bracket.thirdPlace ? (
+                    <>
+                      <div style={{ ...colHead, color: "#9bb6a6", marginTop: 10 }}>3º lugar</div>
+                      <TieCard tie={bracket.thirdPlace} />
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+
+            {/* Champion column */}
+            <div style={{ flex: "0 0 190px", display: "flex", flexDirection: "column" }}>
+              <div style={{ ...colHead, color: LIME }}>Campeão</div>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ borderRadius: 14, border: "1px solid rgba(200,255,45,0.45)", background: "linear-gradient(180deg, rgba(200,255,45,0.06), transparent)", boxShadow: "0 0 30px -10px rgba(200,255,45,0.5)", padding: "22px 16px", textAlign: "center" }}>
+                  {champion ? (
+                    <>
+                      <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+                        <FlagCrest code={champion.code} accent={teamAccent(champion.code)} size={56} />
+                      </div>
+                      <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 30, lineHeight: 1, color: LIME }}>{champion.code}</div>
+                      <div style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "#9bb6a6", marginTop: 8 }}>palpite da IA</div>
+                    </>
+                  ) : (
+                    <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 44, lineHeight: 1, color: LIME }}>?</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Champion pick + força ranking */}
       {champion ? (
         <div style={{ display: "grid", gridTemplateColumns: narrow ? "1fr" : "minmax(0,1fr) minmax(0,1.1fr)", gap: 16, marginBottom: 26 }}>
@@ -189,59 +242,6 @@ export function AiPalpitesView({ matches, groups, groupByTeam }: AiPalpitesViewP
               })}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Projected knockout — full simulation */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", margin: "4px 4px 8px" }}>
-        <span style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.1em", color: "#9bb6a6" }}>MATA-MATA PROJETADO</span>
-        <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: DIM_2 }}>▸ avança · times em itálico = previsão de classificação · ᵖ = pênaltis</span>
-      </div>
-      {bracket.columns.length === 0 ? (
-        <div style={{ ...card, padding: "28px 24px", textAlign: "center", fontFamily: BRIC, color: DIM }}>
-          O mata-mata ainda não foi sorteado — a projeção aparece assim que as chaves saírem.
-        </div>
-      ) : (
-        <div style={{ overflowX: "auto", paddingBottom: 12 }}>
-          <div style={{ display: "flex", gap: 16, minWidth: "max-content" }}>
-            {bracket.columns.map((col) => (
-              <div key={col.slug} style={{ flex: "0 0 248px", display: "flex", flexDirection: "column" }}>
-                <div style={{ ...colHead, color: col.slug === "final" ? LIME : "#9bb6a6" }}>{col.label}</div>
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-                  {col.ties.map((tie) => (
-                    <TieCard key={tie.id} tie={tie} />
-                  ))}
-                  {/* 3rd-place match rides under the final column. */}
-                  {col.slug === "final" && bracket.thirdPlace ? (
-                    <>
-                      <div style={{ ...colHead, color: "#9bb6a6", marginTop: 10 }}>3º lugar</div>
-                      <TieCard tie={bracket.thirdPlace} />
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-
-            {/* Champion column */}
-            <div style={{ flex: "0 0 190px", display: "flex", flexDirection: "column" }}>
-              <div style={{ ...colHead, color: LIME }}>Campeão</div>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ borderRadius: 14, border: "1px solid rgba(200,255,45,0.45)", background: "linear-gradient(180deg, rgba(200,255,45,0.06), transparent)", boxShadow: "0 0 30px -10px rgba(200,255,45,0.5)", padding: "22px 16px", textAlign: "center" }}>
-                  {champion ? (
-                    <>
-                      <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
-                        <FlagCrest code={champion.code} accent={teamAccent(champion.code)} size={56} />
-                      </div>
-                      <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 30, lineHeight: 1, color: LIME }}>{champion.code}</div>
-                      <div style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "#9bb6a6", marginTop: 8 }}>palpite da IA</div>
-                    </>
-                  ) : (
-                    <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 44, lineHeight: 1, color: LIME }}>?</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       )}
     </section>
