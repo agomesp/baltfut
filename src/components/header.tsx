@@ -54,7 +54,7 @@ export function Header({ view, onView, dark, onToggleTheme, followCode, followNa
             // name in the palpites, so it reads as the "AI" feature.
             const rainbow = t.key === "ai";
             return (
-              <button key={t.key} onClick={() => onView(t.key)} style={{ position: "relative", background: "transparent", border: "none", padding: "2px 0 6px", cursor: "pointer", fontFamily: JB, fontSize: 11, fontWeight: rainbow ? 700 : 400, letterSpacing: "0.04em", color: active ? "#f1f7f0" : "#6f8a78", ...(rainbow ? RAINBOW_NAME : null) }}>
+              <button key={t.key} onClick={() => onView(t.key)} style={{ position: "relative", background: "transparent", border: "none", padding: "2px 0 6px", cursor: "pointer", fontFamily: JB, fontSize: 11, fontWeight: rainbow ? 700 : 400, letterSpacing: "0.04em", color: active ? "#f1f7f0" : "#6f8a78", ...(rainbow ? RAINBOW_NAME : null), ...(rainbow ? { backgroundImage: "linear-gradient(90deg,#ff3b30,#ff9500,#ffcc00,#34c759,#00c7be,#0a84ff,#bf5af2,#ff3b30)", backgroundSize: "200% auto", animation: "bfrainbow 4s linear infinite" } : null) }}>
                 {t.label}
                 {active ? <span style={{ position: "absolute", left: 0, bottom: -1, width: "100%", height: 2, background: "#c8ff2d" }} /> : null}
               </button>
