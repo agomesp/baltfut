@@ -13,3 +13,10 @@ export {
   type KnockoutProjection,
   type RankedTeam,
 } from "@/lib/ai-palpite/model";
+export {
+  simulateBracket,
+  type BracketSim,
+  type SimColumn,
+  type SimTie,
+  type SimTeam,
+} from "@/lib/ai-palpite/simulate";

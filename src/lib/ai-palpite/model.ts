@@ -1,6 +1,7 @@
 import {
   buildKnockout,
   isPlaceholderTeam,
+  type Group,
   type KnockoutColumn,
   type Match,
 } from "@/lib/espn";
@@ -10,6 +11,7 @@ import {
   strongerCode,
   type ScorePalpite,
 } from "@/lib/ai-palpite/predict";
+import { simulateBracket, type BracketSim } from "@/lib/ai-palpite/simulate";
 
 /** My predicted scoreline for one fixture. */
 export interface MatchPalpite {
@@ -44,7 +46,11 @@ export interface AiPalpitesModel {
   upcoming: MatchPalpite[];
   /** The real mata-mata columns, each tie annotated with my projection. */
   knockout: KnockoutProjection[];
-  /** Who I back to lift the trophy (highest-rated side still alive). */
+  /** Fully-resolved bracket simulation (group positions → final), or empty
+   *  columns when the mata-mata isn't drawn / standings are missing. */
+  bracket: BracketSim;
+  /** Who I back to lift the trophy: the simulated champion when the bracket is
+   *  drawn, else the highest-rated side still alive. */
   champion: RankedTeam | null;
   /** Top sides still alive, by power — the força ranking. */
   ranking: RankedTeam[];
@@ -122,10 +128,13 @@ function presentTeams(matches: Match[]): Map<string, string> {
 }
 
 /**
- * Build the full AI-palpites view model from live fixtures. Deterministic: the
- * same matches always produce the same predictions.
+ * Build the full AI-palpites view model from live fixtures + group tables.
+ * Deterministic: the same input always produces the same predictions.
  */
-export function buildAiPalpites(matches: Match[]): AiPalpitesModel {
+export function buildAiPalpites(
+  matches: Match[],
+  groups: Group[] = [],
+): AiPalpitesModel {
   const upcoming: MatchPalpite[] = matches
     // Only fixtures with two decided teams — a knockout tie still on seeds
     // ("Group A 1st Place") can't be palpitado yet; it shows in the mata-mata.
@@ -144,10 +153,18 @@ export function buildAiPalpites(matches: Match[]): AiPalpitesModel {
     .map(([code, name]) => ({ code, name, power: teamPower(code) }))
     .sort((a, b) => b.power - a.power || a.code.localeCompare(b.code));
 
+  const bracket = simulateBracket(matches, groups);
+  // The simulated champion is the sharper pick (it walks the real bracket); fall
+  // back to the strongest side still alive when the mata-mata isn't drawn yet.
+  const simChampion = bracket.champion
+    ? { code: bracket.champion.code, name: bracket.champion.name, power: teamPower(bracket.champion.code) }
+    : null;
+
   return {
     upcoming,
     knockout,
-    champion: ranking[0] ?? null,
+    bracket,
+    champion: simChampion ?? ranking[0] ?? null,
     ranking: ranking.slice(0, 8),
   };
 }

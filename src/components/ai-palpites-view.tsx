@@ -1,9 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import type { Match } from "@/lib/espn";
-import { isPlaceholderTeam, seedLabel } from "@/lib/espn";
-import { buildAiPalpites, type ScorePalpite } from "@/lib/ai-palpite";
+import type { Group, Match } from "@/lib/espn";
+import {
+  buildAiPalpites,
+  type ScorePalpite,
+  type SimTie,
+  type SimTeam,
+} from "@/lib/ai-palpite";
 import { fmtTime, groupByDay } from "@/lib/format";
 import { teamNamePt } from "@/lib/team-names";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -23,6 +27,7 @@ import {
 
 export interface AiPalpitesViewProps {
   matches: Match[];
+  groups: Group[];
   groupByTeam: Record<string, string>;
 }
 
@@ -61,29 +66,40 @@ function ScorePill({ score }: { score: ScorePalpite }) {
 
 const colHead = { fontFamily: JB, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" as const, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 6 };
 
-/** One mata-mata slot: a decided team (highlighted lime when I back it), or a seed. */
-function BracketSlot({ team, advances }: { team: Match["home"]; advances: boolean }) {
-  if (isPlaceholderTeam(team.name)) {
-    return (
-      <div style={{ padding: "7px 11px" }}>
-        <span style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.02em", color: "#8fa898", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{seedLabel(team.name)}</span>
-      </div>
-    );
-  }
+/** One side of a simulated tie: flag + code + name + goals. The team I back is
+ *  lime with a ▸; predicted (not-yet-decided) sides render in italic. */
+function SimSlot({ team, goals, advances, penalties }: { team: SimTeam; goals: number; advances: boolean; penalties: boolean }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 11px", opacity: advances ? 1 : 0.5 }}>
-      <FlagIcon code={team.abbreviation} size={12} />
-      <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13, color: advances ? LIME : "#f1f7f0" }}>{team.abbreviation}</span>
-      <span style={{ fontFamily: BRIC, fontSize: 11.5, color: DIM, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(team.abbreviation, team.name)}</span>
-      {advances ? <span style={{ marginLeft: "auto", fontFamily: JB, fontSize: 9, color: LIME, flex: "none" }}>▸</span> : null}
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", opacity: advances ? 1 : 0.6 }}>
+      <FlagIcon code={team.code} size={12} />
+      <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13, color: advances ? LIME : "#f1f7f0", fontStyle: team.projected ? "italic" : "normal" }}>{team.code}</span>
+      <span style={{ fontFamily: BRIC, fontSize: 11, color: DIM, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: team.projected ? "italic" : "normal" }}>{teamNamePt(team.code, team.name)}</span>
+      <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, flex: "none" }}>
+        {advances ? <span style={{ fontFamily: JB, fontSize: 9, color: LIME }}>▸</span> : null}
+        <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 14, color: advances ? "#fff" : "#7d9a86" }}>
+          {goals}{advances && penalties ? <span style={{ fontFamily: JB, fontSize: 8, color: LIME, verticalAlign: "super" }}> p</span> : null}
+        </span>
+      </span>
     </div>
   );
 }
 
-export function AiPalpitesView({ matches, groupByTeam }: AiPalpitesViewProps) {
+/** A simulated tie card (two stacked slots). */
+function TieCard({ tie }: { tie: SimTie }) {
+  return (
+    <div style={card}>
+      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <SimSlot team={tie.home} goals={tie.homeGoals} advances={tie.winner === "home"} penalties={tie.penalties} />
+      </div>
+      <SimSlot team={tie.away} goals={tie.awayGoals} advances={tie.winner === "away"} penalties={tie.penalties} />
+    </div>
+  );
+}
+
+export function AiPalpitesView({ matches, groups, groupByTeam }: AiPalpitesViewProps) {
   const narrow = useIsNarrow();
-  const model = useMemo(() => buildAiPalpites(matches), [matches]);
-  const { upcoming, knockout, champion, ranking } = model;
+  const model = useMemo(() => buildAiPalpites(matches, groups), [matches, groups]);
+  const { upcoming, bracket, champion, ranking } = model;
 
   const days = useMemo(() => groupByDay(upcoming.map((u) => u.match)), [upcoming]);
   const palpiteByMatch = useMemo(
@@ -93,7 +109,7 @@ export function AiPalpitesView({ matches, groupByTeam }: AiPalpitesViewProps) {
 
   return (
     <section>
-      <ViewHeader label="// AI PALPITES" sub="previsões da IA do BaltFut · placar, mata-mata e campeão · geradas por força das seleções" />
+      <ViewHeader label="// AI PALPITES" sub="previsões da IA do BaltFut · placar, mata-mata completo e campeão · geradas por força das seleções" />
 
       {/* Champion pick + força ranking */}
       {champion ? (
@@ -105,6 +121,11 @@ export function AiPalpitesView({ matches, groupByTeam }: AiPalpitesViewProps) {
               <div style={{ fontFamily: JB, fontSize: 10, letterSpacing: "0.16em", color: LIME, marginBottom: 6 }}>CAMPEÃO PROJETADO</div>
               <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(30px,5vw,46px)", lineHeight: 0.95, letterSpacing: "-0.02em", color: "#f1f7f0" }}>{champion.code}</div>
               <div style={{ fontFamily: BRIC, fontSize: 14, color: DIM, marginTop: 4 }}>{teamNamePt(champion.code, champion.name)}</div>
+              {bracket.runnerUp && bracket.third ? (
+                <div style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.04em", color: DIM_2, marginTop: 10, lineHeight: 1.6 }}>
+                  VICE <span style={{ color: "#cfd9d1" }}>{bracket.runnerUp.code}</span> · 3º <span style={{ color: "#cfd9d1" }}>{bracket.third.code}</span>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -171,37 +192,32 @@ export function AiPalpitesView({ matches, groupByTeam }: AiPalpitesViewProps) {
         </div>
       )}
 
-      {/* Projected knockout */}
-      <div style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.1em", color: "#9bb6a6", margin: "4px 4px 8px" }}>
-        MATA-MATA PROJETADO
+      {/* Projected knockout — full simulation */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", margin: "4px 4px 8px" }}>
+        <span style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.1em", color: "#9bb6a6" }}>MATA-MATA PROJETADO</span>
+        <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: DIM_2 }}>▸ avança · times em itálico = previsão de classificação · ᵖ = pênaltis</span>
       </div>
-      {knockout.length === 0 ? (
+      {bracket.columns.length === 0 ? (
         <div style={{ ...card, padding: "28px 24px", textAlign: "center", fontFamily: BRIC, color: DIM }}>
-          O mata-mata ainda não foi sorteado — palpites do chaveamento aparecem assim que as chaves saírem.
+          O mata-mata ainda não foi sorteado — a projeção aparece assim que as chaves saírem.
         </div>
       ) : (
         <div style={{ overflowX: "auto", paddingBottom: 12 }}>
-          <div style={{ display: "flex", gap: 18, minWidth: "max-content" }}>
-            {knockout.map((col) => (
-              <div key={col.slug} style={{ flex: "0 0 250px", display: "flex", flexDirection: "column" }}>
-                <div style={{ ...colHead, color: "#9bb6a6" }}>{col.label}</div>
+          <div style={{ display: "flex", gap: 16, minWidth: "max-content" }}>
+            {bracket.columns.map((col) => (
+              <div key={col.slug} style={{ flex: "0 0 248px", display: "flex", flexDirection: "column" }}>
+                <div style={{ ...colHead, color: col.slug === "final" ? LIME : "#9bb6a6" }}>{col.label}</div>
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
                   {col.ties.map((tie) => (
-                    <div key={tie.match.id} style={card}>
-                      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <BracketSlot team={tie.match.home} advances={tie.advances === tie.match.home.abbreviation} />
-                        </div>
-                        {tie.score ? <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 14, color: "#fff", padding: "0 11px", flex: "none" }}>{tie.score.home}</span> : null}
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <BracketSlot team={tie.match.away} advances={tie.advances === tie.match.away.abbreviation} />
-                        </div>
-                        {tie.score ? <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 14, color: "#fff", padding: "0 11px", flex: "none" }}>{tie.score.away}</span> : null}
-                      </div>
-                    </div>
+                    <TieCard key={tie.id} tie={tie} />
                   ))}
+                  {/* 3rd-place match rides under the final column. */}
+                  {col.slug === "final" && bracket.thirdPlace ? (
+                    <>
+                      <div style={{ ...colHead, color: "#9bb6a6", marginTop: 10 }}>3º lugar</div>
+                      <TieCard tie={bracket.thirdPlace} />
+                    </>
+                  ) : null}
                 </div>
               </div>
             ))}

@@ -438,7 +438,7 @@ export default function Home() {
         )}
         {!loading && view === "bracket" && <BracketView stages={knockout} />}
         {!loading && view === "ai" && (
-          <AiPalpitesView matches={matches} groupByTeam={groupByTeam} />
+          <AiPalpitesView matches={matches} groups={groups} groupByTeam={groupByTeam} />
         )}
       </main>
     </>
