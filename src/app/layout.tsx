@@ -101,16 +101,6 @@ export default function RootLayout({
       </head>
       <body style={{ minHeight: "100vh" }}>
         <ErrorBoundary>{children}</ErrorBoundary>
-        {/* Site-wide entertainment-only notice. The palpites are a free fan game
-            with a ranking but no prize — make that explicit on every screen so the
-            leaderboard is never mistaken for a contest/sweepstakes. */}
-        <footer className="bf-footer-note" style={{ borderTop: "1px solid rgba(255,255,255,0.05)", padding: "9px 16px 14px", textAlign: "center" }}>
-          <p style={{ margin: 0, fontFamily: "var(--font-jb)", fontSize: 8, letterSpacing: "0.03em", lineHeight: 1.6, color: "var(--ink-3)" }}>
-            Palpites grátis e sem cadastro · sem premiação · apenas para diversão.
-            <br />
-            Projeto de torcedor, sem vínculo com a FIFA. Placares e dados via ESPN.
-          </p>
-        </footer>
         <KickChatReactions />
         <UpdateBanner />
         <div
