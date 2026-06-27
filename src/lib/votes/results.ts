@@ -30,7 +30,12 @@ export function mapEntryRow(row: EntryRow): VoteEntry {
   };
 }
 
-/** Fetch predictions for a match (newest first). */
+/**
+ * Fetch predictions for a match, newest first. The order is set explicitly here,
+ * NOT left to the `vote_entries` view's internal ORDER BY — PostgREST doesn't
+ * contractually preserve a view's order through an outer select+limit, and
+ * `rankPredictions` relies on stable newest-first input (audit B1).
+ */
 export async function fetchVoteEntries(
   client: SupabaseClient,
   matchId: string,
@@ -40,12 +45,19 @@ export async function fetchVoteEntries(
     .from("vote_entries")
     .select("*")
     .eq("match_id", matchId)
+    .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);
   return (data as EntryRow[] | null)?.map(mapEntryRow) ?? [];
 }
 
-/** Fetch all predictions (for the ranking). Capped to keep the payload bounded. */
+/**
+ * Fetch all predictions (for the ranking), newest first, capped to keep the
+ * payload bounded. The explicit ORDER BY (with a `match_id` tiebreaker) makes the
+ * `.limit()` cut DETERMINISTIC: without it, which rows survive past the cap is
+ * undefined, which would silently skew rankSubs/worstPalpiteiro once the table
+ * grows beyond the limit (audit B1).
+ */
 export async function fetchAllEntries(
   client: SupabaseClient,
   limit = 2000,
@@ -53,6 +65,8 @@ export async function fetchAllEntries(
   const { data, error } = await client
     .from("vote_entries")
     .select("*")
+    .order("created_at", { ascending: false })
+    .order("match_id")
     .limit(limit);
   if (error) throw new Error(error.message);
   return (data as EntryRow[] | null)?.map(mapEntryRow) ?? [];
