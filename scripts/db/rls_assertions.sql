@@ -128,4 +128,74 @@ begin
   end;
 end $$;
 
+-- I) name_claims is fully locked to anon — the token_hash secret must never leak
+--    (audit D2). anon has ZERO grants on this table.
+do $$
+begin
+  set local role anon;
+  begin
+    perform 1 from (select token_hash from public.name_claims limit 1) s;
+    raise exception 'FAIL I1: anon read name_claims.token_hash';
+  exception when insufficient_privilege then raise notice 'PASS I1: anon denied name_claims.token_hash';
+  end;
+  begin
+    insert into public.name_claims (name_lower, name, token_hash)
+    values ('hacker','hacker', repeat('z',64));
+    raise exception 'FAIL I2: anon wrote name_claims';
+  exception when insufficient_privilege then raise notice 'PASS I2: anon write to name_claims denied';
+  end;
+end $$;
+
+-- J) ...but the server (service_role) still holds its write grant on name_claims.
+do $$
+begin
+  set local role service_role;
+  insert into public.name_claims (name_lower, name, token_hash)
+  values ('zztest','ZZTest', repeat('a',64))
+  on conflict (name_lower) do nothing;
+  raise notice 'PASS J: service_role can write name_claims';
+end $$;
+
+-- K) promos is anon read-only (audit D2): anon may SELECT, never write. ----------
+do $$
+declare n int;
+begin
+  set local role anon;
+  select count(*) into n from public.promos;        -- anon CAN read (must not raise)
+  raise notice 'PASS K1: anon read promos (% rows)', n;
+  begin
+    insert into public.promos (position, product, link) values (32000, 'x', 'x');
+    raise exception 'FAIL K2: anon inserted a promo';
+  exception when insufficient_privilege then raise notice 'PASS K2: anon insert promo denied';
+  end;
+  begin
+    update public.promos set product = 'x' where position = 0;
+    raise exception 'FAIL K3: anon updated a promo';
+  exception when insufficient_privilege then raise notice 'PASS K3: anon update promo denied';
+  end;
+  begin
+    delete from public.promos;
+    raise exception 'FAIL K4: anon deleted promos';
+  exception when insufficient_privilege then raise notice 'PASS K4: anon delete promo denied';
+  end;
+end $$;
+
+-- L) set_promos: only service_role may execute the privileged feed-replace RPC
+--    (audit D3). anon must not be able to wipe/replace the deals feed.
+do $$
+begin
+  set local role anon;
+  begin
+    perform public.set_promos('[]'::jsonb);
+    raise exception 'FAIL L1: anon executed set_promos';
+  exception when insufficient_privilege then raise notice 'PASS L1: anon set_promos execute denied';
+  end;
+end $$;
+do $$
+begin
+  set local role service_role;
+  perform public.set_promos('[]'::jsonb);           -- execute grant intact (must not raise)
+  raise notice 'PASS L2: service_role can execute set_promos';
+end $$;
+
 select 'ALL RLS CHECKS PASSED' as result;
