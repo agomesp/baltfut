@@ -22,10 +22,11 @@ describe("Home page", () => {
     vi.mocked(fetchLineups).mockResolvedValue(null);
   });
 
-  it("renders the header wordmark and tab nav", async () => {
+  it("renders the header wordmark and the bottom dock nav", async () => {
     render(<Home />);
     expect(await screen.findByText("BaltFut")).toBeInTheDocument();
-    expect(screen.getByText("AO VIVO")).toBeInTheDocument();
-    expect(screen.getByText("CHAVEAMENTO")).toBeInTheDocument();
+    // Navigation moved from the top bar to the bottom dock (BottomTabBar).
+    expect(screen.getByText("Ao vivo")).toBeInTheDocument();
+    expect(screen.getByText("Chaves")).toBeInTheDocument();
   });
 });

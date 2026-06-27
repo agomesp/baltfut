@@ -96,7 +96,8 @@ export function Reactions({ matchId }: { matchId: string }) {
         })}
       </div>
 
-      <div style={{ position: "fixed", bottom: 14, left: "50%", transform: "translateX(-50%)", zIndex: 56 }}>
+      {/* Bottom-LEFT so it never sits under the centered bottom dock nav. */}
+      <div style={{ position: "fixed", bottom: 14, left: 14, zIndex: 56 }}>
         {/* Expanded emoji bar (collapses with a fade/scale). */}
         <div
           style={{
@@ -140,7 +141,7 @@ export function Reactions({ matchId }: { matchId: string }) {
           aria-label="Abrir reações"
           style={{
             position: "absolute",
-            left: "50%",
+            left: 0,
             bottom: 0,
             width: 38,
             height: 38,
@@ -155,7 +156,7 @@ export function Reactions({ matchId }: { matchId: string }) {
             cursor: "pointer",
             transition: "opacity .2s ease, transform .2s ease",
             opacity: open ? 0 : 1,
-            transform: open ? "translateX(-50%) scale(.8)" : "translateX(-50%) scale(1)",
+            transform: open ? "scale(.8)" : "scale(1)",
             pointerEvents: open ? "none" : "auto",
           }}
         >

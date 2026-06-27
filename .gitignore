@@ -54,3 +54,6 @@ next-env.d.ts
 
 # promos now live in the Supabase `promos` table; this is just a local-dev fallback
 /public/promos.json
+
+# Local-only prod data snapshot for dev testing (real palpites — never commit)
+public/dev/

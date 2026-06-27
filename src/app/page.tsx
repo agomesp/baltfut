@@ -36,6 +36,7 @@ import { GroupsView } from "@/components/groups-view";
 import { ResultsView } from "@/components/results-view";
 import { BracketView } from "@/components/bracket-view";
 import { AiPalpitesView } from "@/components/ai-palpites-view";
+import { BottomTabBar } from "@/components/bottom-tab-bar";
 
 const REFRESH_MS = 30_000;
 // Scoreboard refresh, driven by a Web Worker so it stays full-rate even when the
@@ -393,10 +394,6 @@ export default function Home() {
   return (
     <>
       <Header
-        view={view}
-        onView={setView}
-        dark={dark}
-        onToggleTheme={() => setDark((d) => !d)}
         followCode={follow}
         followName={followName}
         onClearFollow={() => setFollow(null)}
@@ -441,6 +438,8 @@ export default function Home() {
           <AiPalpitesView matches={matches} groups={groups} groupByTeam={groupByTeam} />
         )}
       </main>
+      {/* Primary navigation: the bottom dock (2.1 sport). */}
+      <BottomTabBar view={view} onView={setView} variant="v3" />
     </>
   );
 }

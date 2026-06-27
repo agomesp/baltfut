@@ -116,7 +116,7 @@ const inputStyle = {
   background: "rgba(0,0,0,0.3)",
   border: "1px solid rgba(255,255,255,0.14)",
   borderRadius: 10,
-  padding: "9px 13px",
+  padding: "7px 13px",
   color: "#fff",
   fontFamily: BRIC,
   fontSize: 13.5,
@@ -124,16 +124,17 @@ const inputStyle = {
 };
 
 export function NameField({ name, setName, locked, onUnlock }: { name: string; setName: (s: string) => void; locked: boolean; onUnlock: () => void }) {
+  // Label + input on ONE row (label left, input fills) to keep the bar short.
   return (
-    <div>
-      <label style={{ fontFamily: JB, fontSize: 10, letterSpacing: "0.1em", color: "#7d9a86" }}>SEU NOME</label>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <label style={{ flex: "none", fontFamily: JB, fontSize: 10, letterSpacing: "0.1em", color: "#7d9a86", whiteSpace: "nowrap" }}>SEU NOME</label>
       {locked ? (
-        <div style={{ display: "flex", gap: 8, marginTop: 7 }}>
-          <input value={name} readOnly aria-label="Seu nome" title="Seu nome fixo neste navegador" style={{ ...inputStyle, opacity: 0.85, cursor: "default" }} />
-          <button type="button" onClick={onUnlock} title="Usar outro nome" style={{ flex: "none", fontFamily: JB, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9bb6a6", background: "transparent", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 11, padding: "0 12px", cursor: "pointer" }}>Trocar</button>
-        </div>
+        <>
+          <input value={name} readOnly aria-label="Seu nome" title="Seu nome fixo neste navegador" style={{ ...inputStyle, flex: "1 1 auto", minWidth: 0, opacity: 0.85, cursor: "default" }} />
+          <button type="button" onClick={onUnlock} title="Usar outro nome" style={{ flex: "none", alignSelf: "stretch", fontFamily: JB, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9bb6a6", background: "transparent", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 11, padding: "0 12px", cursor: "pointer" }}>Trocar</button>
+        </>
       ) : (
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="digite seu @usuário" maxLength={24} autoComplete="off" aria-label="Seu nome" style={{ ...inputStyle, marginTop: 7 }} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="digite seu @usuário" maxLength={24} autoComplete="off" aria-label="Seu nome" style={{ ...inputStyle, flex: "1 1 auto", minWidth: 0 }} />
       )}
     </div>
   );

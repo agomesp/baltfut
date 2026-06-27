@@ -167,6 +167,79 @@ body {
     background-position: 200% center;
   }
 }
+/* PROTOTYPE-ONLY: UX-lab nav variations (icon pills + discovery nudge). */
+.bf-navlab-btn {
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.bf-navlab-btn:hover {
+  background: rgba(200, 255, 45, 0.12) !important;
+  border-color: rgba(200, 255, 45, 0.4) !important;
+  color: #eaffc0 !important;
+}
+@keyframes bfnavnudge {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(200, 255, 45, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(200, 255, 45, 0.4);
+  }
+}
+.bf-nav-nudge {
+  border-radius: 999px;
+  animation: bfnavnudge 1.8s ease-in-out infinite;
+}
+
+/* Bottom dock (2.1 sport): hover magnification + per-icon active loop animations. */
+.bf-dock-tab {
+  transition: transform 0.16s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.bf-dock-tab:hover {
+  transform: translateY(-3px) scale(1.12);
+}
+/* "Ao vivo" radio: nested arcs pulse in (1→2→3) then out (3→2→1), wifi-style. */
+@keyframes bfwifi1 {
+  0%, 100% { opacity: 0.12; }
+  12%, 88% { opacity: 1; }
+}
+@keyframes bfwifi2 {
+  0%, 24%, 76%, 100% { opacity: 0.12; }
+  32%, 68% { opacity: 1; }
+}
+@keyframes bfwifi3 {
+  0%, 40%, 60%, 100% { opacity: 0.12; }
+  48%, 52% { opacity: 1; }
+}
+/* Sequential chase for grid cells / calendar days / check rows / bracket nodes —
+   one keyframe + staggered animation-delay per element. */
+@keyframes bfchase {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+/* Sparkle twinkle (AI). */
+@keyframes bftwinkle {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* Modo Streamer OFF → a pulsing red glow + gentle breathing scale, so the
+   streamer can't miss that the keep-alive isn't on yet. Calms down once ON. */
+@keyframes bfstreameralert {
+  0%, 100% {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(255, 77, 77, 0);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 22px 5px rgba(255, 77, 77, 0.6);
+    transform: scale(1.04);
+  }
+}
+.bf-streamer-alert {
+  animation: bfstreameralert 1.5s ease-in-out infinite;
+}
+.bf-streamer-alert:hover {
+  animation-play-state: paused;
+}
 @keyframes bfwave {
   0%,
   100% {

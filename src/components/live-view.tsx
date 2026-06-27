@@ -7,7 +7,7 @@ import type { ChipGame, ChipPhase } from "@/lib/chips";
 import { useNow } from "@/lib/use-now";
 import { communityConsensus } from "@/lib/consensus";
 import { classifyLivePalpites } from "@/lib/live-palpites";
-import { palpiteFormOpen, palpiteDeadline } from "@/lib/palpite";
+import { palpiteFormVisible, palpiteDeadline } from "@/lib/palpite";
 import { Reactions } from "@/components/reactions";
 import { RbStoreStrip } from "@/components/live/rb-store-strip";
 import { BfChipRail } from "@/components/live/bf-chip-rail";
@@ -103,7 +103,7 @@ function PlacarStage({
   const final = phase === "post";
   const breakdown = classifyLivePalpites(entries, current, final);
   const consensus = communityConsensus(entries);
-  const formOpen = phase === "live" && palpiteFormOpen(match, releasedIds, now);
+  const formOpen = phase === "live" && palpiteFormVisible(match, releasedIds, now);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
@@ -152,7 +152,7 @@ function DuoStage({ games, allEntries, matches, groupByTeam, releasedIds, onVote
   // and through the first 5 live minutes (kickoff+grace). So a game that kicks
   // off keeps its form for those 5 minutes here, exactly like the 1-game view;
   // after the grace it falls back to the live card.
-  const isForm = (m: Match) => palpiteFormOpen(m, releasedIds, now);
+  const isForm = (m: Match) => palpiteFormVisible(m, releasedIds, now);
   const anyForm = games.some(isForm);
 
   const card = (m: Match) => {
@@ -320,11 +320,6 @@ export function LiveView({
         </div>
 
         <RbStoreStrip height={54} />
-        {/* Entertainment-only notice — the palpites are a free fan game with a
-            ranking but no prize. Sits right under the store strip. */}
-        <p style={{ margin: 0, textAlign: "center", fontFamily: "var(--font-jb)", fontSize: 8, letterSpacing: "0.03em", lineHeight: 1.5, color: "var(--ink-3)" }}>
-          Palpites grátis · sem cadastro · sem premiação · apenas para diversão.
-        </p>
       </div>
     </section>
   );

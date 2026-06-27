@@ -142,6 +142,8 @@ export function ModoStreamer() {
   return (
     <button
       onClick={toggle}
+      // OFF gets the pulsing-glow alert (a reminder to turn it on); ON is calm.
+      className={on ? undefined : "bf-streamer-alert"}
       title={
         on
           ? "Mostrando o relógio do jogo numa janelinha (não feche). Toque para desligar."
@@ -160,9 +162,9 @@ export function ModoStreamer() {
         borderRadius: 8,
         cursor: "pointer",
         boxShadow: "0 6px 22px rgba(0,0,0,0.4)",
-        background: on ? "rgba(67,184,106,0.16)" : "rgba(255,77,77,0.16)",
-        color: on ? "#bff0cf" : "#ffb3b3",
-        border: `1px solid ${on ? "rgba(98,203,132,0.55)" : "rgba(255,77,77,0.55)"}`,
+        background: on ? "rgba(67,184,106,0.16)" : "rgba(255,77,77,0.22)",
+        color: on ? "#bff0cf" : "#ffc9c9",
+        border: `1px solid ${on ? "rgba(98,203,132,0.55)" : "rgba(255,77,77,0.7)"}`,
       }}
     >
       {on ? (

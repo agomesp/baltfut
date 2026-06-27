@@ -2,33 +2,21 @@
 
 import { useNow } from "@/lib/use-now";
 import { wcProgress } from "@/lib/wc-progress";
-import { RAINBOW_NAME } from "@/components/live/bf-ui";
 
+// Page navigation now lives entirely in the bottom dock (BottomTabBar); the top
+// bar is brand + tournament progress + the entertainment-only notice.
 export type ViewKey = "live" | "matches" | "groups" | "results" | "bracket" | "ai";
 
 const BRIC = "var(--font-bric)";
 const JB = "var(--font-jb)";
 
-const NAV: { key: ViewKey; label: string }[] = [
-  { key: "live", label: "AO VIVO" },
-  { key: "matches", label: "JOGOS" },
-  { key: "groups", label: "GRUPOS" },
-  { key: "results", label: "RESULTADOS" },
-  { key: "bracket", label: "CHAVEAMENTO" },
-  { key: "ai", label: "AI PALPITES" },
-];
-
 export interface HeaderProps {
-  view: ViewKey;
-  onView: (v: ViewKey) => void;
-  dark: boolean;
-  onToggleTheme: () => void;
   followCode: string | null;
   followName: string | null;
   onClearFollow: () => void;
 }
 
-export function Header({ view, onView, dark, onToggleTheme, followCode, followName, onClearFollow }: HeaderProps) {
+export function Header({ followCode, followName, onClearFollow }: HeaderProps) {
   const now = useNow(1000);
   const wc = wcProgress(now);
 
@@ -47,20 +35,7 @@ export function Header({ view, onView, dark, onToggleTheme, followCode, followNa
           </span>
         </div>
 
-        <div className="bf-nav" style={{ display: "flex", fontFamily: JB, fontSize: 11, letterSpacing: "0.04em", alignItems: "center", flexWrap: "wrap" }}>
-          {NAV.map((t) => {
-            const active = t.key === view;
-            // The AI tab wears the same rainbow-gradient text as the house bot's
-            // name in the palpites, so it reads as the "AI" feature.
-            const rainbow = t.key === "ai";
-            return (
-              <button key={t.key} onClick={() => onView(t.key)} style={{ position: "relative", background: "transparent", border: "none", padding: "2px 0 6px", cursor: "pointer", fontFamily: JB, fontSize: 11, fontWeight: rainbow ? 700 : 400, letterSpacing: "0.04em", color: active ? "#f1f7f0" : "#6f8a78", ...(rainbow ? RAINBOW_NAME : null), ...(rainbow ? { backgroundImage: "linear-gradient(90deg,#ff3b30,#ff9500,#ffcc00,#34c759,#00c7be,#0a84ff,#bf5af2,#ff3b30)", backgroundSize: "200% auto", animation: "bfrainbow 4s linear infinite" } : null) }}>
-                {t.label}
-                {active ? <span style={{ position: "absolute", left: 0, bottom: -1, width: "100%", height: 2, background: "#c8ff2d" }} /> : null}
-              </button>
-            );
-          })}
-
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           {followCode ? (
             <button onClick={onClearFollow} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: JB, fontSize: 10.5, letterSpacing: "0.06em", color: "#0f1f02", background: "#c8ff2d", border: "none", borderRadius: 999, padding: "7px 12px", cursor: "pointer" }}>
               <span style={{ width: 6, height: 6, borderRadius: 999, background: "#0f1f02" }} />
@@ -68,9 +43,10 @@ export function Header({ view, onView, dark, onToggleTheme, followCode, followNa
             </button>
           ) : null}
 
-          <button onClick={onToggleTheme} aria-label="Alternar tema" style={{ border: "1px solid rgba(255,255,255,0.16)", borderRadius: 999, padding: "7px 13px", color: "#cfd3ce", cursor: "pointer", background: "transparent", fontFamily: JB, fontSize: 11, letterSpacing: "0.04em" }}>
-            {dark ? "ESCURO" : "CLARO"}
-          </button>
+          {/* Entertainment-only notice (moved here from below the RB Store strip). */}
+          <span style={{ fontFamily: JB, fontSize: 8, letterSpacing: "0.03em", color: "var(--ink-3)" }}>
+            Palpites grátis · sem cadastro · sem premiação · apenas para diversão.
+          </span>
         </div>
       </div>
     </header>
