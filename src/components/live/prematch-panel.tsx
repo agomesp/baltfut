@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import { supabaseCastVote, type CastVoteTransport } from "@/lib/votes";
@@ -261,12 +261,21 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
   }, [outcome]);
 
   const lowerName = name.trim().toLowerCase();
-  const meInEntries = lowerName !== "" && entries.some((x) => x.username.trim().toLowerCase() === lowerName);
+  // Memoized so the per-second clock tick (the deadline check) doesn't re-scan the
+  // entries / rebuild the list / recompute the split. Recomputes when the palpites
+  // change (poll/realtime), the viewer's name changes, or they just submitted.
+  const meInEntries = useMemo(
+    () => lowerName !== "" && entries.some((x) => x.username.trim().toLowerCase() === lowerName),
+    [entries, lowerName],
+  );
   const alreadySent = meInEntries || sent != null;
-  const shownEntries = sent && !meInEntries ? [sent, ...entries] : entries;
+  const shownEntries = useMemo(
+    () => (sent && !meInEntries ? [sent, ...entries] : entries),
+    [sent, meInEntries, entries],
+  );
   // Live home/draw/away split for this game — recomputes whenever palpites change
   // (the entries prop refreshes via polling/realtime), like the single-match view.
-  const consensus = communityConsensus(shownEntries);
+  const consensus = useMemo(() => communityConsensus(shownEntries), [shownEntries]);
 
   async function submit() {
     const trimmed = name.trim();

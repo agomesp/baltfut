@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { Match, MatchLineups } from "@/lib/espn";
 import { supabaseCastVote, type VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
@@ -99,10 +99,15 @@ function PlacarStage({
   const narrow = useIsNarrow();
   const homeCode = match.home.abbreviation;
   const awayCode = match.away.abbreviation;
-  const current = { home: match.homeScore ?? 0, away: match.awayScore ?? 0 };
+  const hs = match.homeScore ?? 0;
+  const as = match.awayScore ?? 0;
   const final = phase === "post";
-  const breakdown = classifyLivePalpites(entries, current, final);
-  const consensus = communityConsensus(entries);
+  // Keyed on the PRIMITIVE score (hs/as), not a `current` object — so it stays
+  // cached on idle 1s ticks but recomputes the instant a goal lands (the worker
+  // replaces `matches` → a new score value flows in here). `consensus` depends
+  // only on the palpites, so a goal correctly leaves it untouched.
+  const breakdown = useMemo(() => classifyLivePalpites(entries, { home: hs, away: as }, final), [entries, hs, as, final]);
+  const consensus = useMemo(() => communityConsensus(entries), [entries]);
   const formOpen = phase === "live" && palpiteFormVisible(match, releasedIds, now);
 
   return (

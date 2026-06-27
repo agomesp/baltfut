@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import { rankSubs, worstPalpiteiro, type SubRank } from "@/lib/ranking";
@@ -35,12 +35,20 @@ export interface RankingSubsProps {
 
 export function RankingSubs({ entries, matches, variant = "column", style }: RankingSubsProps) {
   const myName = useMyName();
-  const byId: Record<string, Match> = {};
-  for (const m of matches) byId[m.id] = m;
-  const ranks = rankSubs(entries, byId);
+  // Memoized so a bare parent re-render (the live stages tick every second) does
+  // NOT rebuild the map / re-rank / re-scan. Recomputes the moment its real inputs
+  // change: `matches` is replaced on every scoreboard update (a finished match or
+  // a score change → new array), and `entries` on every palpite poll/realtime
+  // nudge — so the ranking still updates live, just not on idle clock ticks.
+  const byId = useMemo(() => {
+    const m: Record<string, Match> = {};
+    for (const x of matches) m[x.id] = x;
+    return m;
+  }, [matches]);
+  const ranks = useMemo(() => rankSubs(entries, byId), [entries, byId]);
+  const worst = useMemo(() => worstPalpiteiro(ranks), [ranks]);
   const leader = ranks[0] ?? null;
   const rest = ranks.slice(1);
-  const worst = worstPalpiteiro(ranks);
 
   return (
     <div style={{ borderRadius: 12, border: "1px solid rgba(255,179,71,0.2)", background: "rgba(255,255,255,0.02)", padding: 13, display: "flex", flexDirection: "column", minHeight: 0, ...style }}>

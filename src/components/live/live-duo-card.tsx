@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import { communityConsensus } from "@/lib/consensus";
@@ -27,13 +28,19 @@ export function LiveDuoCard({ match, entries, groupLabel }: { match: Match; entr
   const awayCode = match.away.abbreviation;
   const homeAccent = teamAccent(homeCode);
   const awayAccent = teamAccent(awayCode);
-  const consensus = communityConsensus(entries);
+  const consensus = useMemo(() => communityConsensus(entries), [entries]);
   const final = match.state === "post";
   // The staggered duo can pair a live game with one that hasn't kicked off yet
   // (the 10-min lead-in), so this card may render a pre-match game.
   const pre = match.state === "pre";
-  const { winners, open, lost } = classifyLivePalpites(entries, { home: match.homeScore ?? 0, away: match.awayScore ?? 0 }, final);
-  const palps = [...winners, ...open, ...lost];
+  const hs = match.homeScore ?? 0;
+  const as = match.awayScore ?? 0;
+  // Keyed on the primitive score so a goal (matches replaced) re-buckets the
+  // palpites live; idle 1s ticks reuse the cached list.
+  const palps = useMemo(() => {
+    const { winners, open, lost } = classifyLivePalpites(entries, { home: hs, away: as }, final);
+    return [...winners, ...open, ...lost];
+  }, [entries, hs, as, final]);
 
   return (
     <div className="bf-stack-card" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 11, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, background: "rgba(255,255,255,0.015)", padding: "14px 16px", minHeight: 0 }}>
