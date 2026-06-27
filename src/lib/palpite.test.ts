@@ -4,6 +4,8 @@ import {
   palpiteDeadline,
   isPalpiteOpen,
   palpiteFormOpen,
+  palpiteFormVisible,
+  FORM_TAIL_MS,
   formatCountdown,
   formatCountdownLong,
   releasedMatchIds,
@@ -74,6 +76,26 @@ describe("palpiteFormOpen (open pre-match + the first 5 live minutes)", () => {
   });
   it("is closed for an unreleased match", () => {
     expect(palpiteFormOpen(mkMatch("x", "in", KICK), new Set(), kickMs)).toBe(false);
+  });
+});
+
+describe("palpiteFormVisible (form stays mounted into the post-deadline tail)", () => {
+  const released = new Set(["x"]);
+  const deadline = kickMs + PALPITE_GRACE_MS;
+  it("is visible during the open window, like palpiteFormOpen", () => {
+    expect(palpiteFormVisible(mkMatch("x", "in", KICK), released, kickMs + 4 * 60_000)).toBe(true);
+  });
+  it("stays visible just past the deadline (so a late submit's error can show)", () => {
+    expect(palpiteFormVisible(mkMatch("x", "in", KICK), released, deadline + 1000)).toBe(true);
+    // ...whereas the submit window itself is already closed.
+    expect(isPalpiteOpen(deadline, deadline + 1000)).toBe(false);
+  });
+  it("disappears once the tail elapses", () => {
+    expect(palpiteFormVisible(mkMatch("x", "in", KICK), released, deadline + FORM_TAIL_MS)).toBe(false);
+  });
+  it("is hidden for an unreleased match and for an unknown kickoff", () => {
+    expect(palpiteFormVisible(mkMatch("x", "in", KICK), new Set(), deadline + 1000)).toBe(false);
+    expect(palpiteFormVisible(mkMatch("x", "in", "nope"), released, Date.now())).toBe(false);
   });
 });
 

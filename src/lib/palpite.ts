@@ -4,6 +4,17 @@ import type { Match } from "@/lib/espn";
 export const PALPITE_GRACE_MS = 5 * 60_000;
 
 /**
+ * How long the live palpite FORM stays on screen AFTER the submit deadline. The
+ * form would otherwise unmount the instant the window closes — so a palpite sent
+ * in the last second (whose server response, often a rejection, lands just after
+ * the deadline) had its outcome rendered on an unmounted component and vanished
+ * silently. Keeping the form mounted for this tail lets that result/error show;
+ * submits during the tail are themselves closed and report it. See
+ * {@link palpiteFormVisible}.
+ */
+export const FORM_TAIL_MS = 30_000;
+
+/**
  * Which matches are "released" for palpites: the current kickoff-hour group (the
  * earliest group not fully finished) plus the next group. Matches in the same
  * kickoff hour are grouped, so simultaneous matches all open together. Matches
@@ -50,6 +61,19 @@ export function isPalpiteOpen(deadline: number, now: number): boolean {
  */
 export function palpiteFormOpen(match: Match, releasedIds: Set<string>, now: number): boolean {
   return releasedIds.has(match.id) && isPalpiteOpen(palpiteDeadline(match.startsAt), now);
+}
+
+/**
+ * Whether the palpite form should be RENDERED for `match` now. Same gate as
+ * {@link palpiteFormOpen} but extended by {@link FORM_TAIL_MS} past the deadline,
+ * so the form stays mounted long enough to surface a near-deadline submit's
+ * result. Whether a submit is actually accepted is still decided by
+ * {@link isPalpiteOpen} (this only controls visibility) — during the tail the
+ * form shows a closed state.
+ */
+export function palpiteFormVisible(match: Match, releasedIds: Set<string>, now: number): boolean {
+  const deadline = palpiteDeadline(match.startsAt);
+  return releasedIds.has(match.id) && !Number.isNaN(deadline) && now < deadline + FORM_TAIL_MS;
 }
 
 /** Remaining ms -> "M:SS" (minutes may exceed 59), clamped at 0:00. */

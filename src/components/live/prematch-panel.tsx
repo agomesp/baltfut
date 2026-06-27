@@ -8,8 +8,9 @@ import { teamNamePt } from "@/lib/team-names";
 import { fmtTime } from "@/lib/format";
 import { teamCupHistory, type TeamHistoryGame } from "@/lib/team-history";
 import { communityConsensus } from "@/lib/consensus";
-import { palpiteDeadline, formatCountdown, formatCountdownLong } from "@/lib/palpite";
+import { palpiteDeadline, isPalpiteOpen, formatCountdown, formatCountdownLong } from "@/lib/palpite";
 import { useIsNarrow } from "@/lib/use-is-narrow";
+import { useNow } from "@/lib/use-now";
 import { Countdown } from "@/components/countdown";
 import { RankingSubs } from "@/components/live/ranking-subs";
 import { CommunityBar } from "@/components/live/community-bar";
@@ -248,6 +249,10 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
   const [sent, setSent] = useState<VoteEntry | null>(null);
   const [outcome, setOutcome] = useState<string | null>(null);
   const myName = name.trim() || null;
+  // Ticks so the form locks itself the moment the kickoff+grace deadline passes,
+  // even while this card lingers in the post-deadline tail (palpiteFormVisible).
+  const now = useNow(1000);
+  const open = isPalpiteOpen(palpiteDeadline(match.startsAt), now);
 
   useEffect(() => {
     if (!outcome) return;
@@ -267,6 +272,13 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
     const trimmed = name.trim();
     if (!trimmed) {
       setOutcome("Digite seu nome.");
+      return;
+    }
+    // Closed window (sent in the post-deadline tail, or a slow click): fail loudly
+    // instead of firing a request the server will silently reject after the card
+    // would otherwise have unmounted.
+    if (!open) {
+      setOutcome("Palpites encerrados para esta partida.");
       return;
     }
     // Optimistic: show the palpite right away (greyed + shimmering), write in the
@@ -328,10 +340,16 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
             <span style={{ fontFamily: SAIRA, fontSize: 22, color: "#42565b", paddingTop: 26 }}>×</span>
             <Stepper label={awayCode} accent="var(--bf-text)" value={away} onChange={setAway} disabled={alreadySent} />
           </div>
-          {/* Per-game send button, right below this card's score steppers. */}
-          <button type="button" onClick={submit} disabled={alreadySent} className={saving ? "bf-saving" : undefined} style={{ flex: "none", textAlign: "center", backgroundColor: alreadySent ? "rgba(255,255,255,0.05)" : LIME, color: alreadySent ? "#7d9a86" : "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 13, padding: "11px 12px", borderRadius: 10, border: alreadySent ? "1px solid rgba(255,255,255,0.1)" : "none", boxShadow: alreadySent ? "none" : "0 0 22px -10px rgba(200,255,45,0.6)", cursor: alreadySent ? "not-allowed" : "pointer" }}>
-            {saving ? "SALVANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : "ENVIAR PALPITE →"}
-          </button>
+          {/* Per-game send button, right below this card's score steppers. Locked
+              once sent OR once palpites close (kept visible during the tail). */}
+          {(() => {
+            const locked = alreadySent || !open;
+            return (
+              <button type="button" onClick={submit} disabled={locked || saving} className={saving ? "bf-saving" : undefined} style={{ flex: "none", textAlign: "center", backgroundColor: locked ? "rgba(255,255,255,0.05)" : LIME, color: locked ? "#7d9a86" : "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 13, padding: "11px 12px", borderRadius: 10, border: locked ? "1px solid rgba(255,255,255,0.1)" : "none", boxShadow: locked ? "none" : "0 0 22px -10px rgba(200,255,45,0.6)", cursor: locked ? "not-allowed" : "pointer" }}>
+                {saving ? "SALVANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : !open ? "PALPITES ENCERRADOS" : "ENVIAR PALPITE →"}
+              </button>
+            );
+          })()}
           {outcome ? (
             <div style={{ textAlign: "center", fontFamily: BRIC, fontSize: 11.5, color: "#ff6b6b" }}>{outcome}</div>
           ) : null}
