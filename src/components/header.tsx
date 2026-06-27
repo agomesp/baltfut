@@ -17,7 +17,11 @@ export interface HeaderProps {
 }
 
 export function Header({ followCode, followName, onClearFollow }: HeaderProps) {
-  const now = useNow(1000);
+  // Minute resolution: the WC progress % moves ~once an hour, so a 1s tick here
+  // just re-renders the header for nothing. (This bar's clock is isolated — it
+  // never re-rendered the rest of the tree; the per-second live re-renders come
+  // from each live component's own useNow.)
+  const now = useNow(60_000);
   const wc = wcProgress(now);
 
   return (
