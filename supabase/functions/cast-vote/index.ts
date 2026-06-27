@@ -95,7 +95,9 @@ Deno.serve(async (req: Request) => {
     const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${encodeURIComponent(
       vote.league,
     )}/summary?event=${encodeURIComponent(vote.matchId)}`;
-    const espn = await fetch(summaryUrl);
+    // 2s timeout: a HUNG ESPN (vs an error) would otherwise stall the only write
+    // path until the platform hard-timeout. On abort, fall through to fail-open.
+    const espn = await fetch(summaryUrl, { signal: AbortSignal.timeout(2000) });
     if (espn.ok) {
       const timing = matchTimingFromSummary(await espn.json());
       if (palpitesClosed(timing, Date.now())) {
@@ -207,6 +209,9 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         messages: [{ topic: `palpites:${vote.matchId}`, event: "new", payload: {}, private: false }],
       }),
+      // The vote is already saved; don't let a hung realtime endpoint delay the
+      // 201 ack — time out and let clients fall back to the poll.
+      signal: AbortSignal.timeout(1500),
     });
   } catch {
     /* best-effort — clients still get the poll fallback */
