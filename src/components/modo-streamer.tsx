@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Tv } from "lucide-react";
-import { parseScoreboard, scoreboardUrl, DEFAULT_LEAGUE, FIFA_WORLD_DATE_RANGE } from "@/lib/espn";
-import { startScoreboardWorker } from "@/lib/scoreboard-worker";
+import { subscribeScoreboard } from "@/lib/scoreboard-source";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
 import { setStreamerMode } from "@/lib/streamer-mode";
 import { pickMatch } from "@/components/pip/resolve";
@@ -21,11 +20,9 @@ import { streamerClock } from "@/components/streamer-clock";
  * off. Unsupported browsers (no Document PiP) just toggle the flag.
  *
  * Data flow: the seconds tick off the shared heartbeat worker, and the base
- * minute is refreshed by a scoreboard Web Worker — both escape the hidden-tab
- * timer throttle, so the clock stays correct even while the capture is occluded.
+ * minute is refreshed by the shared scoreboard worker source — both escape the
+ * hidden-tab timer throttle, so the clock stays correct even while occluded.
  */
-const POLL_MS = 20_000;
-
 const PIP_STYLE =
   "html,body{margin:0;height:100%}" +
   "body{background:#0b0b0c;color:#62cb84;display:flex;flex-direction:column;align-items:center;" +
@@ -81,15 +78,11 @@ export function ModoStreamer() {
   // keeps the base minute fresh (full-rate even when hidden); the heartbeat
   // ticks the seconds in between.
   const startFeed = useCallback(() => {
-    stopWorkerRef.current = startScoreboardWorker(
-      scoreboardUrl(DEFAULT_LEAGUE, FIFA_WORLD_DATE_RANGE),
-      POLL_MS,
-      (json) => {
-        const m = pickMatch(parseScoreboard(json, DEFAULT_LEAGUE), Date.now());
-        dataRef.current = { clock: m && m.state === "in" ? m.displayClock : null, fetchedAt: Date.now() };
-        paint();
-      },
-    );
+    stopWorkerRef.current = subscribeScoreboard((matches) => {
+      const m = pickMatch(matches, Date.now());
+      dataRef.current = { clock: m && m.state === "in" ? m.displayClock : null, fetchedAt: Date.now() };
+      paint();
+    });
     unsubRef.current = subscribeHeartbeat(paint);
   }, [paint]);
 

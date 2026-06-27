@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PictureInPicture } from "lucide-react";
-import { fetchScoreboard, FIFA_WORLD_DATE_RANGE, type Match } from "@/lib/espn";
+import type { Match } from "@/lib/espn";
+import { subscribeScoreboard } from "@/lib/scoreboard-source";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchVoteEntries, rankPredictions, type RankedPrediction } from "@/lib/votes";
 import {
@@ -13,8 +14,6 @@ import {
   resolveLayout,
   type PipLayout,
 } from "@/components/pip/resolve";
-
-const POLL_MS = 20_000;
 
 // Self-contained styles injected into the PiP window (which has no globals.css)
 // AND into the page for the overlay fallback. Scoped under `.pipwrap` and keyed
@@ -189,7 +188,7 @@ export function PipView() {
   const pipRef = useRef<Window | null>(null);
   const miniRef = useRef<HTMLDivElement | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
-  const pollRef = useRef<number | undefined>(undefined);
+  const pollRef = useRef<(() => void) | undefined>(undefined); // scoreboard unsubscribe
   const dataRef = useRef<Data>({ match: null, ranked: [] });
   const chosenRef = useRef<PipLayout>("full");
   const lockRef = useRef<PipLayout | null>(null);
@@ -243,9 +242,8 @@ export function PipView() {
     if ((e.target as HTMLElement).closest("[data-cyc]")) cycle();
   }, [cycle]);
 
-  const fetchData = useCallback(async () => {
+  const handleMatches = useCallback(async (matches: Match[]) => {
     try {
-      const matches = await fetchScoreboard({ dates: FIFA_WORLD_DATE_RANGE });
       const match = pickMatch(matches, Date.now());
       let ranked: RankedPrediction[] = [];
       if (match) {
@@ -263,7 +261,8 @@ export function PipView() {
   }, [render]);
 
   const teardown = useCallback(() => {
-    window.clearInterval(pollRef.current);
+    pollRef.current?.();
+    pollRef.current = undefined;
     window.clearTimeout(lockTimerRef.current);
     roRef.current?.disconnect();
     roRef.current = null;
@@ -277,10 +276,11 @@ export function PipView() {
   }, [onMiniClick]);
 
   const startData = useCallback(() => {
-    fetchData();
-    window.clearInterval(pollRef.current);
-    pollRef.current = window.setInterval(fetchData, POLL_MS);
-  }, [fetchData]);
+    pollRef.current?.();
+    // Subscribe to the shared scoreboard source: fires with the cached snapshot
+    // immediately and on every poll (worker-backed → stays fresh while hidden).
+    pollRef.current = subscribeScoreboard((matches) => void handleMatches(matches));
+  }, [handleMatches]);
 
   const makeMini = useCallback(() => {
     const mini = document.createElement("div");

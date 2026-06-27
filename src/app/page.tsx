@@ -7,9 +7,7 @@ import {
   fetchLineups,
   teamGroupMap,
   buildKnockout,
-  parseScoreboard,
   parseStandings,
-  scoreboardUrl,
   standingsUrl,
   DEFAULT_LEAGUE,
   FIFA_WORLD_DATE_RANGE,
@@ -18,6 +16,7 @@ import {
   type MatchLineups,
 } from "@/lib/espn";
 import { startScoreboardWorker } from "@/lib/scoreboard-worker";
+import { subscribeScoreboard } from "@/lib/scoreboard-source";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -39,9 +38,6 @@ import { AiPalpitesView } from "@/components/ai-palpites-view";
 import { BottomTabBar } from "@/components/bottom-tab-bar";
 
 const REFRESH_MS = 30_000;
-// Scoreboard refresh, driven by a Web Worker so it stays full-rate even when the
-// tab is hidden (main-thread timers get throttled to ~1/min after 5 min hidden).
-const SCORE_WORKER_MS = 20_000;
 // Standings drive the bracket (chaveamento) seeds — also worker-polled so they
 // stay current while the tab is hidden. Gentler than the score: table positions
 // change far less often than the live clock.
@@ -197,21 +193,21 @@ export default function Home() {
     });
   }, [loadCounts]);
 
-  // Scoreboard via a Web Worker: worker timers escape the hidden-tab throttle, so
-  // the score stays full-rate even while the streamer's window is hidden (the
-  // Modo Streamer PiP keeps it painting; this keeps the data current).
+  // Scoreboard via the SHARED, ref-counted worker source — one poller for the
+  // page, Modo Streamer and PiP (audit A2). Worker-backed, so the score stays
+  // full-rate even while the streamer's window is hidden; the source already
+  // parses + drops empty payloads, so we just apply the Match[].
+  //
+  // INVARIANT: this must stay subscribed for the app's whole lifetime (empty
+  // deps, no condition). The page is the source's permanent first subscriber —
+  // it's what keeps the worker alive, which is what keeps the score fresh while
+  // the tab is hidden (e.g. a streamer who just switches windows, with Modo
+  // Streamer OFF). Don't add deps or gate this, or it'll churn/stop the worker.
   useEffect(() => {
-    return startScoreboardWorker(
-      scoreboardUrl(DEFAULT_LEAGUE, FIFA_WORLD_DATE_RANGE),
-      SCORE_WORKER_MS,
-      (json) => {
-        const next = parseScoreboard(json, DEFAULT_LEAGUE);
-        if (next.length) {
-          setMatches(next);
-          setError(null);
-        }
-      },
-    );
+    return subscribeScoreboard((next) => {
+      setMatches(next);
+      setError(null);
+    });
   }, []);
 
   // Standings via the same worker primitive, so the bracket (chaveamento) seeds
