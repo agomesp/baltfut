@@ -24,6 +24,8 @@ const rawTeamSchema = z.object({
 const rawCompetitorSchema = z.object({
   homeAway: z.enum(["home", "away"]),
   score: z.string().optional(),
+  // Penalty-shootout tally — ESPN sends it as a number; accept string too.
+  shootoutScore: z.union([z.number(), z.string()]).optional(),
   team: rawTeamSchema,
 });
 
@@ -84,6 +86,13 @@ function toTeam(c: RawCompetitor): Team {
 function toScore(state: MatchState, score: string | undefined): number | null {
   if (state === "pre" || score == null) return null;
   const n = Number.parseInt(score, 10);
+  return Number.isNaN(n) ? null : n;
+}
+
+/** Penalty-shootout tally → number, or null when absent/unparseable. */
+function toShootout(v: number | string | undefined): number | null {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : Number.parseInt(v, 10);
   return Number.isNaN(n) ? null : n;
 }
 
@@ -173,6 +182,8 @@ function parseEvent(raw: unknown, league: string): Match | null {
     away: toTeam(awayRaw),
     homeScore: toScore(state, homeRaw.score),
     awayScore: toScore(state, awayRaw.score),
+    homeShootout: toShootout(homeRaw.shootoutScore),
+    awayShootout: toShootout(awayRaw.shootoutScore),
     goals: toGoals(competition.details, sideByTeamId),
     cards: toCards(competition.details, sideByTeamId),
   };

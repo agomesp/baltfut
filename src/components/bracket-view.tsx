@@ -1,7 +1,7 @@
 import type { Match, KnockoutColumn } from "@/lib/espn";
-import { isPlaceholderTeam, seedLabel } from "@/lib/espn";
+import { isPlaceholderTeam, seedLabel, matchShootout } from "@/lib/espn";
 import { teamNamePt } from "@/lib/team-names";
-import { BRIC, JB, SAIRA, LIME, FlagIcon, ViewHeader } from "@/components/live/bf-ui";
+import { BRIC, JB, SAIRA, LIME, GOLD_DEEP, FlagIcon, ViewHeader } from "@/components/live/bf-ui";
 
 export interface BracketViewProps {
   /** Real knockout fixtures from ESPN, grouped into ordered stage columns. */
@@ -12,8 +12,10 @@ const colHead = { fontFamily: JB, fontSize: 10, letterSpacing: "0.08em", textTra
 const slotCard = { borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)" };
 
 /** One side of a tie: a decided team (flag + code + name) or a placeholder seed
- *  ("2º Grupo H", "Venc. 32-avos 1"). Shows the score once the match is underway. */
-function Slot({ team, score }: { team: Match["home"]; score: number | null }) {
+ *  ("2º Grupo H", "Venc. 32-avos 1"). Shows the score once the match is underway,
+ *  plus the penalty tally (and a lime highlight on the advancing side) when the
+ *  tie was decided on penalties. */
+function Slot({ team, score, pen, won = false }: { team: Match["home"]; score: number | null; pen?: number | null; won?: boolean }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "7px 11px" }}>
       {isPlaceholderTeam(team.name) ? (
@@ -21,11 +23,16 @@ function Slot({ team, score }: { team: Match["home"]; score: number | null }) {
       ) : (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <FlagIcon code={team.abbreviation} size={12} />
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13, color: "#f1f7f0" }}>{team.abbreviation}</span>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13, color: won ? LIME : "#f1f7f0" }}>{team.abbreviation}</span>
           <span style={{ fontFamily: BRIC, fontSize: 11.5, color: "#7d9a86", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(team.abbreviation, team.name)}</span>
         </span>
       )}
-      {score != null ? <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 15, color: "#fff", flex: "none" }}>{score}</span> : null}
+      {score != null ? (
+        <span style={{ display: "inline-flex", alignItems: "baseline", gap: 3, flex: "none" }}>
+          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 15, color: "#fff" }}>{score}</span>
+          {pen != null ? <span style={{ fontFamily: JB, fontSize: 9, color: GOLD_DEEP }}>({pen})</span> : null}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -48,12 +55,13 @@ export function BracketView({ stages }: BracketViewProps) {
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-around" }}>
                   {col.matches.map((mt) => {
                     const played = mt.state !== "pre";
+                    const so = matchShootout(mt); // pens → show tally + advancer
                     return (
                       <div key={mt.id} style={slotCard}>
                         <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                          <Slot team={mt.home} score={played ? mt.homeScore ?? 0 : null} />
+                          <Slot team={mt.home} score={played ? mt.homeScore ?? 0 : null} pen={so?.home ?? null} won={so?.winner === "home"} />
                         </div>
-                        <Slot team={mt.away} score={played ? mt.awayScore ?? 0 : null} />
+                        <Slot team={mt.away} score={played ? mt.awayScore ?? 0 : null} pen={so?.away ?? null} won={so?.winner === "away"} />
                       </div>
                     );
                   })}

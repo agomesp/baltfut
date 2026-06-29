@@ -1,8 +1,32 @@
 import { describe, it, expect } from "vitest";
 import { parseScoreboard } from "@/lib/espn/parse";
+import { matchShootout } from "@/lib/espn/result";
 import fixture from "@/lib/espn/__fixtures__/scoreboard.json";
 
 const LEAGUE = "fifa.world";
+
+/** A knockout decided on penalties: ESPN reports the level 90'/AET `score` plus a
+ *  per-competitor `shootoutScore` (a number) and `status.type.shortDetail "FT-Pens"`. */
+function shootoutScoreboard() {
+  return {
+    events: [
+      {
+        id: "k1",
+        date: "2026-07-01T16:00Z",
+        shortName: "FRA @ ARG",
+        status: { type: { state: "post", detail: "Full Time - Penalties", shortDetail: "FT-Pens" } },
+        competitions: [
+          {
+            competitors: [
+              { homeAway: "home", score: "3", shootoutScore: 4, team: { id: "1", displayName: "Argentina", abbreviation: "ARG" } },
+              { homeAway: "away", score: "3", shootoutScore: 2, team: { id: "2", displayName: "France", abbreviation: "FRA" } },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
 
 describe("parseScoreboard", () => {
   it("drops malformed events and keeps the well-formed ones", () => {
@@ -92,6 +116,28 @@ describe("parseScoreboard", () => {
     const pre = parseScoreboard(fixture, LEAGUE).find((m) => m.id === "1001")!;
     expect(pre.goals).toEqual([]);
     expect(pre.cards).toEqual([]);
+  });
+
+  it("captures the penalty-shootout tally and keeps the level 90'/AET score", () => {
+    const m = parseScoreboard(shootoutScoreboard(), LEAGUE)[0];
+    expect(m.homeScore).toBe(3);
+    expect(m.awayScore).toBe(3);
+    expect(m.homeShootout).toBe(4);
+    expect(m.awayShootout).toBe(2);
+    expect(m.statusDetail).toBe("FT-Pens");
+  });
+
+  it("leaves shootout fields null for a non-shootout match", () => {
+    const done = parseScoreboard(fixture, LEAGUE).find((m) => m.id === "1003")!;
+    expect(done.homeShootout).toBeNull();
+    expect(done.awayShootout).toBeNull();
+  });
+
+  it("matchShootout resolves the winner from the tally (null when not a shootout)", () => {
+    const m = parseScoreboard(shootoutScoreboard(), LEAGUE)[0];
+    expect(matchShootout(m)).toEqual({ home: 4, away: 2, winner: "home" });
+    const done = parseScoreboard(fixture, LEAGUE).find((mm) => mm.id === "1003")!;
+    expect(matchShootout(done)).toBeNull();
   });
 
   it("returns an empty array for non-conforming input instead of throwing", () => {

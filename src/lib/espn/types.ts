@@ -71,6 +71,13 @@ export interface Match {
   homeScore: number | null;
   /** Away goals; null before kickoff. */
   awayScore: number | null;
+  /** Penalty-shootout tally for a knockout decided on penalties (ESPN's
+   *  `shootoutScore`); null when the tie wasn't a shootout. The `homeScore`/
+   *  `awayScore` above stay the level 90'/AET aggregate. Optional so existing
+   *  Match fixtures/factories don't all need it; `parseScoreboard` always sets it
+   *  (null when absent) and `matchShootout` treats null/undefined alike. */
+  homeShootout?: number | null;
+  awayShootout?: number | null;
   /** Goal events (scorers) for the live/finished detail view; [] when none. */
   goals: MatchGoal[];
   /** Booking events (yellow/red) for the detail view; [] when none. */

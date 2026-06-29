@@ -1,11 +1,12 @@
 "use client";
 
 import type { Match } from "@/lib/espn";
+import { matchShootout } from "@/lib/espn";
 import { groupByDay } from "@/lib/format";
 import { teamNamePt } from "@/lib/team-names";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { groupLabelFor } from "@/components/match-meta";
-import { BRIC, JB, SAIRA, LIME, FlagIcon, ViewHeader } from "@/components/live/bf-ui";
+import { BRIC, JB, SAIRA, LIME, GOLD_DEEP, FlagIcon, ViewHeader } from "@/components/live/bf-ui";
 
 export interface ResultsViewProps {
   matches: Match[]; // finished, sorted descending by kickoff
@@ -38,8 +39,9 @@ export function ResultsView({ matches, followCode, groupByTeam }: ResultsViewPro
           {day.items.map((m) => {
             const hs = m.homeScore ?? 0;
             const as = m.awayScore ?? 0;
-            const homeWin = hs > as;
-            const awayWin = as > hs;
+            const so = matchShootout(m); // penalty shootout → winner from the tally
+            const homeWin = hs > as || so?.winner === "home";
+            const awayWin = as > hs || so?.winner === "away";
             const homeCode = m.home.abbreviation === followCode ? LIME : homeWin ? "#f1f7f0" : "#6f8a78";
             const awayCode = m.away.abbreviation === followCode ? LIME : awayWin ? "#f1f7f0" : "#6f8a78";
             return (
@@ -53,11 +55,18 @@ export function ResultsView({ matches, followCode, groupByTeam }: ResultsViewPro
                     <FlagIcon code={m.home.abbreviation} size={13} />
                     <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: homeCode }}>{m.home.abbreviation}</span>
                   </div>
-                  <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 26, color: "#fff", minWidth: 64, textAlign: "center", lineHeight: 0.9, whiteSpace: "nowrap" }}>
-                    <span style={{ color: homeWin ? "#fff" : "#9bb6a6" }}>{hs}</span>
-                    <span style={{ color: "#42565b", margin: "0 8px" }}>–</span>
-                    <span style={{ color: awayWin ? "#fff" : "#9bb6a6" }}>{as}</span>
-                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 64 }}>
+                    <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 26, color: "#fff", textAlign: "center", lineHeight: 0.9, whiteSpace: "nowrap" }}>
+                      <span style={{ color: homeWin ? "#fff" : "#9bb6a6" }}>{hs}</span>
+                      <span style={{ color: "#42565b", margin: "0 8px" }}>–</span>
+                      <span style={{ color: awayWin ? "#fff" : "#9bb6a6" }}>{as}</span>
+                    </span>
+                    {so ? (
+                      <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: GOLD_DEEP, marginTop: 3, whiteSpace: "nowrap" }}>
+                        pên {so.home}–{so.away}
+                      </span>
+                    ) : null}
+                  </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: awayCode }}>{m.away.abbreviation}</span>
                     <FlagIcon code={m.away.abbreviation} size={13} />

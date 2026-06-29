@@ -14,6 +14,7 @@ export {
   type FetchScoreboardOptions,
 } from "@/lib/espn/client";
 export { parseScoreboard } from "@/lib/espn/parse";
+export { matchShootout, type Shootout } from "@/lib/espn/result";
 export {
   fetchStandings,
   parseStandings,

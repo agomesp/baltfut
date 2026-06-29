@@ -1,4 +1,5 @@
 import type { Match, MatchSub } from "@/lib/espn";
+import { matchShootout } from "@/lib/espn";
 import { SwitchingCrest } from "@/components/live/switching-crest";
 import { SquadWall } from "@/components/live/squad-wall";
 import { resolveCraquePair, type CraqueBase } from "@/data/craque-map";
@@ -6,6 +7,7 @@ import {
   BRIC,
   BfPulse,
   buildTimeline,
+  GOLD_DEEP,
   JB,
   LIME,
   matchClockLabel,
@@ -107,6 +109,14 @@ export function HeroScoreboard({ match, pre = false, compact = false, subs = [],
               <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: scoreFont, lineHeight: 0.74, color: "#fff" }}>{match.awayScore ?? 0}</span>
             </div>
           )}
+          {(() => {
+            const so = matchShootout(match);
+            return so ? (
+              <span style={{ fontFamily: JB, fontSize: 10, letterSpacing: "0.06em", color: GOLD_DEEP, whiteSpace: "nowrap" }}>
+                PÊNALTIS {so.home}–{so.away}
+              </span>
+            ) : null;
+          })()}
         </div>
 
         <TeamBlock code={match.away.abbreviation} accent={awayAccent} crestSize={crestSize} enter="r" craque={craquePair.away} />
