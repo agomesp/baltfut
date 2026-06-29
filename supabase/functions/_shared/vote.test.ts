@@ -21,6 +21,19 @@ describe("validateVote", () => {
     expect(validateVote({ ...valid, predHome: 1, predAway: 1 }).success).toBe(true);
   });
 
+  it("accepts an optional penWinner (home/away) and treats it as absent otherwise", () => {
+    expect(validateVote({ ...valid, penWinner: "home" }).data?.penWinner).toBe("home");
+    expect(validateVote({ ...valid, penWinner: "away" }).data?.penWinner).toBe("away");
+    expect(validateVote({ ...valid, penWinner: null }).success).toBe(true);
+    expect(validateVote(valid).success).toBe(true); // omitted is fine
+  });
+
+  it("rejects an invalid penWinner value", () => {
+    const result = validateVote({ ...valid, penWinner: "draw" });
+    expect(result.success).toBe(false);
+    expect(result.errors).toHaveProperty("penWinner");
+  });
+
   it("rejects a whitespace-only username", () => {
     const result = validateVote({ ...valid, username: "   " });
     expect(result.success).toBe(false);

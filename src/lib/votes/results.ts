@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Side } from "@/lib/espn";
 
 /** A single public prediction (from the vote_entries view — never includes ip_hash). */
 export interface VoteEntry {
@@ -7,6 +8,9 @@ export interface VoteEntry {
   username: string;
   predHome: number;
   predAway: number;
+  /** Optional pick of who wins a penalty shootout (knockout only). null/undefined
+   *  when not predicted. Scores 0.5 in the ranking when the tie goes to pens. */
+  penWinner?: Side | null;
   createdAt: string;
 }
 
@@ -16,6 +20,7 @@ interface EntryRow {
   username: string;
   pred_home: number;
   pred_away: number;
+  pen_winner?: Side | null;
   created_at: string;
 }
 
@@ -26,6 +31,7 @@ export function mapEntryRow(row: EntryRow): VoteEntry {
     username: row.username,
     predHome: row.pred_home,
     predAway: row.pred_away,
+    penWinner: row.pen_winner ?? null,
     createdAt: row.created_at,
   };
 }

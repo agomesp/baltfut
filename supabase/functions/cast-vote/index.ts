@@ -38,6 +38,29 @@ function json(
   });
 }
 
+// Realtime nudge: tell subscribed clients a palpite landed for this match so they
+// refetch the public feed immediately (instead of waiting for the poll). Carries
+// NO vote data — only the match id (already public) — so it cannot leak ip_hash.
+// Best-effort; the write is already saved, so a hung endpoint must never block.
+async function broadcastPalpite(matchId: string): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        apikey: SERVICE_ROLE_KEY,
+        authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        messages: [{ topic: `palpites:${matchId}`, event: "new", payload: {}, private: false }],
+      }),
+      signal: AbortSignal.timeout(1500),
+    });
+  } catch {
+    /* best-effort — clients still get the poll fallback */
+  }
+}
+
 Deno.serve(async (req: Request) => {
   const origin = req.headers.get("origin");
   const allowOrigin = resolveAllowedOrigin(origin, ALLOWED_ORIGINS);
@@ -155,12 +178,38 @@ Deno.serve(async (req: Request) => {
     username: vote.username,
     pred_home: vote.predHome,
     pred_away: vote.predAway,
+    pen_winner: vote.penWinner ?? null,
     ip_hash: ipHash,
   });
 
   if (error) {
     // 23505 = unique_violation: either one-per-IP or one-name-per-match.
     if (error.code === "23505") {
+      // Pen-add: the caller ALREADY palpitado this match from this IP (score is
+      // locked) and is now setting the penalty winner on that existing palpite.
+      // Fill it in only if not yet chosen. Keyed on (match_id, ip_hash) — the
+      // caller's OWN row — so nobody can ever touch another person's pick, and
+      // the deadline gate above still applies. `is('pen_winner', null)` makes it
+      // one-shot (no flip-flopping once set).
+      if (vote.penWinner) {
+        const { data: updated, error: updErr } = await supabase
+          .from("votes")
+          .update({ pen_winner: vote.penWinner })
+          .eq("match_id", vote.matchId)
+          .eq("ip_hash", ipHash)
+          .is("pen_winner", null)
+          .select("id");
+        if (updErr) {
+          console.error("cast-vote pen update failed:", updErr.code, updErr.message);
+          return json({ error: "Não foi possível registrar seu palpite." }, 500, cors);
+        }
+        if (updated && updated.length > 0) {
+          await broadcastPalpite(vote.matchId);
+          return json({ ok: true }, 200, cors);
+        }
+        // No null-pen row for this IP (pen already set, or a genuine name
+        // collision from another IP) → fall through to the duplicate message.
+      }
       // PostgREST puts the violated columns in `details` (e.g. "lower(username)")
       // and may omit the index name, so match on the column too.
       const blob = `${error.message ?? ""} ${error.details ?? ""}`;
@@ -193,29 +242,8 @@ Deno.serve(async (req: Request) => {
   );
   if (claimErr) console.error("name_claims upsert failed:", claimErr.code, claimErr.message);
 
-  // Realtime nudge: tell subscribed clients a palpite landed for this match so
-  // they refetch the public feed immediately (instead of waiting for the poll).
-  // SECURITY: this carries NO vote data — only the match id (already public) —
-  // so it cannot leak ip_hash. The authoritative rows still come from the
-  // column-restricted `vote_entries` view. Best-effort; never blocks the vote.
-  try {
-    await fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        apikey: SERVICE_ROLE_KEY,
-        authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({
-        messages: [{ topic: `palpites:${vote.matchId}`, event: "new", payload: {}, private: false }],
-      }),
-      // The vote is already saved; don't let a hung realtime endpoint delay the
-      // 201 ack — time out and let clients fall back to the poll.
-      signal: AbortSignal.timeout(1500),
-    });
-  } catch {
-    /* best-effort — clients still get the poll fallback */
-  }
+  // Realtime nudge so subscribed clients refetch the public feed immediately.
+  await broadcastPalpite(vote.matchId);
 
   return json({ ok: true }, 201, cors);
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Match } from "@/lib/espn";
+import type { Match, Side } from "@/lib/espn";
 import { useNow } from "@/lib/use-now";
 import {
   submitVote,
@@ -15,7 +15,42 @@ import {
 import { isPalpiteOpen, formatCountdown } from "@/lib/palpite";
 import { isReservedName } from "@shared/name-claim";
 import { MY_NAME_EVENT } from "@/lib/use-my-name";
-import { BRIC, JB, LIME, SAIRA } from "@/components/live/bf-ui";
+import { BRIC, FlagIcon, JB, LIME, SAIRA } from "@/components/live/bf-ui";
+
+/** Knockout stages where a tie goes to penalties (so a pen-winner pick applies). */
+const KO_STAGES = new Set(["round-of-32", "round-of-16", "quarterfinal", "semifinal", "third-place", "final"]);
+export function isKnockoutStage(stage?: string): boolean {
+  return stage != null && KO_STAGES.has(stage);
+}
+
+/** Knockout-only optional pick: "if it goes to pens, who wins?" (no score). A
+ *  correct call is worth +0.5 in the ranking, so even a wrong score can score. */
+function PenWinnerPick({ homeCode, awayCode, value, onChange, disabled }: { homeCode: string; awayCode: string; value: Side | null; onChange: (s: Side | null) => void; disabled: boolean }) {
+  const opt = (side: Side, code: string) => {
+    const on = value === side;
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(on ? null : side)}
+        style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "7px 8px", borderRadius: 8, cursor: disabled ? "not-allowed" : "pointer", fontFamily: BRIC, fontWeight: 800, fontSize: 12, background: on ? "rgba(232,181,58,0.16)" : "rgba(255,255,255,0.03)", border: on ? "1px solid rgba(232,181,58,0.6)" : "1px solid rgba(255,255,255,0.1)", color: on ? "#f3d27a" : "#cfe3d6", opacity: disabled && !on ? 0.45 : 1 }}
+      >
+        <FlagIcon code={code} size={12} /> {code}
+      </button>
+    );
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "7px 9px", borderRadius: 9, border: "1px solid rgba(232,181,58,0.22)", background: "rgba(232,181,58,0.05)" }}>
+      <span style={{ fontFamily: JB, fontSize: 8.5, letterSpacing: "0.05em", color: "#caa94a", textAlign: "center" }}>
+        SE FOR AOS PÊNALTIS, QUEM VENCE? <span style={{ color: "#6f8a78" }}>(vale 0,5)</span>
+      </span>
+      <div style={{ display: "flex", gap: 8 }}>
+        {opt("home", homeCode)}
+        {opt("away", awayCode)}
+      </div>
+    </div>
+  );
+}
 
 const clampScore = (n: number) => Math.max(SCORE_MIN, Math.min(SCORE_MAX, n));
 
@@ -155,7 +190,13 @@ const submitBtnStyle = {
   width: "100%",
 };
 
-/** Reserved → dup-name → submit, mirroring PredictionPanel's guards. Returns the outcome. */
+/**
+ * Reserved → dup-name → submit, mirroring PredictionPanel's guards. Returns the
+ * outcome. `penWinner` is the optional knockout shootout call. `allowExisting`
+ * skips the dup-name guard for the "add a pen pick to my already-sent palpite"
+ * flow — the server then fills pen_winner on the caller's existing row (score
+ * stays), keyed on (match, ip), so it can only touch their own palpite.
+ */
 export async function castPalpite(
   match: Match,
   name: string,
@@ -163,14 +204,16 @@ export async function castPalpite(
   away: number,
   entries: VoteEntry[],
   transport: CastVoteTransport,
+  penWinner: Side | null = null,
+  allowExisting = false,
 ): Promise<SubmitOutcome> {
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, message: "Digite seu nome." };
   if (isReservedName(trimmed)) return { ok: false, message: "Esse nome é reservado. Escolha outro." };
-  if (entries.some((x) => x.username.trim().toLowerCase() === trimmed.toLowerCase())) {
+  if (!allowExisting && entries.some((x) => x.username.trim().toLowerCase() === trimmed.toLowerCase())) {
     return { ok: false, message: "Esse nome já foi usado nesta partida." };
   }
-  return submitVote({ matchId: match.id, league: match.league, username: trimmed, predHome: home, predAway: away }, transport);
+  return submitVote({ matchId: match.id, league: match.league, username: trimmed, predHome: home, predAway: away, penWinner }, transport);
 }
 
 export interface PalpiteFormProps {
@@ -188,10 +231,13 @@ export function PalpiteForm({ match, entries, closesAt, released = true, onVoted
   const { name, setName, locked, confirm, unlock } = useNameLock();
   const [home, setHome] = useState(0);
   const [away, setAway] = useState(0);
+  const [penWinner, setPenWinner] = useState<Side | null>(null); // knockout-only pen pick
+  const [sent, setSent] = useState(false); // locked once this browser's name has a palpite here
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<SubmitOutcome | null>(null);
   const now = useNow(1000);
   const open = isPalpiteOpen(closesAt, now);
+  const canPen = isKnockoutStage(match.stage); // knockout tie → pen-winner pick applies
   const homeAccentCode = match.home.abbreviation;
   const awayAccentCode = match.away.abbreviation;
   const draftKey = `baltfut_draft:${match.id}`;
@@ -214,6 +260,8 @@ export function PalpiteForm({ match, entries, closesAt, released = true, onVoted
     }
     setHome(h);
     setAway(a);
+    setPenWinner(null);
+    setSent(false); // a new match starts unlocked
   }, [draftKey]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -243,19 +291,28 @@ export function PalpiteForm({ match, entries, closesAt, released = true, onVoted
     }
     setSubmitting(true);
     setOutcome(null);
-    const result = await castPalpite(match, name, home, away, entries, transport);
+    // Pen-add: already palpitado this knockout match (score locked) and now only
+    // setting the pen winner. Re-send the existing score + the pick (allowExisting
+    // skips the dup-name guard); the server fills pen_winner on the same row.
+    const trimmed = name.trim();
+    const mine = trimmed ? entries.find((x) => x.username.trim().toLowerCase() === trimmed.toLowerCase()) : undefined;
+    const isPenAdd = mine != null && canPen && mine.penWinner == null;
+    const result = isPenAdd
+      ? await castPalpite(match, name, mine!.predHome, mine!.predAway, entries, transport, penWinner, true)
+      : await castPalpite(match, name, home, away, entries, transport, penWinner, false);
     setOutcome(result);
     setSubmitting(false);
     if (result.ok) {
-      confirm(name.trim());
-      setHome(0);
-      setAway(0);
+      if (!isPenAdd) {
+        confirm(trimmed);
+        setSent(true); // keep the submitted score on screen, but lock the form
+      }
       try {
         localStorage.removeItem(draftKey);
       } catch {
         /* ignore */
       }
-      onVoted();
+      onVoted(); // refetch so the stored pen pick shows + the form re-locks
     }
   }
 
@@ -272,27 +329,64 @@ export function PalpiteForm({ match, entries, closesAt, released = true, onVoted
     );
   }
 
+  // Lock the form once this browser's name already has a palpite on this match —
+  // either just submitted (`sent`) or found in the feed on reload. Greyed steppers
+  // + "PALPITE ENVIADO ✓". EXCEPTION: on a knockout match you palpitado BEFORE
+  // choosing a pen winner, keep the pen picker open so you can add it (the score
+  // stays locked) and send just that — "penAddMode".
+  const lowerName = name.trim().toLowerCase();
+  const myEntry = lowerName ? entries.find((x) => x.username.trim().toLowerCase() === lowerName) : undefined;
+  const alreadySent = sent || myEntry != null;
+  const showHome = myEntry && !sent ? myEntry.predHome : home;
+  const showAway = myEntry && !sent ? myEntry.predAway : away;
+  const penStored = myEntry && !sent ? myEntry.penWinner ?? null : null;
+  // Add a pen pick to an existing palpite: knockout, still open, palpitado, and no
+  // pen call stored yet.
+  const penAddMode = !sent && myEntry != null && canPen && open && penStored == null;
+  // Pen picker shows the stored call when fully locked; otherwise the live draft.
+  const showPen = penAddMode || !alreadySent ? penWinner : penStored;
+  const penPickerDisabled = alreadySent && !penAddMode;
+  // Submit gating: a name + (knockout) a pen pick to send a NEW palpite; just the
+  // pen pick in penAddMode; nothing once fully locked.
+  const nameMissing = !name.trim();
+  const penMissing = canPen && !penWinner;
+  const fullyLocked = alreadySent && !penAddMode;
+  const blocked = penAddMode ? !penWinner : !alreadySent && (nameMissing || penMissing);
+  const btnDisabled = submitting || fullyLocked || blocked;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <NameField name={name} setName={setName} locked={locked} onUnlock={unlock} />
+      <NameField name={name} setName={setName} locked={locked} onUnlock={() => { unlock(); setSent(false); setHome(0); setAway(0); setPenWinner(null); }} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 24, padding: "2px 0" }}>
-        <Stepper label={homeAccentCode} accent="var(--bf-text)" value={home} onChange={setHome} />
+        <Stepper label={homeAccentCode} accent="var(--bf-text)" value={showHome} onChange={setHome} disabled={alreadySent} />
         <span style={{ fontFamily: SAIRA, fontWeight: 500, fontSize: 22, color: "#42565b", paddingTop: 22 }}>×</span>
-        <Stepper label={awayAccentCode} accent="var(--bf-text)" value={away} onChange={setAway} />
+        <Stepper label={awayAccentCode} accent="var(--bf-text)" value={showAway} onChange={setAway} disabled={alreadySent} />
       </div>
-      <button type="button" onClick={onSubmit} disabled={submitting} style={{ ...submitBtnStyle, opacity: submitting ? 0.7 : 1 }}>
-        {submitting ? "ENVIANDO…" : "ENVIAR PALPITE →"}
+      {canPen ? <PenWinnerPick homeCode={homeAccentCode} awayCode={awayAccentCode} value={showPen} onChange={setPenWinner} disabled={penPickerDisabled} /> : null}
+      <button type="button" onClick={onSubmit} disabled={btnDisabled} style={{ ...submitBtnStyle, ...(fullyLocked ? { background: "rgba(255,255,255,0.05)", color: "#7d9a86", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "none", cursor: "not-allowed" } : blocked ? { opacity: 0.4, cursor: "not-allowed", boxShadow: "none" } : { opacity: submitting ? 0.7 : 1 }) }}>
+        {submitting ? "ENVIANDO…" : fullyLocked ? "PALPITE ENVIADO ✓" : penAddMode ? "ENVIAR PÊNALTI →" : "ENVIAR PALPITE →"}
       </button>
-      <div style={{ fontFamily: JB, fontSize: 9, color: "#6f8a78", textAlign: "center", letterSpacing: "0.04em" }}>
-        {open ? "1 palpite por pessoa · placar exato pontua no Ranking dos Subs" : "Palpites encerrados — palpite a próxima partida."}
+      <div style={{ fontFamily: JB, fontSize: 9, color: blocked || penAddMode ? "#caa94a" : "#6f8a78", textAlign: "center", letterSpacing: "0.04em" }}>
+        {fullyLocked
+          ? "Você já palpitou esta partida · toque em Trocar para usar outro nome"
+          : penAddMode
+            ? penWinner
+              ? "Envie seu palpite de pênaltis — o placar continua travado"
+              : "Você já palpitou — escolha quem vence nos pênaltis e envie"
+            : !open
+              ? "Palpites encerrados — palpite a próxima partida."
+              : nameMissing
+                ? "Digite seu nome para enviar o palpite"
+                : penMissing
+                  ? "Escolha quem vence nos pênaltis para enviar"
+                  : "1 palpite por pessoa · placar exato pontua no Ranking dos Subs"}
       </div>
-      {open ? (
+      {open && !fullyLocked ? (
         <div style={{ fontFamily: JB, fontSize: 9.5, color: closesAt - now < 60_000 ? "#ff6b6b" : "#9bb6a6", textAlign: "center" }}>
           Fecha em {formatCountdown(closesAt - now)}
         </div>
       ) : null}
       {outcome && !outcome.ok ? <span role="alert" style={{ fontSize: 12, color: "#ff6b6b", textAlign: "center" }}>{outcome.message}</span> : null}
-      {outcome?.ok ? <span style={{ fontSize: 12, color: LIME, textAlign: "center" }}>Palpite enviado!</span> : null}
     </div>
   );
 }

@@ -1,39 +1,120 @@
 import type { Match } from "@/lib/espn";
+import { matchShootout } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 
 export interface SubRank {
   username: string;
+  /** Exact-score hits + 0.5 per correct penalty-winner call. May be fractional. */
   wins: number;
   losses: number;
+  /** Correct / wrong penalty-winner calls (only on matches decided on pens). The
+   *  0.5 per correct call is already folded into `wins`; these are the breakdown. */
+  penWins: number;
+  penLosses: number;
 }
 
 /**
  * Wins/losses per nickname across finished matches. A win is an exact final-score
- * prediction; anything else on a finished match is a loss. Every palpite on a
- * finished match counts (the kickoff+5min form lock already prevents late ones).
- * Sorted by wins (correct palpites) desc, then name — losses are tallied for
- * display but never affect the order, so a wrong palpite costs nothing in rank.
+ * prediction (+1); anything else on a finished match is a loss. When the tie was
+ * decided on penalties and the sub called a winner, a correct call adds +0.5 (a
+ * wrong one only bumps the pen-loss breakdown). Every palpite on a finished match
+ * counts (the kickoff+5min form lock already prevents late ones). Sorted by wins
+ * (correct palpites, incl. the pen halves) desc, then name — losses are tallied
+ * for display but never affect the order, so a wrong palpite costs nothing in rank.
  */
 export function rankSubs(
   entries: VoteEntry[],
   matchesById: Record<string, Match>,
 ): SubRank[] {
-  const tally = new Map<string, { wins: number; losses: number }>();
+  const tally = new Map<string, { wins: number; losses: number; penWins: number; penLosses: number }>();
 
   for (const e of entries) {
     const m = matchesById[e.matchId];
     if (!m || m.state !== "post" || m.homeScore == null || m.awayScore == null) {
       continue;
     }
-    const t = tally.get(e.username) ?? { wins: 0, losses: 0 };
+    const t = tally.get(e.username) ?? { wins: 0, losses: 0, penWins: 0, penLosses: 0 };
     if (e.predHome === m.homeScore && e.predAway === m.awayScore) t.wins += 1;
     else t.losses += 1;
+    // Penalty bonus: only when the tie actually went to pens AND they called a
+    // winner. Correct → half a point (and a pen-win); wrong → just a pen-loss.
+    const so = matchShootout(m);
+    if (so && e.penWinner) {
+      if (e.penWinner === so.winner) {
+        t.penWins += 1;
+        t.wins += 0.5;
+      } else {
+        t.penLosses += 1;
+      }
+    }
     tally.set(e.username, t);
   }
 
   return [...tally.entries()]
     .map(([username, v]) => ({ username, ...v }))
     .sort((a, b) => b.wins - a.wins || a.username.localeCompare(b.username));
+}
+
+/** A one-vs-one duel between two nicknames (e.g. the house bot "ChatGPT" vs the
+ *  viewer), scored on the matches BOTH palpitado — a fair head-to-head. */
+export interface HeadToHead {
+  /** Finished matches both names palpitado (the fair comparison set). */
+  shared: number;
+  /** Exact-score hits for side A / side B among the shared matches. */
+  aHits: number;
+  bHits: number;
+  /** Who's ahead on hits. */
+  lead: "a" | "b" | "tie";
+  /** The most recent shared finished match (by kickoff), for a recap line. */
+  last: { home: number; away: number; aHit: boolean; bHit: boolean } | null;
+}
+
+/**
+ * Head-to-head between nicknames `a` and `b` over the FINISHED matches both
+ * palpitado: exact-score hits each, who leads, and the latest shared result. Pure
+ * (case-insensitive); an empty/absent name on either side yields an empty duel.
+ */
+export function headToHead(
+  entries: VoteEntry[],
+  matchesById: Record<string, Match>,
+  a: string,
+  b: string,
+): HeadToHead {
+  const la = a.trim().toLowerCase();
+  const lb = b.trim().toLowerCase();
+  const empty: HeadToHead = { shared: 0, aHits: 0, bHits: 0, lead: "tie", last: null };
+  if (!la || !lb || la === lb) return empty;
+
+  const aPicks = new Map<string, VoteEntry>();
+  const bPicks = new Map<string, VoteEntry>();
+  for (const e of entries) {
+    const u = e.username.trim().toLowerCase();
+    if (u === la) aPicks.set(e.matchId, e);
+    else if (u === lb) bPicks.set(e.matchId, e);
+  }
+
+  let shared = 0;
+  let aHits = 0;
+  let bHits = 0;
+  let last: HeadToHead["last"] = null;
+  let lastKick = "";
+  for (const [matchId, ae] of aPicks) {
+    const be = bPicks.get(matchId);
+    if (!be) continue;
+    const m = matchesById[matchId];
+    if (!m || m.state !== "post" || m.homeScore == null || m.awayScore == null) continue;
+    shared += 1;
+    const aHit = ae.predHome === m.homeScore && ae.predAway === m.awayScore;
+    const bHit = be.predHome === m.homeScore && be.predAway === m.awayScore;
+    if (aHit) aHits += 1;
+    if (bHit) bHits += 1;
+    const kick = m.startsAt ?? "";
+    if (kick >= lastKick) {
+      lastKick = kick;
+      last = { home: m.homeScore, away: m.awayScore, aHit, bHit };
+    }
+  }
+  return { shared, aHits, bHits, lead: aHits > bHits ? "a" : bHits > aHits ? "b" : "tie", last };
 }
 
 /** The "pior palpiteiro": lowest hit-rate among subs with at least one graded palpite. */

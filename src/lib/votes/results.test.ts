@@ -43,7 +43,7 @@ describe("vote fetchers order explicitly (audit B1)", () => {
       { match_id: "1001", league: "fifa.world", username: "u", pred_home: 2, pred_away: 1, created_at: "t" },
     ]);
     expect(await fetchVoteEntries(client, "1001")).toEqual([
-      { matchId: "1001", league: "fifa.world", username: "u", predHome: 2, predAway: 1, createdAt: "t" },
+      { matchId: "1001", league: "fifa.world", username: "u", predHome: 2, predAway: 1, penWinner: null, createdAt: "t" },
     ]);
   });
 });
@@ -65,6 +65,7 @@ describe("mapEntryRow", () => {
       username: "Allan",
       predHome: 2,
       predAway: 1,
+      penWinner: null,
       createdAt: "2026-06-21T16:00:00Z",
     });
   });

@@ -11,8 +11,10 @@ import { communityConsensus } from "@/lib/consensus";
 import { palpiteDeadline, isPalpiteOpen, formatCountdown, formatCountdownLong } from "@/lib/palpite";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { useNow } from "@/lib/use-now";
+import { isReservedName } from "@shared/name-claim";
 import { Countdown } from "@/components/countdown";
 import { RankingSubs } from "@/components/live/ranking-subs";
+import { IaVsVoce } from "@/components/live/ia-vs-voce";
 import { CommunityBar } from "@/components/live/community-bar";
 import {
   PalpiteForm,
@@ -26,6 +28,7 @@ import {
   BfPulse,
   FlagCrest,
   GOLD,
+  GOLD_DEEP,
   JB,
   LIME,
   nameStyle,
@@ -67,24 +70,46 @@ function KickoffClock({ startsAt }: { startsAt: string }) {
 }
 
 function SentList({ entries, homeCode, awayCode, myName, cols = 2, pendingName = null }: { entries: VoteEntry[]; homeCode: string; awayCode: string; myName: string | null; cols?: number; pendingName?: string | null }) {
+  const myLower = myName ? myName.trim().toLowerCase() : "";
+  const myEntry = myLower ? entries.find((e) => e.username.trim().toLowerCase() === myLower) : undefined;
+  // Pin the house bot (ChatGPT) first, then VOCÊ, then everyone else — stable
+  // within each group. Makes the feed read at a glance for stream viewers.
+  const rankOf = (e: VoteEntry) => (isReservedName(e.username) ? 0 : myLower && e.username.trim().toLowerCase() === myLower ? 1 : 2);
+  const sorted = [...entries].sort((a, b) => rankOf(a) - rankOf(b));
+  const samePick = (e: VoteEntry) =>
+    myEntry != null && e.username.trim().toLowerCase() !== myLower && e.predHome === myEntry.predHome && e.predAway === myEntry.predAway;
+  const sameCount = myEntry ? entries.filter(samePick).length : 0;
+
   return (
-    <div className="bf-scroll" style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "7px 8px", alignContent: "start", flex: 1, minHeight: 0, paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
-      {entries.length === 0 ? (
-        <div style={{ fontFamily: BRIC, fontSize: 11.5, color: "#6f8a78" }}>Nenhum palpite ainda. Seja o primeiro.</div>
-      ) : (
-        entries.map((e, i) => {
-          const mine = myName != null && e.username.trim().toLowerCase() === myName.trim().toLowerCase();
-          const saving = pendingName != null && e.username.trim().toLowerCase() === pendingName;
-          return (
-            <div key={`${e.username}-${i}`} className={saving ? "bf-saving" : undefined} style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 7, padding: "6px 8px", backgroundColor: saving ? "rgba(255,255,255,0.04)" : mine ? "rgba(200,255,45,0.1)" : "rgba(255,255,255,0.025)", border: saving ? "1px solid rgba(255,255,255,0.08)" : mine ? "1px solid rgba(200,255,45,0.4)" : "1px solid rgba(255,255,255,0.05)", opacity: saving ? 0.55 : 1 }}>
-              <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11.5, ...nameStyle(e.username, "#eef3ee"), flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.username}</span>
-              {mine && !saving ? <span style={{ flex: "none", fontFamily: JB, fontSize: 7.5, letterSpacing: "0.06em", fontWeight: 700, color: "#0f1f02", background: LIME, padding: "2px 5px", borderRadius: 4 }}>VOCÊ</span> : null}
-              <span style={{ flex: "none", fontFamily: JB, fontSize: 9.5, color: "#aebdb4" }}>{pickLine(e, homeCode, awayCode)}</span>
-            </div>
-          );
-        })
-      )}
-    </div>
+    <>
+      {myEntry && sameCount > 0 ? (
+        <div style={{ flex: "none", fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: "#9bb6a6", marginBottom: 6 }}>
+          {sameCount} {sameCount === 1 ? "pessoa tem" : "pessoas têm"} o mesmo placar que você
+        </div>
+      ) : null}
+      <div className="bf-scroll" style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "7px 8px", alignContent: "start", flex: 1, minHeight: 0, paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
+        {sorted.length === 0 ? (
+          <div style={{ fontFamily: BRIC, fontSize: 11.5, color: "#6f8a78" }}>Nenhum palpite ainda. Seja o primeiro.</div>
+        ) : (
+          sorted.map((e, i) => {
+            const mine = myName != null && e.username.trim().toLowerCase() === myLower;
+            const saving = pendingName != null && e.username.trim().toLowerCase() === pendingName;
+            const same = samePick(e);
+            const bg = saving ? "rgba(255,255,255,0.04)" : mine ? "rgba(200,255,45,0.1)" : same ? "rgba(200,255,45,0.045)" : "rgba(255,255,255,0.025)";
+            const border = saving ? "1px solid rgba(255,255,255,0.08)" : mine ? "1px solid rgba(200,255,45,0.4)" : same ? "1px solid rgba(200,255,45,0.22)" : "1px solid rgba(255,255,255,0.05)";
+            return (
+              <div key={`${e.username}-${i}`} className={saving ? "bf-saving" : undefined} style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 7, padding: "6px 8px", backgroundColor: bg, border, opacity: saving ? 0.55 : 1 }}>
+                <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 11.5, ...nameStyle(e.username, "#eef3ee"), flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.username}</span>
+                {mine && !saving ? <span style={{ flex: "none", fontFamily: JB, fontSize: 7.5, letterSpacing: "0.06em", fontWeight: 700, color: "#0f1f02", background: LIME, padding: "2px 5px", borderRadius: 4 }}>VOCÊ</span> : null}
+                {same ? <span title="mesmo placar que você" style={{ flex: "none", fontFamily: JB, fontSize: 9, color: LIME }}>=</span> : null}
+                <span style={{ flex: "none", fontFamily: JB, fontSize: 9.5, color: same ? "#cdeec0" : "#aebdb4" }}>{pickLine(e, homeCode, awayCode)}</span>
+                {e.penWinner ? <span title="pênaltis: quem vence" style={{ flex: "none", fontFamily: JB, fontSize: 8, letterSpacing: "0.02em", color: GOLD_DEEP }}>pên {e.penWinner === "home" ? homeCode : awayCode}</span> : null}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </>
   );
 }
 
@@ -122,7 +147,7 @@ function PreHero({ match, groupByTeam }: { match: Match; groupByTeam: Record<str
     <div style={{ position: "relative", flex: "none", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,179,71,0.16)", background: "linear-gradient(180deg, rgba(255,179,71,0.06), transparent)", padding: "14px 22px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(12px,3vw,30px)" }}>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, minWidth: 0 }}>
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(16px,2vw,23px)", letterSpacing: "-0.02em", color: homeAccent, whiteSpace: "nowrap" }}>{teamNamePt(match.home.abbreviation, match.home.name).toUpperCase()}</span>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(18px,2.2vw,26px)", letterSpacing: "-0.02em", color: homeAccent, whiteSpace: "nowrap" }}>{match.home.abbreviation}</span>
           <FlagCrest code={match.home.abbreviation} accent={homeAccent} size={50} />
         </div>
         <div style={{ flex: "none", textAlign: "center" }}>
@@ -135,7 +160,7 @@ function PreHero({ match, groupByTeam }: { match: Match; groupByTeam: Record<str
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <FlagCrest code={match.away.abbreviation} accent={awayAccent} size={50} />
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(16px,2vw,23px)", letterSpacing: "-0.02em", color: awayAccent, whiteSpace: "nowrap" }}>{teamNamePt(match.away.abbreviation, match.away.name).toUpperCase()}</span>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(18px,2.2vw,26px)", letterSpacing: "-0.02em", color: awayAccent, whiteSpace: "nowrap" }}>{match.away.abbreviation}</span>
         </div>
       </div>
       <div style={{ textAlign: "center", marginTop: 14 }}>
@@ -175,6 +200,9 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
   // The parent (decideConcurrent) only hands us a `second` when it wants the duo,
   // so simply mirror that — AUTO with a simultaneous partner shows both games.
   const showDuo = second != null;
+  // Crowd's home/draw/away split for this match — recomputes as palpites stream in
+  // (poll/realtime).
+  const consensus = useMemo(() => communityConsensus(entries), [entries]);
 
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
@@ -183,13 +211,11 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
       </div>
 
       {!showDuo ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
-          <PreHero match={match} groupByTeam={groupByTeam} />
-          {/* On mobile this 3-column row stacks: form first, sent palpites next,
-              the ranking last (via flex `order`). */}
-          <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 12, flex: 1, minHeight: 0 }}>
-            <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: narrow ? "100%" : 170, order: narrow ? 3 : 0 }} />
-            <div style={{ ...cardWrap, flex: narrow ? "none" : 1.35, order: narrow ? 1 : 0, minWidth: 0, minHeight: 0, overflow: narrow ? "visible" : "hidden", border: "1px solid rgba(200,255,45,0.16)", padding: "13px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+        (() => {
+          const preHero = <PreHero match={match} groupByTeam={groupByTeam} />;
+          const ranking = <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: narrow ? "100%" : 170 }} />;
+          const formCard = (
+            <div style={{ ...cardWrap, flex: narrow ? "none" : 1, minWidth: 0, minHeight: 0, overflow: narrow ? "visible" : "hidden", border: "1px solid rgba(200,255,45,0.16)", padding: "13px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
               <SectionLabel>{"// FAÇA SEU PALPITE"}</SectionLabel>
               <PalpiteForm match={match} entries={entries} closesAt={palpiteDeadline(match.startsAt)} released={releasedIds.has(match.id)} onVoted={onVoted} transport={transport} />
               <div className="bf-scroll" style={{ display: "flex", gap: 12, flex: 1, minHeight: 0, alignItems: "flex-start", paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
@@ -197,15 +223,56 @@ export function PreMatchPanel({ match, second, entries, secondEntries, allEntrie
                 <HistoryColumn code={awayCode} accent={awayAccent} games={teamCupHistory(matches, awayCode)} />
               </div>
             </div>
-            <div style={{ ...cardWrap, flex: narrow ? "none" : 1.05, order: narrow ? 2 : 0, minWidth: 0, padding: 14, display: "flex", flexDirection: "column" }}>
+          );
+          const iaEl = <IaVsVoce entries={allEntries} matches={matches} name={myName} style={{ flex: "none" }} />;
+          const communityEl = <CommunityBar consensus={consensus} homeCode={homeCode} awayCode={awayCode} homeAccent={homeAccent} awayAccent={awayAccent} />;
+          const sentCard = (
+            <div style={{ ...cardWrap, flex: narrow ? "none" : 1, minWidth: 0, padding: 14, display: "flex", flexDirection: "column", minHeight: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 11 }}>
                 <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14 }}>Palpites enviados</span>
                 <span style={{ fontFamily: JB, fontSize: 9.5, color: "#6f8a78" }}>{entries.length} no total</span>
               </div>
               <SentList entries={entries} homeCode={homeCode} awayCode={awayCode} myName={myName} />
             </div>
-          </div>
-        </div>
+          );
+
+          // Mobile: everything stacks in reading order (header → form → IA →
+          // comunidade → palpites → ranking).
+          if (narrow) {
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
+                {preHero}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {formCard}
+                  {iaEl}
+                  {communityEl}
+                  {sentCard}
+                  {ranking}
+                </div>
+              </div>
+            );
+          }
+
+          // Desktop: the match header + (ranking + form) make a LEFT region whose
+          // width ends where the form does; the right column (IA / comunidade /
+          // palpites) runs the full height alongside it for more vertical room.
+          return (
+            <div style={{ display: "flex", flexDirection: "row", gap: 12, flex: 1, minHeight: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1.8, minWidth: 0, minHeight: 0 }}>
+                {preHero}
+                <div style={{ display: "flex", flexDirection: "row", gap: 12, flex: 1, minHeight: 0 }}>
+                  {ranking}
+                  {formCard}
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1.05, minWidth: 0, minHeight: 0 }}>
+                {iaEl}
+                {communityEl}
+                {sentCard}
+              </div>
+            </div>
+          );
+        })()
       ) : (
         <PreMatchDuo
           match={match}
@@ -353,9 +420,12 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
               once sent OR once palpites close (kept visible during the tail). */}
           {(() => {
             const locked = alreadySent || !open;
+            const nameMissing = !name.trim();
+            const blocked = !locked && nameMissing; // require a name before sending
+            const disabled = locked || saving || blocked;
             return (
-              <button type="button" onClick={submit} disabled={locked || saving} className={saving ? "bf-saving" : undefined} style={{ flex: "none", textAlign: "center", backgroundColor: locked ? "rgba(255,255,255,0.05)" : LIME, color: locked ? "#7d9a86" : "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 13, padding: "11px 12px", borderRadius: 10, border: locked ? "1px solid rgba(255,255,255,0.1)" : "none", boxShadow: locked ? "none" : "0 0 22px -10px rgba(200,255,45,0.6)", cursor: locked ? "not-allowed" : "pointer" }}>
-                {saving ? "SALVANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : !open ? "PALPITES ENCERRADOS" : "ENVIAR PALPITE →"}
+              <button type="button" onClick={submit} disabled={disabled} className={saving ? "bf-saving" : undefined} style={{ flex: "none", textAlign: "center", backgroundColor: locked ? "rgba(255,255,255,0.05)" : LIME, color: locked ? "#7d9a86" : "#0f1f02", fontFamily: BRIC, fontWeight: 800, fontSize: 13, padding: "11px 12px", borderRadius: 10, border: locked ? "1px solid rgba(255,255,255,0.1)" : "none", boxShadow: locked || blocked ? "none" : "0 0 22px -10px rgba(200,255,45,0.6)", opacity: blocked ? 0.4 : 1, cursor: disabled ? "not-allowed" : "pointer" }}>
+                {saving ? "SALVANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : !open ? "PALPITES ENCERRADOS" : nameMissing ? "DIGITE SEU NOME" : "ENVIAR PALPITE →"}
               </button>
             );
           })()}

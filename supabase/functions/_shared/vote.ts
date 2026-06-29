@@ -40,6 +40,9 @@ export const voteInputSchema = z.object({
     .regex(USERNAME_RE, "username has invalid characters"),
   predHome: z.number().int().min(SCORE_MIN).max(SCORE_MAX),
   predAway: z.number().int().min(SCORE_MIN).max(SCORE_MAX),
+  // Optional knockout penalty-shootout winner call (no score). Absent/null on
+  // group palpites. Mirrors the votes.pen_winner CHECK ('home' | 'away' | null).
+  penWinner: z.enum(["home", "away"]).nullish(),
 });
 
 /** Clean, validated prediction payload. Unknown keys are stripped, never trusted. */

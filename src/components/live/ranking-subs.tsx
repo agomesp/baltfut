@@ -5,10 +5,20 @@ import { rankSubs, worstPalpiteiro, type SubRank } from "@/lib/ranking";
 import { useMyName } from "@/lib/use-my-name";
 import { BRIC, JB, SAIRA, LIME_DEEP, GOLD, GOLD_DEEP, VoceTag, isMe, nameStyle } from "@/components/live/bf-ui";
 
-const WL = ({ w, l, big = false }: { w: number; l: number; big?: boolean }) => (
-  <span style={{ fontFamily: SAIRA, fontWeight: 700, fontSize: big ? 14 : 13 }}>
-    <span style={{ color: LIME_DEEP }}>{w}</span>
-    <span style={{ color: "#5c7560" }}>–{l}</span>
+/** pt-BR-format the (possibly fractional) win count: 1 → "1", 1.5 → "1,5". */
+const fmtWins = (w: number) => (Number.isInteger(w) ? `${w}` : w.toFixed(1).replace(".", ","));
+
+const WL = ({ w, l, pw, pl, big = false }: { w: number; l: number; pw: number; pl: number; big?: boolean }) => (
+  <span style={{ display: "inline-flex", alignItems: "baseline", gap: 5, flex: "none" }}>
+    <span style={{ fontFamily: SAIRA, fontWeight: 700, fontSize: big ? 14 : 13 }}>
+      <span style={{ color: LIME_DEEP }}>{fmtWins(w)}</span>
+      <span style={{ color: "#5c7560" }}>–{l}</span>
+    </span>
+    {pw + pl > 0 ? (
+      <span title="pênaltis · acertos–erros (cada acerto vale 0,5)" style={{ fontFamily: JB, fontSize: big ? 9 : 8, letterSpacing: "0.03em", color: GOLD_DEEP, whiteSpace: "nowrap" }}>
+        p {pw}–{pl}
+      </span>
+    ) : null}
   </span>
 );
 
@@ -20,7 +30,7 @@ function Row({ r, rank, dense, myName }: { r: SubRank; rank: number; dense?: boo
         <span style={{ fontFamily: BRIC, fontSize: dense ? 11 : 12.5, fontWeight: 600, minWidth: 0, ...nameStyle(r.username, "#e9ece8"), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.username}</span>
         {isMe(r.username, myName) ? <VoceTag /> : null}
       </div>
-      <WL w={r.wins} l={r.losses} />
+      <WL w={r.wins} l={r.losses} pw={r.penWins} pl={r.penLosses} />
     </div>
   );
 }
@@ -52,9 +62,12 @@ export function RankingSubs({ entries, matches, variant = "column", style }: Ran
 
   return (
     <div style={{ borderRadius: 12, border: "1px solid rgba(255,179,71,0.2)", background: "rgba(255,255,255,0.02)", padding: 13, display: "flex", flexDirection: "column", minHeight: 0, ...style }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
         <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: GOLD }}>Ranking dos Subs</span>
-        <span style={{ fontFamily: JB, fontSize: 9, color: "#6f8a78" }}>V &amp; D</span>
+        <span style={{ display: "inline-flex", alignItems: "baseline", gap: 7, fontFamily: JB, fontSize: 9, flex: "none" }}>
+          <span style={{ color: "#6f8a78" }}>V–D</span>
+          <span title="pênaltis · acertos–erros (cada acerto vale 0,5)" style={{ color: GOLD_DEEP }}>p&nbsp;pên</span>
+        </span>
       </div>
 
       {leader ? (
@@ -63,7 +76,7 @@ export function RankingSubs({ entries, matches, variant = "column", style }: Ran
           <span style={{ flex: 1, minWidth: 0, fontFamily: BRIC, fontWeight: 800, fontSize: 13, ...nameStyle(leader.username, "#f3d27a"), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{leader.username}</span>
           {isMe(leader.username, myName) ? <VoceTag /> : null}
           <span style={{ flex: "none", fontFamily: JB, fontSize: 7, letterSpacing: "0.08em", color: "#caa94a" }}>LÍDER</span>
-          <WL w={leader.wins} l={leader.losses} big />
+          <WL w={leader.wins} l={leader.losses} pw={leader.penWins} pl={leader.penLosses} big />
         </div>
       ) : (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: BRIC, fontSize: 12, color: "#6f8a78", padding: "18px 8px" }}>
