@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import { supabaseCastVote, type CastVoteTransport } from "@/lib/votes";
@@ -9,6 +9,7 @@ import { fmtTime } from "@/lib/format";
 import { teamCupHistory, type TeamHistoryGame } from "@/lib/team-history";
 import { communityConsensus, type Consensus } from "@/lib/consensus";
 import { palpiteDeadline, effectiveDeadline, isPalpiteOpen, formatCountdown, formatCountdownLong } from "@/lib/palpite";
+import { detectChegandoChanges, buildChegandoRows } from "@/lib/chegando";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { useNow } from "@/lib/use-now";
 import { isReservedName } from "@shared/name-claim";
@@ -228,19 +229,25 @@ function ChatCta({ homeCode, awayCode, pen = false }: { homeCode: string; awayCo
   );
 }
 
-function ChegandoRow({ nick, value, fresh, pen }: { nick: string; value: string; fresh: boolean; pen: boolean }) {
+function ChegandoRow({ nick, value, fresh, changed, pen }: { nick: string; value: string; fresh: boolean; changed: boolean; pen: boolean }) {
   const freshBg = pen ? "rgba(232,181,58,0.12)" : "rgba(200,255,45,0.1)";
   const freshBorder = pen ? "1px solid rgba(232,181,58,0.4)" : "1px solid rgba(200,255,45,0.34)";
+  // A CHANGED palpite (re-palpite) wins the styling: yellow card + "alterado" so a
+  // viewer can tell at a glance someone swapped their pick.
+  const changedBg = "rgba(255,205,50,0.15)";
+  const changedBorder = "1px solid rgba(255,205,50,0.6)";
+  const bg = changed ? changedBg : fresh ? freshBg : "rgba(255,255,255,0.03)";
+  const border = changed ? changedBorder : fresh ? freshBorder : "1px solid rgba(255,255,255,0.05)";
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 15px", borderRadius: 12, background: fresh ? freshBg : "rgba(255,255,255,0.03)", border: fresh ? freshBorder : "1px solid rgba(255,255,255,0.05)", animation: "chegaIn .42s cubic-bezier(.2,.8,.2,1)" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 15px", borderRadius: 12, background: bg, border, animation: "chegaIn .42s cubic-bezier(.2,.8,.2,1)" }}>
       <span style={{ flex: "none", width: 30, height: 30, borderRadius: 8, background: "#53fc18", color: "#0a0a0a", fontFamily: BRIC, fontWeight: 900, fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center" }}>K</span>
       <span style={{ flex: 1, minWidth: 0, fontFamily: BRIC, fontWeight: 700, fontSize: 19, color: "#eef3ee", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nick}</span>
       {pen ? (
-        <span style={{ flex: "none", display: "inline-flex", alignItems: "center", gap: 7, fontFamily: BRIC, fontWeight: 800, fontSize: 19, color: "#f3d27a" }}><FlagIcon code={value} size={16} /> {value}</span>
+        <span style={{ flex: "none", display: "inline-flex", alignItems: "center", gap: 7, fontFamily: BRIC, fontWeight: 800, fontSize: 19, color: changed ? "#ffd24a" : "#f3d27a" }}><FlagIcon code={value} size={16} /> {value}</span>
       ) : (
-        <span style={{ flex: "none", fontFamily: SAIRA, fontWeight: 800, fontSize: 26, color: "#fff" }}>{value}</span>
+        <span style={{ flex: "none", fontFamily: SAIRA, fontWeight: 800, fontSize: 26, color: changed ? "#ffd24a" : "#fff" }}>{value}</span>
       )}
-      <span style={{ flex: "none", fontFamily: JB, fontSize: 11, color: pen ? GOLD_DEEP : LIME, fontWeight: 700 }}>registrado ✓</span>
+      <span style={{ flex: "none", fontFamily: JB, fontSize: 11, color: changed ? "#ffd24a" : pen ? GOLD_DEEP : LIME, fontWeight: 700 }}>{changed ? "alterado ⟳" : "registrado ✓"}</span>
     </div>
   );
 }
@@ -251,19 +258,29 @@ function ChegandoRow({ nick, value, fresh, pen }: { nick: string; value: string;
  *  newly-arriving one animates in (the per-row chegaIn runs when its node mounts,
  *  keyed by username so only genuinely-new palpites animate). */
 function ChegandoFeed({ entries, pen = false, homeCode = "", awayCode = "" }: { entries: VoteEntry[]; pen?: boolean; homeCode?: string; awayCode?: string }) {
-  const rows = useMemo(() => {
-    // In pen mode, only entries that called a winner appear (value = the team code);
-    // otherwise the value is the score. Newest first, capped (the list scrolls).
-    const list = pen ? entries.filter((e) => e.penWinner === "home" || e.penWinner === "away") : entries;
-    return [...list]
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, 24)
-      .map((e) => ({
-        key: e.username,
-        nick: e.username,
-        value: pen ? (e.penWinner === "home" ? homeCode : awayCode) : `${e.predHome}×${e.predAway}`,
-      }));
+  // Detect a CHANGED palpite (a re-palpite) live: the votes feed keeps one row per
+  // user, so when that row's value differs from what we last saw, the person swapped
+  // their pick. Mark it (with the moment we noticed) so it bubbles to the top in
+  // yellow as "alterado" — and since it's the SAME keyed row, its old position is
+  // vacated (no duplicate to remove). First sight of a name is NOT a change.
+  const seenRef = useRef(new Map<string, string>());
+  const [changedAt, setChangedAt] = useState<Map<string, number>>(() => new Map());
+  useEffect(() => {
+    const changed = detectChegandoChanges(entries, seenRef.current, pen, homeCode, awayCode);
+    if (changed.length) {
+      const now = Date.now();
+      setChangedAt((cur) => {
+        const next = new Map(cur);
+        for (const u of changed) next.set(u, now);
+        return next;
+      });
+    }
   }, [entries, pen, homeCode, awayCode]);
+
+  const rows = useMemo(
+    () => buildChegandoRows(entries, changedAt, pen, homeCode, awayCode, 24),
+    [entries, pen, homeCode, awayCode, changedAt],
+  );
 
   return (
     <div style={{ ...cardWrap, flex: 1, minWidth: 0, minHeight: 0, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -273,7 +290,7 @@ function ChegandoFeed({ entries, pen = false, homeCode = "", awayCode = "" }: { 
         {rows.length === 0 ? (
           <div style={{ fontFamily: BRIC, fontSize: 12, color: "#6f8a78" }}>Nenhum palpite ainda — manda no chat!</div>
         ) : (
-          rows.map((r, i) => <ChegandoRow key={r.key} nick={r.nick} value={r.value} fresh={i === 0} pen={pen} />)
+          rows.map((r, i) => <ChegandoRow key={r.key} nick={r.nick} value={r.value} fresh={i === 0 && !r.changed} changed={r.changed} pen={pen} />)
         )}
       </div>
     </div>
