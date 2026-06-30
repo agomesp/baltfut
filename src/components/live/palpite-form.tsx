@@ -14,7 +14,7 @@ import {
 } from "@/lib/votes";
 import { isPalpiteOpen, formatCountdown } from "@/lib/palpite";
 import { isReservedName } from "@shared/name-claim";
-import { penWindowClosed, penWindowHardClosed } from "@shared/deadline";
+import { penWindowClosed, penWindowHardClosed, penVoteVisible } from "@shared/deadline";
 
 /** Manual pen-vote override broadcast by the admin (null = automatic). */
 export type PenOverride = "open" | "closed" | null;
@@ -52,6 +52,12 @@ export function PenVote({ match, entries, onVoted, transport = supabaseCastVote,
   const lower = myName ? myName.trim().toLowerCase() : "";
   const myEntry = lower ? entries.find((e) => e.username.trim().toLowerCase() === lower) : undefined;
   if (!isKnockoutStage(match.stage) || !myEntry) return null;
+  // Hidden until ~10 min before pens (clock ≥ 110'), then auto-shows and stays
+  // through the shootout/result — unless the admin manually liberated it ("open"),
+  // which reveals it early.
+  if (override !== "open" && !penVoteVisible({ state: match.state, detail: match.statusDetail, clock: match.displayClock })) {
+    return null;
+  }
   // Optimistic first, so an in-flight change shows immediately even when a pick is
   // already stored (`?? penWinner` alone would keep showing the old one).
   const chosen: Side | null = optimistic ?? myEntry.penWinner ?? null;
@@ -184,7 +190,7 @@ const clampScore = (n: number) => Math.max(SCORE_MIN, Math.min(SCORE_MAX, n));
 
 /** − value + score stepper (Saira numeral). `disabled` greys it out (e.g. once
  *  the palpite for this game is locked in). */
-export function Stepper({ label, accent, value, onChange, disabled = false }: { label: string; accent: string; value: number; onChange: (n: number) => void; disabled?: boolean }) {
+export function Stepper({ label, accent, value, onChange, disabled = false, readOnly = false }: { label: string; accent: string; value: number; onChange: (n: number) => void; disabled?: boolean; readOnly?: boolean }) {
   const btn = {
     width: 30,
     height: 30,
@@ -204,10 +210,10 @@ export function Stepper({ label, accent, value, onChange, disabled = false }: { 
   return (
     <div style={{ textAlign: "center" }}>
       <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: accent, marginBottom: 6 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button type="button" disabled={disabled} aria-label={`Menos ${label}`} style={btn} onClick={() => onChange(clampScore(value - 1))}>−</button>
-        <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: disabled ? "#6f8a78" : "#fff", width: 42, textAlign: "center", lineHeight: 0.8 }}>{value}</span>
-        <button type="button" disabled={disabled} aria-label={`Mais ${label}`} style={btn} onClick={() => onChange(clampScore(value + 1))}>+</button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+        {readOnly ? null : <button type="button" disabled={disabled} aria-label={`Menos ${label}`} style={btn} onClick={() => onChange(clampScore(value - 1))}>−</button>}
+        <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: disabled && !readOnly ? "#6f8a78" : "#fff", width: 42, textAlign: "center", lineHeight: 0.8 }}>{value}</span>
+        {readOnly ? null : <button type="button" disabled={disabled} aria-label={`Mais ${label}`} style={btn} onClick={() => onChange(clampScore(value + 1))}>+</button>}
       </div>
     </div>
   );
@@ -350,12 +356,14 @@ export interface PalpiteFormProps {
   closesAt: number;
   /** False when the match is beyond the current+next kickoff-group window (locked). */
   released?: boolean;
+  /** Hide the "Fecha em …" countdown (the pre-match hero shows it beside the pill). */
+  hideCountdown?: boolean;
   onVoted: () => void;
   transport?: CastVoteTransport;
 }
 
 /** Full single-match pre-match form: name + two steppers + ENVIAR. */
-export function PalpiteForm({ match, entries, closesAt, released = true, onVoted, transport = supabaseCastVote }: PalpiteFormProps) {
+export function PalpiteForm({ match, entries, closesAt, released = true, hideCountdown = false, onVoted, transport = supabaseCastVote }: PalpiteFormProps) {
   const { name, setName, locked, confirm, unlock } = useNameLock();
   const [home, setHome] = useState(0);
   const [away, setAway] = useState(0);
@@ -457,33 +465,19 @@ export function PalpiteForm({ match, entries, closesAt, released = true, onVoted
     <NameField name={name} setName={setName} locked={locked} onUnlock={() => { unlock(); setSent(false); setHome(0); setAway(0); }} />
   );
 
-  // Phase 2 — KNOCKOUT: once your score is in, the steppers + send button VANISH
-  // and the pen-winner vote takes their place (auto-saves on tap, open until you
-  // pick or the match ends). Not picking blocks nothing.
-  if (alreadySent && canPen) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {nameField}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "9px 10px", borderRadius: 10, border: "1px solid rgba(200,255,45,0.25)", background: "rgba(200,255,45,0.06)" }}>
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 12.5, color: "#cdeec0" }}>PALPITE ENVIADO ✓</span>
-          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 15, color: "#fff" }}>{homeAccentCode} {showHome} <span style={{ color: "#42565b" }}>×</span> {showAway} {awayAccentCode}</span>
-        </div>
-        <PenVote match={match} entries={entries} onVoted={onVoted} transport={transport} />
-      </div>
-    );
-  }
-
-  // Phase 1 (active) or phase 2 on a NON-knockout match (greyed lock). A name is
-  // required to send; the pen winner is not (knockout handles it via PenVote).
+  // Phase 1 (active) or phase 2 (sent). Once sent: the steppers go read-only (the
+  // +/- buttons hide, the picked score stays) and the button locks to "PALPITE
+  // ENVIADO". On a KNOCKOUT match the pen-winner vote is appended below — itself
+  // hidden until ~10 min before pens (110'). A name is required to send.
   const blocked = !alreadySent && nameMissing;
   const btnDisabled = submitting || alreadySent || blocked;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {nameField}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 24, padding: "2px 0" }}>
-        <Stepper label={homeAccentCode} accent="var(--bf-text)" value={showHome} onChange={setHome} disabled={alreadySent} />
+        <Stepper label={homeAccentCode} accent="var(--bf-text)" value={showHome} onChange={setHome} disabled={alreadySent} readOnly={alreadySent} />
         <span style={{ fontFamily: SAIRA, fontWeight: 500, fontSize: 22, color: "#42565b", paddingTop: 22 }}>×</span>
-        <Stepper label={awayAccentCode} accent="var(--bf-text)" value={showAway} onChange={setAway} disabled={alreadySent} />
+        <Stepper label={awayAccentCode} accent="var(--bf-text)" value={showAway} onChange={setAway} disabled={alreadySent} readOnly={alreadySent} />
       </div>
       <button type="button" onClick={onSubmit} disabled={btnDisabled} style={{ ...submitBtnStyle, ...(alreadySent ? { background: "rgba(255,255,255,0.05)", color: "#7d9a86", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "none", cursor: "not-allowed" } : blocked ? { opacity: 0.4, cursor: "not-allowed", boxShadow: "none" } : { opacity: submitting ? 0.7 : 1 }) }}>
         {submitting ? "ENVIANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : "ENVIAR PALPITE →"}
@@ -497,12 +491,13 @@ export function PalpiteForm({ match, entries, closesAt, released = true, onVoted
               ? "Digite seu nome para enviar o palpite"
               : "1 palpite por pessoa · placar exato pontua no Ranking dos Subs"}
       </div>
-      {open && !alreadySent ? (
+      {open && !alreadySent && !hideCountdown ? (
         <div style={{ fontFamily: JB, fontSize: 9.5, color: closesAt - now < 60_000 ? "#ff6b6b" : "#9bb6a6", textAlign: "center" }}>
           Fecha em {formatCountdown(closesAt - now)}
         </div>
       ) : null}
       {outcome && !outcome.ok ? <span role="alert" style={{ fontSize: 12, color: "#ff6b6b", textAlign: "center" }}>{outcome.message}</span> : null}
+      {alreadySent && canPen ? <PenVote match={match} entries={entries} onVoted={onVoted} transport={transport} /> : null}
     </div>
   );
 }

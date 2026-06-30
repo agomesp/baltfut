@@ -6,9 +6,11 @@ import { matchShootout } from "@/lib/espn";
 import { supabaseCastVote, type VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
 import { useNow } from "@/lib/use-now";
+import { wcProgress } from "@/lib/wc-progress";
 import { communityConsensus } from "@/lib/consensus";
 import { classifyLivePalpites } from "@/lib/live-palpites";
-import { palpiteFormVisible, palpiteDeadline } from "@/lib/palpite";
+import { palpiteFormVisible, effectiveDeadline } from "@/lib/palpite";
+import { penVoteVisible } from "@shared/deadline";
 import { Reactions } from "@/components/reactions";
 import { RbStoreStrip } from "@/components/live/rb-store-strip";
 import { BfChipRail } from "@/components/live/bf-chip-rail";
@@ -85,6 +87,7 @@ function PlacarStage({
   followCode,
   releasedIds,
   penOverride,
+  palpiteOpenUntil,
 }: {
   match: Match;
   phase: ChipPhase;
@@ -98,6 +101,7 @@ function PlacarStage({
   followCode: string | null;
   releasedIds: Set<string>;
   penOverride: PenOverride;
+  palpiteOpenUntil: number | null;
 }) {
   const now = useNow(1000);
   const narrow = useIsNarrow();
@@ -112,7 +116,13 @@ function PlacarStage({
   // only on the palpites, so a goal correctly leaves it untouched.
   const breakdown = useMemo(() => classifyLivePalpites(entries, { home: hs, away: as }, final), [entries, hs, as, final]);
   const consensus = useMemo(() => communityConsensus(entries), [entries]);
-  const formOpen = phase === "live" && palpiteFormVisible(match, releasedIds, now);
+  // A manual admin window (palpiteOpenUntil) can keep the form open past the grace
+  // — or REOPEN a finished match — so it bypasses the live-only phase gate too.
+  const overrideOpen = palpiteOpenUntil != null && now <= palpiteOpenUntil;
+  const formOpen = (phase === "live" || overrideOpen) && palpiteFormVisible(match, releasedIds, now, palpiteOpenUntil);
+  // The pen-winner split shows only once the pen UI goes live (≥110', 10 min before
+  // pens) — or when the admin manually liberated it; mirrors the PenVote picker gate.
+  const penVisible = penOverride === "open" || penVoteVisible({ state: match.state, detail: match.statusDetail, clock: match.displayClock });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
@@ -143,10 +153,10 @@ function PlacarStage({
             <>
               {formOpen ? (
                 <div style={{ borderRadius: 12, border: "1px solid rgba(200,255,45,0.16)", background: "rgba(255,255,255,0.02)", padding: "14px 16px", flex: "none" }}>
-                  <PalpiteForm match={match} entries={entries} closesAt={palpiteDeadline(match.startsAt)} onVoted={onVoted} />
+                  <PalpiteForm match={match} entries={entries} closesAt={effectiveDeadline(match.startsAt, palpiteOpenUntil)} onVoted={onVoted} />
                 </div>
               ) : null}
-              <PalpiteBreakdown breakdown={breakdown} homeCode={homeCode} awayCode={awayCode} total={entries.length} closed={phase !== "live"} penResult={matchShootout(match)} />
+              <PalpiteBreakdown breakdown={breakdown} homeCode={homeCode} awayCode={awayCode} total={entries.length} closed={phase !== "live"} penResult={matchShootout(match)} penVisible={penVisible} />
             </>
           )}
         </div>
@@ -168,7 +178,7 @@ function PlacarStage({
  * it flips to a live card at kickoff. When any card is a form, a shared name
  * field sits above the pair (mirrors the pre-match duo).
  */
-function DuoStage({ games, allEntries, matches, groupByTeam, releasedIds, onVoted }: { games: Match[]; allEntries: VoteEntry[]; matches: Match[]; groupByTeam: Record<string, string>; releasedIds: Set<string>; onVoted: () => void }) {
+function DuoStage({ games, allEntries, matches, groupByTeam, releasedIds, palpiteOverrides, onVoted }: { games: Match[]; allEntries: VoteEntry[]; matches: Match[]; groupByTeam: Record<string, string>; releasedIds: Set<string>; palpiteOverrides: Record<string, number>; onVoted: () => void }) {
   const narrow = useIsNarrow();
   const now = useNow(1000);
   const { name, setName, locked, confirm, unlock } = useNameLock();
@@ -176,13 +186,14 @@ function DuoStage({ games, allEntries, matches, groupByTeam, releasedIds, onVote
   // and through the first 5 live minutes (kickoff+grace). So a game that kicks
   // off keeps its form for those 5 minutes here, exactly like the 1-game view;
   // after the grace it falls back to the live card.
-  const isForm = (m: Match) => palpiteFormVisible(m, releasedIds, now);
+  const ovr = (m: Match) => palpiteOverrides[m.id] ?? null;
+  const isForm = (m: Match) => palpiteFormVisible(m, releasedIds, now, ovr(m));
   const anyForm = games.some(isForm);
 
   const card = (m: Match) => {
     const entries = allEntries.filter((e) => e.matchId === m.id);
     return isForm(m) ? (
-      <DuoGameCard key={m.id} match={m} entries={entries} groupByTeam={groupByTeam} name={name} confirm={confirm} released borderColor="rgba(200,255,45,0.18)" transport={supabaseCastVote} onVoted={onVoted} />
+      <DuoGameCard key={m.id} match={m} entries={entries} groupByTeam={groupByTeam} name={name} confirm={confirm} released openUntil={ovr(m)} borderColor="rgba(200,255,45,0.18)" transport={supabaseCastVote} onVoted={onVoted} />
     ) : (
       <LiveDuoCard key={m.id} match={m} entries={entries} groupLabel={groupVenueLabel(m, groupByTeam)} />
     );
@@ -234,6 +245,8 @@ export interface LiveViewProps {
   groupByTeam: Record<string, string>;
   releasedIds: Set<string>;
   penOverride?: PenOverride;
+  /** Manual per-match palpite windows from the admin: match_id → openUntil (ms). */
+  palpiteOverrides?: Record<string, number>;
 }
 
 export function LiveView({
@@ -251,8 +264,10 @@ export function LiveView({
   groupByTeam,
   releasedIds,
   penOverride = null,
+  palpiteOverrides = {},
 }: LiveViewProps) {
   const now = useNow(15_000);
+  const wc = wcProgress(now);
   const selected = chips.find((c) => c.match.id === selectedId) ?? chips[0];
 
   // Auto-decide 1 vs 2 concurrent games. Ticks with `now`, so the pair opens 10
@@ -295,12 +310,40 @@ export function LiveView({
     };
   }, [primary?.id, partner?.id, primaryPhase]);
 
+  // Compact masthead: brand block (column) on the left of the match rail, the
+  // entertainment-only notice pinned top-right above it. Replaces the global header
+  // on the live screen (shorter page) and renders even with no game selected.
+  const masthead = (
+    <div style={{ display: "flex", alignItems: "stretch", gap: 16, flex: "none", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 3, flex: "none" }}>
+        <span style={{ fontFamily: "var(--font-bric)", fontWeight: 800, fontSize: 22, letterSpacing: "-0.02em", color: "#f1f7f0", lineHeight: 1 }}>BaltFut</span>
+        <span style={{ fontFamily: JB, fontSize: 8, letterSpacing: "0.03em", color: "#7d9a86", lineHeight: 1.35, whiteSpace: "nowrap" }}>
+          COPA DO MUNDO <span style={{ color: "#c8ff2d" }}>26.</span>
+        </span>
+        <span style={{ fontFamily: JB, fontSize: 8, letterSpacing: "0.03em", color: "#7d9a86", lineHeight: 1.35, whiteSpace: "nowrap" }}>{wc.pct}% CONCLUÍDA</span>
+      </div>
+      <div style={{ flex: "1 1 360px", minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <span style={{ fontFamily: JB, fontSize: 8, letterSpacing: "0.03em", color: "var(--ink-3)" }}>
+            Palpites grátis · sem cadastro · sem premiação · apenas para diversão.
+          </span>
+        </div>
+        <BfChipRail chips={chips} selectedId={selected?.match.id ?? null} onSelect={onSelect} releasedIds={releasedIds} />
+      </div>
+    </div>
+  );
+
   if (!selected || !primary) {
     return (
       <section>
-        <div style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)", padding: "40px 24px", textAlign: "center" }}>
-          <div style={{ fontFamily: "var(--font-bric)", fontWeight: 800, fontSize: 24, color: "#cfd9d1" }}>Nenhum jogo por enquanto</div>
-          <div style={{ fontSize: 14, color: "#6f8a78", marginTop: 8 }}>Volte perto dos próximos jogos.</div>
+        <div ref={fillRef} style={{ display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
+          {masthead}
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <div style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)", padding: "40px 24px", textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--font-bric)", fontWeight: 800, fontSize: 24, color: "#cfd9d1" }}>Nenhum jogo por enquanto</div>
+              <div style={{ fontSize: 14, color: "#6f8a78", marginTop: 8 }}>Volte perto dos próximos jogos.</div>
+            </div>
+          </div>
         </div>
       </section>
     );
@@ -311,7 +354,7 @@ export function LiveView({
       <Reactions matchId={primary.id} />
       <KickLiveChip />
       <div ref={fillRef} style={{ display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
-        <BfChipRail chips={chips} selectedId={selected.match.id} onSelect={onSelect} releasedIds={releasedIds} />
+        {masthead}
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           {primaryPhase === "pre" ? (
@@ -324,10 +367,11 @@ export function LiveView({
               matches={matches}
               groupByTeam={groupByTeam}
               releasedIds={releasedIds}
+              palpiteOverrides={palpiteOverrides}
               onVoted={onVoted}
             />
           ) : partner ? (
-            <DuoStage games={[primary, partner]} allEntries={allEntries} matches={matches} groupByTeam={groupByTeam} releasedIds={releasedIds} onVoted={onVoted} />
+            <DuoStage games={[primary, partner]} allEntries={allEntries} matches={matches} groupByTeam={groupByTeam} releasedIds={releasedIds} palpiteOverrides={palpiteOverrides} onVoted={onVoted} />
           ) : (
             <PlacarStage
               match={primary}
@@ -342,6 +386,7 @@ export function LiveView({
               followCode={followCode}
               releasedIds={releasedIds}
               penOverride={penOverride}
+              palpiteOpenUntil={palpiteOverrides[primary.id] ?? null}
             />
           )}
         </div>

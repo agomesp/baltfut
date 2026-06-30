@@ -30,6 +30,7 @@ export function PalpiteBreakdown({
   total,
   closed,
   penResult,
+  penVisible = true,
 }: {
   breakdown: LivePalpiteBreakdown;
   homeCode: string;
@@ -38,6 +39,9 @@ export function PalpiteBreakdown({
   closed: boolean;
   /** Final shootout result (after the match ends on pens): tally + winning side. */
   penResult?: { winner: "home" | "away"; home: number; away: number } | null;
+  /** Whether the pen-winner split should be shown yet (≥110', i.e. 10 min before
+   *  pens). When false, the normal score breakdown shows even if pen votes exist. */
+  penVisible?: boolean;
 }) {
   const { winners, open, lost } = breakdown;
   const myName = useMyName();
@@ -51,7 +55,9 @@ export function PalpiteBreakdown({
     ...open.map((p) => ({ ...p, bucket: "open" as const })),
     ...lost.map((p) => ({ ...p, bucket: "lost" as const })),
   ];
-  const hasPen = all.some((p) => p.penWinner);
+  // Only split by pen pick once the pen UI is live (≥110'); before that, show the
+  // normal score breakdown even if some palpites already carry a pen winner.
+  const hasPen = penVisible && all.some((p) => p.penWinner);
   const homeVoters = all.filter((p) => p.penWinner === "home");
   const awayVoters = all.filter((p) => p.penWinner === "away");
   const noPen = all.filter((p) => !p.penWinner);

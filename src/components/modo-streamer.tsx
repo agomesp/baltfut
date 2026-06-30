@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Tv } from "lucide-react";
 import { subscribeScoreboard } from "@/lib/scoreboard-source";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
-import { setStreamerMode } from "@/lib/streamer-mode";
+import { setStreamerMode, isStreamerMode } from "@/lib/streamer-mode";
 import { pickMatch } from "@/components/pip/resolve";
 import { streamerClock } from "@/components/streamer-clock";
 
@@ -36,6 +36,10 @@ interface DocumentPiP {
 
 export function ModoStreamer() {
   const [on, setOn] = useState(false);
+  // On a manual page refresh (reload), prompt to turn Modo Streamer on — unless
+  // it's already active. Hidden on first navigation; the click on ATIVAR is the
+  // user gesture the PiP needs to open.
+  const [prompt, setPrompt] = useState(false);
   const pipRef = useRef<Window | null>(null);
   const clkRef = useRef<HTMLElement | null>(null);
   const dataRef = useRef<{ clock: string | null; fetchedAt: number }>({ clock: null, fetchedAt: 0 });
@@ -132,7 +136,52 @@ export function ModoStreamer() {
   // Close the PiP if this ever unmounts.
   useEffect(() => () => stop(), [stop]);
 
+  // Show the "ativar modo streamer?" prompt when the page was manually reloaded
+  // (F5 / Cmd-R) and the mode isn't already on. Navigation type "reload" covers a
+  // manual refresh; first visits ("navigate") and back/forward are skipped.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    if (nav?.type === "reload" && !isStreamerMode()) setPrompt(true);
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   return (
+    <>
+    {prompt ? (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ativar modo streamer?"
+        onClick={() => setPrompt(false)}
+        style={{ position: "fixed", inset: 0, zIndex: 100000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(4,10,6,0.5)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: "min(480px, 92vw)", textAlign: "center", borderRadius: 20, padding: "38px 34px", background: "rgba(10,16,11,0.96)", border: "2px solid rgba(200,255,45,0.7)", boxShadow: "0 0 28px -6px rgba(200,255,45,0.6), 0 24px 70px rgba(0,0,0,0.6)", animation: "streamerGoalGlow 2.4s ease-in-out infinite" }}
+        >
+          {/* Lime ring + pulsing glow — the live hero's goal-scorer crest effect. */}
+          <style>{"@keyframes streamerGoalGlow{0%,100%{box-shadow:0 0 18px -8px rgba(200,255,45,0.45),0 24px 70px rgba(0,0,0,0.6)}50%{box-shadow:0 0 42px -4px rgba(200,255,45,0.78),0 24px 70px rgba(0,0,0,0.6)}}"}</style>
+          <div style={{ fontFamily: "var(--font-bric)", fontWeight: 800, fontSize: "clamp(28px,5vw,44px)", lineHeight: 1.04, letterSpacing: "-0.02em", color: "#f1f7f0" }}>
+            Ativar modo streamer?
+          </div>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 30 }}>
+            <button
+              onClick={() => { setPrompt(false); if (!on) toggle(); }}
+              style={{ fontFamily: "var(--font-bric)", fontWeight: 800, fontSize: 14, letterSpacing: "0.04em", padding: "13px 30px", borderRadius: 11, border: "none", cursor: "pointer", background: "#c8ff2d", color: "#0f1f02", boxShadow: "0 0 28px -8px rgba(200,255,45,0.6)" }}
+            >
+              ATIVAR
+            </button>
+            <button
+              onClick={() => setPrompt(false)}
+              style={{ fontFamily: "var(--font-bric)", fontWeight: 700, fontSize: 14, letterSpacing: "0.04em", padding: "13px 30px", borderRadius: 11, border: "1px solid rgba(255,255,255,0.16)", cursor: "pointer", background: "rgba(255,255,255,0.06)", color: "#cfe3d6" }}
+            >
+              NÃO ATIVAR
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
     <button
       onClick={toggle}
       // OFF gets the pulsing-glow alert (a reminder to turn it on); ON is calm.
@@ -174,5 +223,6 @@ export function ModoStreamer() {
         {on ? "ATIVADO" : "DESATIVADO"}
       </span>
     </button>
+    </>
   );
 }

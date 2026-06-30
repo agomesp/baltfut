@@ -63,6 +63,10 @@ export default function Home() {
   const [allEntries, setAllEntries] = useState<VoteEntry[]>([]);
   // Admin manual pen-vote control, per match, pushed in realtime (null = auto).
   const [penOverrides, setPenOverrides] = useState<Record<string, "open" | "closed">>({});
+  // Admin manual palpite WINDOW, per match: match_id → openUntil (epoch ms). Read
+  // from palpite_overrides on load and updated live via realtime broadcast. Lets
+  // the admin extend/reopen/close-early a match's score-palpite window for everyone.
+  const [palpiteOverrides, setPalpiteOverrides] = useState<Record<string, number>>({});
 
   // ---- theme + follow persistence -----------------------------------------
   // Read persisted prefs on mount. Lazy useState init can't be used: localStorage
@@ -154,6 +158,23 @@ export default function Home() {
     }
   }, []);
 
+  // Manual palpite windows (admin). Public, non-PII read (match_id + open_until).
+  const loadPalpiteOverrides = useCallback(async () => {
+    const client = getSupabaseClient();
+    if (!client) return;
+    try {
+      const { data } = await client.from("palpite_overrides").select("match_id, open_until");
+      const next: Record<string, number> = {};
+      for (const row of data ?? []) {
+        const t = Date.parse((row as { open_until: string }).open_until);
+        if (!Number.isNaN(t)) next[(row as { match_id: string }).match_id] = t;
+      }
+      setPalpiteOverrides(next);
+    } catch {
+      /* non-fatal — default cutoff applies */
+    }
+  }, []);
+
   const loadAll = useCallback(
     async (signal?: AbortSignal) => {
       const [sb, st] = await Promise.allSettled([
@@ -168,9 +189,10 @@ export default function Home() {
       }
       if (st.status === "fulfilled") setGroups(st.value);
       await loadCounts();
+      void loadPalpiteOverrides();
       setLoading(false);
     },
-    [loadCounts],
+    [loadCounts, loadPalpiteOverrides],
   );
 
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -355,6 +377,33 @@ export default function Home() {
     };
   }, [view, activeId]);
 
+  // Realtime push: the admin broadcasts a manual palpite-window change for a match
+  // (extend / reopen / close-early / back-to-auto). Mirrors the pen control: every
+  // viewer's form re-opens or closes with no reload, and cast-vote honors the same
+  // window server-side so the submit actually lands.
+  useEffect(() => {
+    if (view !== "live" || !activeId) return;
+    const client = getSupabaseClient();
+    if (!client) return;
+    const channel = client
+      .channel(`palpite-window:${activeId}`)
+      .on("broadcast", { event: "set" }, (msg) => {
+        const raw = (msg.payload as { openUntil?: unknown })?.openUntil;
+        const t = typeof raw === "string" ? Date.parse(raw) : NaN;
+        setPalpiteOverrides((cur) => {
+          if (!Number.isNaN(t)) return { ...cur, [activeId]: t };
+          if (!(activeId in cur)) return cur;
+          const next = { ...cur };
+          delete next[activeId]; // null/cleared → back to the automatic cutoff
+          return next;
+        });
+      })
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [view, activeId]);
+
   useEffect(() => {
     if (view !== "live" || !activeId) return;
     const controller = new AbortController();
@@ -416,11 +465,16 @@ export default function Home() {
 
   return (
     <>
-      <Header
-        followCode={follow}
-        followName={followName}
-        onClearFollow={() => setFollow(null)}
-      />
+      {/* The live screen mounts its own compact masthead (brand + notice) inline
+          next to the match rail, so the global header is suppressed there to
+          reclaim vertical height. Every other tab keeps the full header. */}
+      {view !== "live" && (
+        <Header
+          followCode={follow}
+          followName={followName}
+          onClearFollow={() => setFollow(null)}
+        />
+      )}
       {/* Shell padding (incl. the live-view variant + mobile sizes) lives in
           globals.css `.bf-main`, keyed off the html `data-view` attribute. */}
       <main className="bf-main">
@@ -446,6 +500,7 @@ export default function Home() {
             groupByTeam={groupByTeam}
             releasedIds={releasedIds}
             penOverride={(activeId && penOverrides[activeId]) || null}
+            palpiteOverrides={palpiteOverrides}
           />
         )}
         {!loading && view === "matches" && (

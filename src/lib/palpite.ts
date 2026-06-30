@@ -1,7 +1,7 @@
 import type { Match } from "@/lib/espn";
 
-/** Palpites stay open until kickoff + this grace period (the first 5 minutes). */
-export const PALPITE_GRACE_MS = 5 * 60_000;
+/** Palpites stay open until kickoff + this grace period (the first 15 minutes). */
+export const PALPITE_GRACE_MS = 15 * 60_000;
 
 /**
  * How long the live palpite FORM stays on screen AFTER the submit deadline. The
@@ -47,6 +47,21 @@ export function palpiteDeadline(startsAt: string): number {
   return Number.isNaN(t) ? NaN : t + PALPITE_GRACE_MS;
 }
 
+/** Is `openUntil` a usable manual-override timestamp (finite epoch ms)? */
+function hasOverride(openUntil?: number | null): openUntil is number {
+  return openUntil != null && Number.isFinite(openUntil);
+}
+
+/**
+ * The effective submit deadline for a match: the admin's manual `openUntil`
+ * override when one is set (extend / reopen / close-early), otherwise the default
+ * kickoff + grace. Mirrors the server's `palpitesClosedWithOverride`, so the form's
+ * countdown and gating line up with what cast-vote will actually accept.
+ */
+export function effectiveDeadline(startsAt: string, openUntil?: number | null): number {
+  return hasOverride(openUntil) ? openUntil : palpiteDeadline(startsAt);
+}
+
 /** Whether palpites are still open at `now` (false if the deadline is unknown). */
 export function isPalpiteOpen(deadline: number, now: number): boolean {
   return !Number.isNaN(deadline) && now < deadline;
@@ -55,11 +70,19 @@ export function isPalpiteOpen(deadline: number, now: number): boolean {
 /**
  * Whether the palpite FORM should be available for `match` now: it's released
  * (current/next kickoff group) AND still inside the kickoff+grace window. So it's
- * open pre-match and for the first 5 live minutes, then closes. Both the single
+ * open pre-match and for the first 15 live minutes, then closes. Both the single
  * (PlacarStage) and 2-game (DuoStage) live views gate on this, so a live match
  * keeps its form for exactly the grace period in either layout.
  */
-export function palpiteFormOpen(match: Match, releasedIds: Set<string>, now: number): boolean {
+export function palpiteFormOpen(
+  match: Match,
+  releasedIds: Set<string>,
+  now: number,
+  openUntil?: number | null,
+): boolean {
+  // A manual override fully decides the window (and bypasses the released-group
+  // gate, so a reopened finished match shows the form again).
+  if (hasOverride(openUntil)) return now <= openUntil;
   return releasedIds.has(match.id) && isPalpiteOpen(palpiteDeadline(match.startsAt), now);
 }
 
@@ -71,7 +94,13 @@ export function palpiteFormOpen(match: Match, releasedIds: Set<string>, now: num
  * {@link isPalpiteOpen} (this only controls visibility) — during the tail the
  * form shows a closed state.
  */
-export function palpiteFormVisible(match: Match, releasedIds: Set<string>, now: number): boolean {
+export function palpiteFormVisible(
+  match: Match,
+  releasedIds: Set<string>,
+  now: number,
+  openUntil?: number | null,
+): boolean {
+  if (hasOverride(openUntil)) return now < openUntil + FORM_TAIL_MS;
   const deadline = palpiteDeadline(match.startsAt);
   return releasedIds.has(match.id) && !Number.isNaN(deadline) && now < deadline + FORM_TAIL_MS;
 }
