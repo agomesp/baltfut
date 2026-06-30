@@ -66,6 +66,11 @@ export function penWindowClosed(
   return min != null && min >= etEndMin;
 }
 
+/** ESPN's status text signals a penalty shootout (underway or decided). */
+function shootoutSignalled(detail?: string | null): boolean {
+  return /\b(pen|shoot|p[êe]nal)/.test(`${detail ?? ""}`.toLowerCase());
+}
+
 /**
  * The IRREVERSIBLE part of the pen cutoff: the match has finished, or ESPN signals
  * the shootout is underway/decided. Unlike the 120' clock fallback, this can't be
@@ -73,7 +78,7 @@ export function penWindowClosed(
  */
 export function penWindowHardClosed(t: { state: string | null; detail?: string | null }): boolean {
   if (t.state === "post") return true;
-  return /\b(pen|shoot|p[êe]nal)/.test(`${t.detail ?? ""}`.toLowerCase());
+  return shootoutSignalled(t.detail);
 }
 
 /** How many minutes before the shootout (120') the pen-winner UI appears. */
@@ -81,19 +86,23 @@ export const PEN_VOTE_LEAD_MIN = 10;
 
 /**
  * Whether the pen-winner UI — the "QUEM VENCE NOS PÊNALTIS?" picker AND the
- * by-pen palpite split — should be SHOWN yet. To keep it relevant, it stays
- * hidden until the match is within {@link PEN_VOTE_LEAD_MIN} of the shootout —
- * i.e. the clock has reached `EXTRA_TIME_END_MIN - lead` (110') — then auto-shows
- * and stays through extra time, the shootout, and the finished result. Hidden
- * pre-match and through regulation/early extra time. Pure; shared by PenVote and
- * the live palpites split.
+ * by-pen palpite split — should be SHOWN. It appears only when penalties are
+ * actually relevant:
+ *   - DURING play, once the clock is within {@link PEN_VOTE_LEAD_MIN} of the
+ *     shootout (≥110'), and
+ *   - through a real shootout + its finished result (ESPN signals "pen"/"shoot").
+ * It stays HIDDEN pre-match, through regulation, AND once a match has finished
+ * WITHOUT going to pens (a regulation result like 1–2 shows the normal palpites,
+ * not the pen split). Pure; shared by PenVote and the live palpites split. The
+ * caller also OR-s in a real shootout tally (matchShootout) for robustness.
  */
 export function penVoteVisible(
   t: { state: string | null; detail?: string | null; clock?: string | null },
   etEndMin = EXTRA_TIME_END_MIN,
   leadMin = PEN_VOTE_LEAD_MIN,
 ): boolean {
-  if (penWindowHardClosed(t)) return true; // shootout / FT / finished → keep the result visible
+  if (shootoutSignalled(t.detail)) return true; // a real shootout → show it + the result
+  if (t.state === "post") return false; // finished without pens → normal palpites, not the split
   const min = clockMinute(t.clock) ?? clockMinute(t.detail);
   return min != null && min >= etEndMin - leadMin;
 }

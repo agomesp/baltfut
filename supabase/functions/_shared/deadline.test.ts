@@ -133,8 +133,14 @@ describe("penVoteVisible (pen UI appears 10 min before the shootout, at 110')", 
     expect(penVoteVisible({ state: "in", clock: "120'+2'" })).toBe(true);
   });
 
-  it("stays visible once the shootout / full-time is signalled (to show the result)", () => {
+  it("shows through a real shootout + its result (status signals pens)", () => {
     expect(penVoteVisible({ state: "in", detail: "Pens", clock: null })).toBe(true);
-    expect(penVoteVisible({ state: "post", clock: null })).toBe(true);
+    expect(penVoteVisible({ state: "post", detail: "Penalty Shootout", clock: null })).toBe(true);
+    expect(penVoteVisible({ state: "post", detail: "AET · Pens", clock: null })).toBe(true);
+  });
+
+  it("stays HIDDEN once a match FINISHES without pens (regulation result → normal palpites)", () => {
+    expect(penVoteVisible({ state: "post", detail: "FT", clock: null })).toBe(false);
+    expect(penVoteVisible({ state: "post", detail: null, clock: null })).toBe(false);
   });
 });

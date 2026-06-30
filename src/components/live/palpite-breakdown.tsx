@@ -55,9 +55,11 @@ export function PalpiteBreakdown({
     ...open.map((p) => ({ ...p, bucket: "open" as const })),
     ...lost.map((p) => ({ ...p, bucket: "lost" as const })),
   ];
-  // Only split by pen pick once the pen UI is live (≥110'); before that, show the
-  // normal score breakdown even if some palpites already carry a pen winner.
-  const hasPen = penVisible && all.some((p) => p.penWinner);
+  // Split by pen pick only when pens are actually relevant: the pen UI is live
+  // (≥110' / shootout via penVisible) OR a real shootout result exists. A match
+  // finished in regulation (no penResult) shows the normal score breakdown even
+  // if some palpites carry a pen winner.
+  const hasPen = (penVisible || penResult != null) && all.some((p) => p.penWinner);
   const homeVoters = all.filter((p) => p.penWinner === "home");
   const awayVoters = all.filter((p) => p.penWinner === "away");
   const noPen = all.filter((p) => !p.penWinner);
