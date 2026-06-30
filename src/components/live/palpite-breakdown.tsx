@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type { LivePalpite, LivePalpiteBreakdown } from "@/lib/live-palpites";
 import { useMyName } from "@/lib/use-my-name";
-import { BRIC, JB, SectionLabel, VoceTag, isMe, nameStyle } from "@/components/live/bf-ui";
+import { BRIC, JB, FlagIcon, SectionLabel, VoceTag, isMe, nameStyle, teamAccent } from "@/components/live/bf-ui";
 
 const SKIN = {
   win: { statusColor: "#0f1f02", tagBg: "#c8ff2d", cardBg: "linear-gradient(120deg, rgba(200,255,45,0.17), rgba(200,255,45,0.03))", cardBorder: "1px solid rgba(200,255,45,0.55)", nameColor: "#eaffc0", pickColor: "#c2e69e", opacity: 1 },
@@ -40,6 +40,47 @@ export function PalpiteBreakdown({
   const myName = useMyName();
   const empty = winners.length + open.length + lost.length === 0;
 
+  // Flatten with the live-status bucket so the pen split below can still show each
+  // palpiteiro's standing (cravou / pode / fora).
+  type Tagged = LivePalpite & { bucket: "win" | "open" | "lost" };
+  const all: Tagged[] = [
+    ...winners.map((p) => ({ ...p, bucket: "win" as const })),
+    ...open.map((p) => ({ ...p, bucket: "open" as const })),
+    ...lost.map((p) => ({ ...p, bucket: "lost" as const })),
+  ];
+  const hasPen = all.some((p) => p.penWinner);
+  const homeVoters = all.filter((p) => p.penWinner === "home");
+  const awayVoters = all.filter((p) => p.penWinner === "away");
+  const noPen = all.filter((p) => !p.penWinner);
+  const homeAccent = teamAccent(homeCode);
+  const awayAccent = teamAccent(awayCode);
+
+  const STATUS = { win: { c: "#c8ff2d", t: "cravou ✓" }, open: { c: "#f2c14e", t: "pode" }, lost: { c: "#9a7a7a", t: "fora" } } as const;
+  const penCard = (p: Tagged, accent: string) => {
+    const st = STATUS[p.bucket];
+    return (
+      <div key={`${p.username}-${p.bucket}`} style={{ borderRadius: 8, padding: "6px 9px", background: accent + "12", border: `1px solid ${accent}44`, opacity: p.bucket === "lost" ? 0.55 : 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <NameRow name={p.username} myName={myName} color="#eef3ee" font={{ fontFamily: BRIC, fontWeight: 700, fontSize: 12 }} />
+          <div style={{ fontFamily: JB, fontSize: 9, color: "#9bb6a6", textDecoration: p.bucket === "lost" ? "line-through" : "none" }}>{pickStr(p, homeCode, awayCode)}</div>
+        </div>
+        <span style={{ flex: "none", fontFamily: JB, fontSize: 8.5, fontWeight: 700, color: st.c }}>{st.t}</span>
+      </div>
+    );
+  };
+  const penColumn = (code: string, accent: string, voters: Tagged[]) => (
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 7 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 8, background: accent + "22", border: `1px solid ${accent}66`, flex: "none" }}>
+        <FlagIcon code={code} size={14} />
+        <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13.5, color: accent }}>{code}</span>
+        <span style={{ marginLeft: "auto", fontFamily: JB, fontSize: 9, color: "#9bb6a6" }}>{voters.length} {voters.length === 1 ? "voto" : "votos"}</span>
+      </div>
+      <div className="bf-scroll" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", overflowX: "hidden", paddingRight: 2 }}>
+        {voters.length === 0 ? <span style={{ fontFamily: BRIC, fontSize: 11, color: "#6f8a78", padding: "4px 2px" }}>ninguém ainda</span> : voters.map((p) => penCard(p, accent))}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: 9 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flex: "none" }}>
@@ -49,13 +90,25 @@ export function PalpiteBreakdown({
         </span>
       </div>
 
-      <div className="bf-scroll" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 9, paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
       {empty ? (
         <div style={{ fontFamily: BRIC, fontSize: 12.5, color: "#7d9a86", padding: "6px 2px" }}>
           Nenhum palpite nesta partida ainda.
         </div>
-      ) : null}
-
+      ) : hasPen ? (
+        // Knockout pen context: split everyone by who they called for the shootout,
+        // each column in that team's colour.
+        <>
+          <div style={{ flex: "none", fontFamily: JB, fontSize: 9, letterSpacing: "0.08em", color: "#caa94a" }}>QUEM VENCE NOS PÊNALTIS — POR TIME</div>
+          <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 10 }}>
+            {penColumn(homeCode, homeAccent, homeVoters)}
+            {penColumn(awayCode, awayAccent, awayVoters)}
+          </div>
+          {noPen.length > 0 ? (
+            <div style={{ flex: "none", fontFamily: JB, fontSize: 8.5, color: "#6f8a78" }}>{noPen.length} ainda sem palpite de pênalti</div>
+          ) : null}
+        </>
+      ) : (
+      <div className="bf-scroll" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 9, paddingRight: 4, overflowY: "auto", overflowX: "hidden" }}>
       {winners.length > 0 ? (
         <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
           {winners.map((p, i) => {
@@ -111,6 +164,7 @@ export function PalpiteBreakdown({
         </div>
       ) : null}
       </div>
+      )}
     </div>
   );
 }

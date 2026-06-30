@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { Match, Side } from "@/lib/espn";
 import { useNow } from "@/lib/use-now";
 import {
@@ -32,11 +32,13 @@ export function isKnockoutStage(stage?: string): boolean {
  * time, 120'); after that the picker closes and the last pick locks. Renders nothing
  * for non-knockout / no palpite / closed-and-never-picked. Worth +0.5 when correct.
  */
-export function PenVote({ match, entries, onVoted, transport = supabaseCastVote }: {
+export function PenVote({ match, entries, onVoted, transport = supabaseCastVote, variant = "inline" }: {
   match: Match;
   entries: VoteEntry[];
   onVoted: () => void;
   transport?: CastVoteTransport;
+  /** "inline" = compact card (forms). "hero" = a tall column to sit beside the placar. */
+  variant?: "inline" | "hero";
 }) {
   const myName = useMyName();
   const [saving, setSaving] = useState<Side | null>(null);
@@ -65,6 +67,53 @@ export function PenVote({ match, entries, onVoted, transport = supabaseCastVote 
       setErr(r.message);
     }
   };
+
+  // ── Hero variant: a tall, prominent column that sits to the RIGHT of the placar. ──
+  if (variant === "hero") {
+    const heroBox: CSSProperties = { display: "flex", flexDirection: "column", gap: 9, flex: "none", width: 198, alignSelf: "stretch", minHeight: 0, padding: "13px 13px", borderRadius: 14, border: "1px solid rgba(232,181,58,0.5)", background: "linear-gradient(180deg, rgba(232,181,58,0.13), rgba(232,181,58,0.03))", boxShadow: "0 0 34px -12px rgba(232,181,58,0.5)" };
+    const heroLabel = (
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: "#ffe6a8", lineHeight: 1.08 }}>QUEM VENCE<br />NOS PÊNALTIS?</div>
+        <div style={{ fontFamily: JB, fontSize: 8.5, letterSpacing: "0.08em", color: "#caa94a", marginTop: 3 }}>VALE 0,5</div>
+      </div>
+    );
+    if (windowClosed) {
+      if (!chosen) return null;
+      const code = chosen === "home" ? homeCode : awayCode;
+      return (
+        <div style={heroBox}>
+          {heroLabel}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 9 }}>
+            <FlagIcon code={code} size={46} />
+            <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 24, color: "#ffe6a8" }}>{code}</span>
+            <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.06em", color: "#caa94a" }}>✓ REGISTRADO</span>
+          </div>
+        </div>
+      );
+    }
+    const heroBtn = (side: Side, code: string) => {
+      const on = side === chosen;
+      return (
+        <button type="button" disabled={saving != null} onClick={() => pick(side)} className={saving === side ? "bf-saving" : undefined}
+          style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 7, padding: "10px", borderRadius: 12, cursor: saving ? "wait" : on ? "default" : "pointer", background: on ? "rgba(232,181,58,0.24)" : "rgba(255,255,255,0.03)", border: on ? "2px solid rgba(232,181,58,0.95)" : "1px solid rgba(232,181,58,0.4)", color: on ? "#ffe6a8" : "#f3d27a", opacity: saving && saving !== side ? 0.4 : 1 }}>
+          <FlagIcon code={code} size={38} />
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 20 }}>{code}{on ? " ✓" : ""}</span>
+        </button>
+      );
+    };
+    return (
+      <div style={heroBox}>
+        {heroLabel}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 9, minHeight: 0 }}>
+          {heroBtn("home", homeCode)}
+          {heroBtn("away", awayCode)}
+        </div>
+        <span style={{ fontFamily: JB, fontSize: 8, color: err ? "#ff8f8f" : "#6f8a78", textAlign: "center" }}>
+          {err ?? (chosen ? "toque na outra p/ trocar" : "toque p/ escolher · salva na hora")}
+        </span>
+      </div>
+    );
+  }
 
   const box = { display: "flex", flexDirection: "column" as const, gap: 6, padding: "8px 10px", borderRadius: 9, border: "1px solid rgba(232,181,58,0.28)", background: "rgba(232,181,58,0.06)" };
   const label = (

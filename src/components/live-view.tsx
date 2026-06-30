@@ -113,7 +113,21 @@ function PlacarStage({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
-      <HeroWithCinematic match={match} subs={lineups?.subs ?? []} />
+      {/* The knockout pen-winner picker rides as a tall column to the RIGHT of the
+          placar so it's prominent during the live game (self-hides when N/A). */}
+      {narrow ? (
+        <>
+          <HeroWithCinematic match={match} subs={lineups?.subs ?? []} />
+          <PenVote match={match} entries={entries} onVoted={onVoted} />
+        </>
+      ) : (
+        <div style={{ display: "flex", gap: 11, alignItems: "stretch", flex: "none", minHeight: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <HeroWithCinematic match={match} subs={lineups?.subs ?? []} />
+          </div>
+          <PenVote variant="hero" match={match} entries={entries} onVoted={onVoted} />
+        </div>
+      )}
       <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 12, flex: 1, minHeight: 0 }}>
         <div style={{ flex: narrow ? "none" : 1.5, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flex: "none" }}>
@@ -135,9 +149,6 @@ function PlacarStage({
         </div>
         <div style={{ flex: narrow ? "none" : 0.82, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <IaVsVoce entries={allEntries} matches={matches} style={{ flex: "none" }} />
-          {/* Knockout pen vote — stays open through the live match for anyone who
-              palpitado but hasn't called the shootout winner yet (self-hides otherwise). */}
-          <PenVote match={match} entries={entries} onVoted={onVoted} />
           <CommunityBar consensus={consensus} homeCode={homeCode} awayCode={awayCode} homeAccent={teamAccent(homeCode)} awayAccent={teamAccent(awayCode)} />
           <RankingSubs entries={allEntries} matches={matches} variant={narrow ? "column" : "grid"} style={narrow ? { flex: "none" } : { flex: 1, minHeight: 0 }} />
         </div>
