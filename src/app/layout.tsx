@@ -115,8 +115,10 @@ export default function RootLayout({
             alignItems: "center",
           }}
         >
-          <ChatEmotesToggle />
-          <PipView />
+          {/* Buttons hidden (display:none) but kept mounted so their behaviour
+              stays intact — emotes keep floating, PiP stays available. */}
+          <span style={{ display: "none" }}><ChatEmotesToggle /></span>
+          <span style={{ display: "none" }}><PipView /></span>
           <ModoStreamer />
         </div>
       </body>
