@@ -17,7 +17,7 @@ const KICK = "2026-06-21T16:00:00Z";
 const kickMs = Date.parse(KICK);
 
 describe("palpiteDeadline", () => {
-  it("is kickoff + 15 minutes", () => {
+  it("is kickoff + 5 minutes", () => {
     expect(palpiteDeadline(KICK)).toBe(kickMs + PALPITE_GRACE_MS);
   });
   it("is NaN for an unparseable date", () => {
@@ -27,12 +27,12 @@ describe("palpiteDeadline", () => {
 
 describe("isPalpiteOpen", () => {
   const deadline = palpiteDeadline(KICK);
-  it("open before the deadline (incl. first 15 live minutes)", () => {
+  it("open before the deadline (incl. first 5 live minutes)", () => {
     expect(isPalpiteOpen(deadline, kickMs - 1000)).toBe(true); // pre-kickoff
-    expect(isPalpiteOpen(deadline, kickMs + 14 * 60_000)).toBe(true); // 14' in
+    expect(isPalpiteOpen(deadline, kickMs + 4 * 60_000)).toBe(true); // 4' in
   });
   it("closed at/after the deadline", () => {
-    expect(isPalpiteOpen(deadline, kickMs + 15 * 60_000)).toBe(false);
+    expect(isPalpiteOpen(deadline, kickMs + 5 * 60_000)).toBe(false);
     expect(isPalpiteOpen(deadline, kickMs + 60 * 60_000)).toBe(false);
   });
   it("closed when the deadline is unknown (NaN)", () => {
@@ -98,13 +98,13 @@ const mkMatch = (id: string, state: Match["state"], startsAt: string): Match => 
   homeScore: null, awayScore: null, goals: [], cards: [],
 });
 
-describe("palpiteFormOpen (open pre-match + the first 15 live minutes)", () => {
+describe("palpiteFormOpen (open pre-match + the first 5 live minutes)", () => {
   const released = new Set(["x"]);
-  it("is open for a released live match inside the 15-min grace", () => {
-    expect(palpiteFormOpen(mkMatch("x", "in", KICK), released, kickMs + 14 * 60_000)).toBe(true);
+  it("is open for a released live match inside the 5-min grace", () => {
+    expect(palpiteFormOpen(mkMatch("x", "in", KICK), released, kickMs + 4 * 60_000)).toBe(true);
   });
   it("closes once the grace expires, even though still released", () => {
-    expect(palpiteFormOpen(mkMatch("x", "in", KICK), released, kickMs + 15 * 60_000)).toBe(false);
+    expect(palpiteFormOpen(mkMatch("x", "in", KICK), released, kickMs + 5 * 60_000)).toBe(false);
   });
   it("is open pre-kickoff for a released match", () => {
     expect(palpiteFormOpen(mkMatch("x", "pre", KICK), released, kickMs - 60_000)).toBe(true);

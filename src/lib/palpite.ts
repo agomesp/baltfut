@@ -1,7 +1,7 @@
 import type { Match } from "@/lib/espn";
 
-/** Palpites stay open until kickoff + this grace period (the first 15 minutes). */
-export const PALPITE_GRACE_MS = 15 * 60_000;
+/** Palpites stay open until kickoff + this grace period (the first 5 minutes). */
+export const PALPITE_GRACE_MS = 5 * 60_000;
 
 /**
  * How long the live palpite FORM stays on screen AFTER the submit deadline. The
@@ -70,7 +70,7 @@ export function isPalpiteOpen(deadline: number, now: number): boolean {
 /**
  * Whether the palpite FORM should be available for `match` now: it's released
  * (current/next kickoff group) AND still inside the kickoff+grace window. So it's
- * open pre-match and for the first 15 live minutes, then closes. Both the single
+ * open pre-match and for the first 5 live minutes, then closes. Both the single
  * (PlacarStage) and 2-game (DuoStage) live views gate on this, so a live match
  * keeps its form for exactly the grace period in either layout.
  */

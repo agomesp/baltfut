@@ -1,7 +1,7 @@
 // Server-side palpite cutoff. Shared by the cast-vote Edge Function (Deno) and
 // the Node unit tests. Pure — no Deno/Node globals — so both can import it.
 
-export const PALPITE_GRACE_MS = 15 * 60_000; // mirrors the client's palpiteDeadline
+export const PALPITE_GRACE_MS = 5 * 60_000; // mirrors the client's palpiteDeadline
 
 interface EspnSummaryLike {
   header?: {
