@@ -20,7 +20,7 @@ import { IaVsVoce } from "@/components/live/ia-vs-voce";
 import { LiveDuoCard } from "@/components/live/live-duo-card";
 import { PreMatchPanel, DuoGameCard } from "@/components/live/prematch-panel";
 import { LineupPanel } from "@/components/live/lineup-panel";
-import { PalpiteForm, PenVote, NameField, useNameLock } from "@/components/live/palpite-form";
+import { PalpiteForm, PenVote, NameField, useNameLock, type PenOverride } from "@/components/live/palpite-form";
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
 import { decideConcurrent } from "@/lib/concurrent-games";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -84,6 +84,7 @@ function PlacarStage({
   onVoted,
   followCode,
   releasedIds,
+  penOverride,
 }: {
   match: Match;
   phase: ChipPhase;
@@ -96,6 +97,7 @@ function PlacarStage({
   onVoted: () => void;
   followCode: string | null;
   releasedIds: Set<string>;
+  penOverride: PenOverride;
 }) {
   const now = useNow(1000);
   const narrow = useIsNarrow();
@@ -119,14 +121,14 @@ function PlacarStage({
       {narrow ? (
         <>
           <HeroWithCinematic match={match} subs={lineups?.subs ?? []} />
-          <PenVote match={match} entries={entries} onVoted={onVoted} />
+          <PenVote match={match} entries={entries} onVoted={onVoted} override={penOverride} />
         </>
       ) : (
         <div style={{ display: "flex", gap: 11, alignItems: "stretch", flex: "none", minHeight: 0 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <HeroWithCinematic match={match} subs={lineups?.subs ?? []} />
           </div>
-          <PenVote variant="hero" match={match} entries={entries} onVoted={onVoted} />
+          <PenVote variant="hero" match={match} entries={entries} onVoted={onVoted} override={penOverride} />
         </div>
       )}
       <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 12, flex: 1, minHeight: 0 }}>
@@ -231,6 +233,7 @@ export interface LiveViewProps {
   followCode: string | null;
   groupByTeam: Record<string, string>;
   releasedIds: Set<string>;
+  penOverride?: PenOverride;
 }
 
 export function LiveView({
@@ -247,6 +250,7 @@ export function LiveView({
   followCode,
   groupByTeam,
   releasedIds,
+  penOverride = null,
 }: LiveViewProps) {
   const now = useNow(15_000);
   const selected = chips.find((c) => c.match.id === selectedId) ?? chips[0];
@@ -337,6 +341,7 @@ export function LiveView({
               onVoted={onVoted}
               followCode={followCode}
               releasedIds={releasedIds}
+              penOverride={penOverride}
             />
           )}
         </div>

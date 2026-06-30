@@ -61,6 +61,8 @@ export default function Home() {
   const [lineups, setLineups] = useState<MatchLineups | null>(null);
   const [entries, setEntries] = useState<VoteEntry[]>([]);
   const [allEntries, setAllEntries] = useState<VoteEntry[]>([]);
+  // Admin manual pen-vote control, per match, pushed in realtime (null = auto).
+  const [penOverrides, setPenOverrides] = useState<Record<string, "open" | "closed">>({});
 
   // ---- theme + follow persistence -----------------------------------------
   // Read persisted prefs on mount. Lazy useState init can't be used: localStorage
@@ -328,6 +330,31 @@ export default function Home() {
     };
   }, [view, activeId, loadEntries, loadAllEntries]);
 
+  // Realtime push: the admin (baltfut-admin) broadcasts a manual pen-vote control
+  // for a match — liberate/close — and re-broadcasts it so late joiners catch up.
+  // The streamer + every viewer flip the pen picker on/off with no reload.
+  useEffect(() => {
+    if (view !== "live" || !activeId) return;
+    const client = getSupabaseClient();
+    if (!client) return;
+    const channel = client
+      .channel(`pen:${activeId}`)
+      .on("broadcast", { event: "set" }, (msg) => {
+        const state = (msg.payload as { state?: unknown })?.state;
+        setPenOverrides((cur) => {
+          if (state === "open" || state === "closed") return { ...cur, [activeId]: state };
+          if (!(activeId in cur)) return cur;
+          const next = { ...cur };
+          delete next[activeId]; // anything else → back to automatic
+          return next;
+        });
+      })
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [view, activeId]);
+
   useEffect(() => {
     if (view !== "live" || !activeId) return;
     const controller = new AbortController();
@@ -418,6 +445,7 @@ export default function Home() {
             followCode={follow}
             groupByTeam={groupByTeam}
             releasedIds={releasedIds}
+            penOverride={(activeId && penOverrides[activeId]) || null}
           />
         )}
         {!loading && view === "matches" && (

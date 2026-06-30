@@ -61,11 +61,19 @@ export function penWindowClosed(
   t: { state: string | null; detail?: string | null; clock?: string | null },
   etEndMin = EXTRA_TIME_END_MIN,
 ): boolean {
-  if (t.state === "post") return true;
-  const text = `${t.detail ?? ""} ${t.clock ?? ""}`.toLowerCase();
-  if (/\b(pen|shoot|p[êe]nal)/.test(text)) return true; // shootout in progress / decided
+  if (penWindowHardClosed(t)) return true;
   const min = clockMinute(t.clock) ?? clockMinute(t.detail);
   return min != null && min >= etEndMin;
+}
+
+/**
+ * The IRREVERSIBLE part of the pen cutoff: the match has finished, or ESPN signals
+ * the shootout is underway/decided. Unlike the 120' clock fallback, this can't be
+ * overridden — a manual "keep it open" (admin) still yields to a real shootout/FT.
+ */
+export function penWindowHardClosed(t: { state: string | null; detail?: string | null }): boolean {
+  if (t.state === "post") return true;
+  return /\b(pen|shoot|p[êe]nal)/.test(`${t.detail ?? ""}`.toLowerCase());
 }
 
 /**

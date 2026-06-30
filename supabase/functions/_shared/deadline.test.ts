@@ -3,6 +3,7 @@ import {
   matchTimingFromSummary,
   palpitesClosed,
   penWindowClosed,
+  penWindowHardClosed,
   PALPITE_GRACE_MS,
 } from "@shared/deadline";
 
@@ -73,6 +74,13 @@ describe("penWindowClosed (pen-winner vote cutoff)", () => {
   it("does not false-positive on 'open' (no \\bpen boundary) and stays open pre-match", () => {
     expect(penWindowClosed({ state: "pre", detail: "Scheduled", clock: null })).toBe(false);
     expect(penWindowClosed({ state: "in", detail: "match is open", clock: "70'" })).toBe(false);
+  });
+
+  it("penWindowHardClosed: only post / shootout-signal (NOT the 120' clock)", () => {
+    expect(penWindowHardClosed({ state: "post", detail: "FT" })).toBe(true);
+    expect(penWindowHardClosed({ state: "in", detail: "STATUS_SHOOTOUT Pens" })).toBe(true);
+    expect(penWindowHardClosed({ state: "in", detail: "STATUS_OVERTIME 120'" })).toBe(false); // clock alone doesn't hard-close
+    expect(penWindowHardClosed({ state: "in", detail: "ET" })).toBe(false);
   });
 
   it("matchTimingFromSummary surfaces detail + clock for the cutoff", () => {

@@ -14,7 +14,10 @@ import {
 } from "@/lib/votes";
 import { isPalpiteOpen, formatCountdown } from "@/lib/palpite";
 import { isReservedName } from "@shared/name-claim";
-import { penWindowClosed } from "@shared/deadline";
+import { penWindowClosed, penWindowHardClosed } from "@shared/deadline";
+
+/** Manual pen-vote override broadcast by the admin (null = automatic). */
+export type PenOverride = "open" | "closed" | null;
 import { MY_NAME_EVENT, useMyName } from "@/lib/use-my-name";
 import { BRIC, FlagIcon, JB, LIME, SAIRA } from "@/components/live/bf-ui";
 
@@ -32,13 +35,15 @@ export function isKnockoutStage(stage?: string): boolean {
  * time, 120'); after that the picker closes and the last pick locks. Renders nothing
  * for non-knockout / no palpite / closed-and-never-picked. Worth +0.5 when correct.
  */
-export function PenVote({ match, entries, onVoted, transport = supabaseCastVote, variant = "inline" }: {
+export function PenVote({ match, entries, onVoted, transport = supabaseCastVote, variant = "inline", override = null }: {
   match: Match;
   entries: VoteEntry[];
   onVoted: () => void;
   transport?: CastVoteTransport;
   /** "inline" = compact card (forms). "hero" = a tall column to sit beside the placar. */
   variant?: "inline" | "hero";
+  /** Admin manual control: force the pen window open/closed (null = automatic). */
+  override?: PenOverride;
 }) {
   const myName = useMyName();
   const [saving, setSaving] = useState<Side | null>(null);
@@ -50,7 +55,15 @@ export function PenVote({ match, entries, onVoted, transport = supabaseCastVote,
   // Optimistic first, so an in-flight change shows immediately even when a pick is
   // already stored (`?? penWinner` alone would keep showing the old one).
   const chosen: Side | null = optimistic ?? myEntry.penWinner ?? null;
-  const windowClosed = penWindowClosed({ state: match.state, detail: match.statusDetail, clock: match.displayClock });
+  // Effective close: a manual "closed" shuts it; a manual "open" keeps it open
+  // PAST the 120' clock fallback but still yields to a real shootout/full-time
+  // (the hard close). No override → the automatic rule.
+  const windowClosed =
+    override === "closed"
+      ? true
+      : override === "open"
+        ? penWindowHardClosed({ state: match.state, detail: match.statusDetail })
+        : penWindowClosed({ state: match.state, detail: match.statusDetail, clock: match.displayClock });
   const homeCode = match.home.abbreviation;
   const awayCode = match.away.abbreviation;
 
