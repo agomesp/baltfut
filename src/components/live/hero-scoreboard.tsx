@@ -123,7 +123,9 @@ export function HeroScoreboard({ match, pre = false, compact = false, subs = [],
       </div>
 
       {showTimeline ? (
-        <div style={{ position: "relative", zIndex: 1, maxWidth: 580, margin: "12px auto 0" }}>
+        // Full section width so the event chips lay out across the whole row (fewer
+        // wrapped lines = shorter hero), instead of a narrow centred column.
+        <div style={{ position: "relative", zIndex: 1, margin: "12px 0 0" }}>
           <div style={{ position: "relative", height: 3, background: "rgba(255,255,255,0.1)", borderRadius: 2, margin: "0 4px" }}>
             <TimelineFill match={match} />
             {events.map((ev, i) => (
