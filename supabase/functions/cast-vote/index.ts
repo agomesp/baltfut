@@ -11,7 +11,7 @@
 // app's tsconfig; Deno type-checks it on `supabase functions serve`/`deploy`.
 import { createClient } from "@supabase/supabase-js";
 import { validateVote } from "../_shared/vote.ts";
-import { matchTimingFromSummary, palpitesClosed } from "../_shared/deadline.ts";
+import { matchTimingFromSummary, palpitesClosed, penWindowClosed } from "../_shared/deadline.ts";
 import { decideClaim, isReservedName, nameSkeleton } from "../_shared/name-claim.ts";
 import { getClientIp, hashIp, hashToken } from "../_shared/ip.ts";
 import {
@@ -109,11 +109,16 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Esse nome é reservado. Escolha outro." }, 403, cors);
   }
 
-  // Server-side cutoff: reject palpites for matches that have finished or are past
-  // kickoff + 5min, using ESPN as the trusted clock. This enforces the deadline
-  // even when a client bypasses the UI (e.g. POSTing directly to the API), so a
-  // finished/old match can't be palpited to game the ranking. Fail open on any
-  // ESPN/network error so a hiccup never blocks legitimate palpites.
+  // Server-side cutoff, using ESPN as the trusted clock (enforced even when a
+  // client bypasses the UI). Two different deadlines:
+  //   * SCORE palpite: closed once finished OR past kickoff + 5min.
+  //   * PEN-WINNER vote on an existing palpite: stays open through regulation +
+  //     extra time, and closes the moment the shootout starts (or, failing a clear
+  //     ESPN signal, once the clock passes 120') — so picking after pens begin is
+  //     impossible.
+  // Fail open on any ESPN/network error so a hiccup never blocks a legit palpite.
+  let scoreClosed = false;
+  let penClosed = false;
   try {
     const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${encodeURIComponent(
       vote.league,
@@ -123,13 +128,25 @@ Deno.serve(async (req: Request) => {
     const espn = await fetch(summaryUrl, { signal: AbortSignal.timeout(2000) });
     if (espn.ok) {
       const timing = matchTimingFromSummary(await espn.json());
-      if (palpitesClosed(timing, Date.now())) {
-        return json({ error: "Palpites encerrados para esta partida." }, 403, cors);
-      }
+      scoreClosed = palpitesClosed(timing, Date.now());
+      penClosed = penWindowClosed(timing);
     }
   } catch {
-    /* ESPN unreachable — fail open */
+    /* ESPN unreachable — fail open (both flags stay false) */
   }
+  // A pen-winner vote needs the pen window; a score palpite needs the score window.
+  if (vote.penWinner ? penClosed : scoreClosed) {
+    return json(
+      { error: vote.penWinner ? "Pênaltis encerrados para esta partida." : "Palpites encerrados para esta partida." },
+      403,
+      cors,
+    );
+  }
+  // Past the score window but the pen window is still open: ONLY a pen-winner vote
+  // on an existing palpite is allowed (no new score palpites / no score changes).
+  // (Only reached for penWinner requests, since a score palpite past the window was
+  // already rejected above.)
+  const penOnly = scoreClosed;
 
   const ip = getClientIp(req.headers);
   if (!ip) {
@@ -172,6 +189,29 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // Past the score window (match still live, pens not started): set OR CHANGE the
+  // pen winner on the caller's existing row — never insert a late palpite. Keyed on
+  // (match, ip_hash) so it can only touch their own row. Overwrites, so the pick can
+  // be changed right up to the shootout (the penClosed gate above shuts it then).
+  if (penOnly) {
+    const { data: updated, error: updErr } = await supabase
+      .from("votes")
+      .update({ pen_winner: vote.penWinner })
+      .eq("match_id", vote.matchId)
+      .eq("ip_hash", ipHash)
+      .select("id");
+    if (updErr) {
+      console.error("cast-vote pen update failed:", updErr.code, updErr.message);
+      return json({ error: "Não foi possível registrar seu palpite." }, 500, cors);
+    }
+    if (updated && updated.length > 0) {
+      await broadcastPalpite(vote.matchId);
+      return json({ ok: true }, 200, cors);
+    }
+    // No palpite from this IP on this match — nothing to attach a pen to.
+    return json({ error: "Palpites encerrados para esta partida." }, 403, cors);
+  }
+
   const { error } = await supabase.from("votes").insert({
     match_id: vote.matchId,
     league: vote.league,
@@ -185,19 +225,17 @@ Deno.serve(async (req: Request) => {
   if (error) {
     // 23505 = unique_violation: either one-per-IP or one-name-per-match.
     if (error.code === "23505") {
-      // Pen-add: the caller ALREADY palpitado this match from this IP (score is
-      // locked) and is now setting the penalty winner on that existing palpite.
-      // Fill it in only if not yet chosen. Keyed on (match_id, ip_hash) — the
-      // caller's OWN row — so nobody can ever touch another person's pick, and
-      // the deadline gate above still applies. `is('pen_winner', null)` makes it
-      // one-shot (no flip-flopping once set).
+      // Pen vote: the caller ALREADY palpitado this match from this IP (the score
+      // is locked) and is setting OR CHANGING the penalty winner on that row. Keyed
+      // on (match_id, ip_hash) — the caller's OWN row — so it can never touch
+      // someone else's pick, and the deadline gate above still applies. Overwrites,
+      // so the pick can be changed until the shootout.
       if (vote.penWinner) {
         const { data: updated, error: updErr } = await supabase
           .from("votes")
           .update({ pen_winner: vote.penWinner })
           .eq("match_id", vote.matchId)
           .eq("ip_hash", ipHash)
-          .is("pen_winner", null)
           .select("id");
         if (updErr) {
           console.error("cast-vote pen update failed:", updErr.code, updErr.message);
@@ -207,8 +245,8 @@ Deno.serve(async (req: Request) => {
           await broadcastPalpite(vote.matchId);
           return json({ ok: true }, 200, cors);
         }
-        // No null-pen row for this IP (pen already set, or a genuine name
-        // collision from another IP) → fall through to the duplicate message.
+        // No row for this IP (a genuine name collision from another IP) → fall
+        // through to the duplicate message.
       }
       // PostgREST puts the violated columns in `details` (e.g. "lower(username)")
       // and may omit the index name, so match on the column too.

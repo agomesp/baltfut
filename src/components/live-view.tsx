@@ -19,7 +19,7 @@ import { IaVsVoce } from "@/components/live/ia-vs-voce";
 import { LiveDuoCard } from "@/components/live/live-duo-card";
 import { PreMatchPanel, DuoGameCard } from "@/components/live/prematch-panel";
 import { LineupPanel } from "@/components/live/lineup-panel";
-import { PalpiteForm, NameField, useNameLock } from "@/components/live/palpite-form";
+import { PalpiteForm, PenVote, NameField, useNameLock } from "@/components/live/palpite-form";
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
 import { decideConcurrent } from "@/lib/concurrent-games";
 import { useIsNarrow } from "@/lib/use-is-narrow";
@@ -135,6 +135,9 @@ function PlacarStage({
         </div>
         <div style={{ flex: narrow ? "none" : 0.82, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <IaVsVoce entries={allEntries} matches={matches} style={{ flex: "none" }} />
+          {/* Knockout pen vote — stays open through the live match for anyone who
+              palpitado but hasn't called the shootout winner yet (self-hides otherwise). */}
+          <PenVote match={match} entries={entries} onVoted={onVoted} />
           <CommunityBar consensus={consensus} homeCode={homeCode} awayCode={awayCode} homeAccent={teamAccent(homeCode)} awayAccent={teamAccent(awayCode)} />
           <RankingSubs entries={allEntries} matches={matches} variant={narrow ? "column" : "grid"} style={narrow ? { flex: "none" } : { flex: 1, minHeight: 0 }} />
         </div>
