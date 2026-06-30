@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import type { Match, MatchLineups } from "@/lib/espn";
+import { matchShootout } from "@/lib/espn";
 import { supabaseCastVote, type VoteEntry } from "@/lib/votes";
 import type { ChipGame, ChipPhase } from "@/lib/chips";
 import { useNow } from "@/lib/use-now";
@@ -143,7 +144,7 @@ function PlacarStage({
                   <PalpiteForm match={match} entries={entries} closesAt={palpiteDeadline(match.startsAt)} onVoted={onVoted} />
                 </div>
               ) : null}
-              <PalpiteBreakdown breakdown={breakdown} homeCode={homeCode} awayCode={awayCode} total={entries.length} closed={phase !== "live"} />
+              <PalpiteBreakdown breakdown={breakdown} homeCode={homeCode} awayCode={awayCode} total={entries.length} closed={phase !== "live"} penResult={matchShootout(match)} />
             </>
           )}
         </div>
