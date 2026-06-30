@@ -11,7 +11,7 @@
 // app's tsconfig; Deno type-checks it on `supabase functions serve`/`deploy`.
 import { createClient } from "@supabase/supabase-js";
 import { validateVote } from "../_shared/vote.ts";
-import { matchTimingFromSummary, palpitesClosed, penWindowClosed } from "../_shared/deadline.ts";
+import { matchTimingFromSummary, palpitesClosedWithOverride, penWindowClosed } from "../_shared/deadline.ts";
 import { decideClaim, isReservedName, nameSkeleton } from "../_shared/name-claim.ts";
 import { getClientIp, hashIp, hashToken } from "../_shared/ip.ts";
 import {
@@ -109,9 +109,23 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Esse nome é reservado. Escolha outro." }, 403, cors);
   }
 
+  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  // A manual per-match window set from the admin tool: when present it overrides
+  // the default score cutoff (extend / reopen / close early), so a window the admin
+  // opens lets this submit through. Fetched in parallel with ESPN below.
+  const overridePromise = supabase
+    .from("palpite_overrides")
+    .select("open_until")
+    .eq("match_id", vote.matchId)
+    .maybeSingle();
+
   // Server-side cutoff, using ESPN as the trusted clock (enforced even when a
   // client bypasses the UI). Two different deadlines:
-  //   * SCORE palpite: closed once finished OR past kickoff + 5min.
+  //   * SCORE palpite: closed once finished OR past kickoff + 5min — UNLESS a
+  //     manual admin window (palpite_overrides) says otherwise.
   //   * PEN-WINNER vote on an existing palpite: stays open through regulation +
   //     extra time, and closes the moment the shootout starts (or, failing a clear
   //     ESPN signal, once the clock passes 120') — so picking after pens begin is
@@ -119,6 +133,8 @@ Deno.serve(async (req: Request) => {
   // Fail open on any ESPN/network error so a hiccup never blocks a legit palpite.
   let scoreClosed = false;
   let penClosed = false;
+  const { data: override } = await overridePromise;
+  const openUntil = override?.open_until ? Date.parse(override.open_until) : null;
   try {
     const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/soccer/${encodeURIComponent(
       vote.league,
@@ -128,12 +144,15 @@ Deno.serve(async (req: Request) => {
     const espn = await fetch(summaryUrl, { signal: AbortSignal.timeout(2000) });
     if (espn.ok) {
       const timing = matchTimingFromSummary(await espn.json());
-      scoreClosed = palpitesClosed(timing, Date.now());
+      scoreClosed = palpitesClosedWithOverride(timing, Date.now(), { openUntil });
       penClosed = penWindowClosed(timing);
     }
   } catch {
     /* ESPN unreachable — fail open (both flags stay false) */
   }
+  // ESPN errored but the admin explicitly CLOSED the window early (openUntil in the
+  // past): honor that even on the fail-open path so an early close still sticks.
+  if (openUntil != null && Date.now() > openUntil) scoreClosed = true;
   // A pen-winner vote needs the pen window; a score palpite needs the score window.
   if (vote.penWinner ? penClosed : scoreClosed) {
     return json(
@@ -153,10 +172,6 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Não foi possível identificar o cliente." }, 400, cors);
   }
   const ipHash = await hashIp(ip, IP_PEPPER);
-
-  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
 
   // Nickname ownership: a name belongs to the first person who used it, proved by
   // a secret token in their browser's localStorage. Block anyone else from

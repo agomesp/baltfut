@@ -198,4 +198,38 @@ begin
   raise notice 'PASS L2: service_role can execute set_promos';
 end $$;
 
+-- M) palpite_overrides is anon read-only: anon may SELECT the public window, never
+--    write it. Only service_role (the admin tool) sets/clears a match's window.
+do $$
+declare n int;
+begin
+  set local role anon;
+  select count(*) into n from public.palpite_overrides;   -- anon CAN read (must not raise)
+  raise notice 'PASS M1: anon read palpite_overrides (% rows)', n;
+  begin
+    insert into public.palpite_overrides (match_id, open_until) values ('rls_probe', now());
+    raise exception 'FAIL M2: anon inserted a palpite override';
+  exception when insufficient_privilege then raise notice 'PASS M2: anon insert override denied';
+  end;
+  begin
+    update public.palpite_overrides set open_until = now();
+    raise exception 'FAIL M3: anon updated a palpite override';
+  exception when insufficient_privilege then raise notice 'PASS M3: anon update override denied';
+  end;
+  begin
+    delete from public.palpite_overrides;
+    raise exception 'FAIL M4: anon deleted palpite overrides';
+  exception when insufficient_privilege then raise notice 'PASS M4: anon delete override denied';
+  end;
+end $$;
+do $$
+begin
+  set local role service_role;
+  insert into public.palpite_overrides (match_id, open_until)
+  values ('rls_probe', now())
+  on conflict (match_id) do update set open_until = excluded.open_until;
+  delete from public.palpite_overrides where match_id = 'rls_probe';
+  raise notice 'PASS M5: service_role can write palpite_overrides';
+end $$;
+
 select 'ALL RLS CHECKS PASSED' as result;

@@ -1,7 +1,7 @@
 // Server-side palpite cutoff. Shared by the cast-vote Edge Function (Deno) and
 // the Node unit tests. Pure — no Deno/Node globals — so both can import it.
 
-export const PALPITE_GRACE_MS = 5 * 60_000; // mirrors the client's palpiteDeadline
+export const PALPITE_GRACE_MS = 15 * 60_000; // mirrors the client's palpiteDeadline
 
 interface EspnSummaryLike {
   header?: {
@@ -76,6 +76,28 @@ export function penWindowHardClosed(t: { state: string | null; detail?: string |
   return /\b(pen|shoot|p[êe]nal)/.test(`${t.detail ?? ""}`.toLowerCase());
 }
 
+/** How many minutes before the shootout (120') the pen-winner UI appears. */
+export const PEN_VOTE_LEAD_MIN = 10;
+
+/**
+ * Whether the pen-winner UI — the "QUEM VENCE NOS PÊNALTIS?" picker AND the
+ * by-pen palpite split — should be SHOWN yet. To keep it relevant, it stays
+ * hidden until the match is within {@link PEN_VOTE_LEAD_MIN} of the shootout —
+ * i.e. the clock has reached `EXTRA_TIME_END_MIN - lead` (110') — then auto-shows
+ * and stays through extra time, the shootout, and the finished result. Hidden
+ * pre-match and through regulation/early extra time. Pure; shared by PenVote and
+ * the live palpites split.
+ */
+export function penVoteVisible(
+  t: { state: string | null; detail?: string | null; clock?: string | null },
+  etEndMin = EXTRA_TIME_END_MIN,
+  leadMin = PEN_VOTE_LEAD_MIN,
+): boolean {
+  if (penWindowHardClosed(t)) return true; // shootout / FT / finished → keep the result visible
+  const min = clockMinute(t.clock) ?? clockMinute(t.detail);
+  return min != null && min >= etEndMin - leadMin;
+}
+
 /**
  * Palpites are closed once the match has finished, or once kickoff + grace has
  * passed. If the kickoff is unknown AND the match isn't marked finished we treat
@@ -90,4 +112,33 @@ export function palpitesClosed(
   if (timing.state === "post") return true;
   if (!Number.isNaN(timing.kickoffMs)) return now > timing.kickoffMs + grace;
   return false;
+}
+
+/** A manual, per-match palpite window set from the admin tool. */
+export interface PalpiteOverride {
+  /**
+   * Epoch ms until which score palpites are open for this match. When set to a
+   * finite number it FULLY decides the score window (open iff `now <= openUntil`),
+   * overriding both the finished state and the default grace — so the admin can
+   * extend the window, reopen a finished match, or close it early. `null`/non-finite
+   * means "no override" and the default {@link palpitesClosed} rule applies.
+   */
+  openUntil: number | null;
+}
+
+/**
+ * {@link palpitesClosed}, but honoring a manual per-match override. The same source
+ * of truth runs on the server (cast-vote) and the client, so a window the admin
+ * opens lets real viewers actually submit (cast-vote accepts) AND re-enables their
+ * form (client). With no override it is identical to {@link palpitesClosed}.
+ */
+export function palpitesClosedWithOverride(
+  timing: MatchTiming,
+  now: number,
+  override?: PalpiteOverride | null,
+  grace = PALPITE_GRACE_MS,
+): boolean {
+  const openUntil = override?.openUntil;
+  if (openUntil != null && Number.isFinite(openUntil)) return now > openUntil;
+  return palpitesClosed(timing, now, grace);
 }
