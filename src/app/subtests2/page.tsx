@@ -51,7 +51,7 @@ export default function SubtestsPage() {
   const [state, setState] = useState<DraftState>(initialState);
   const [hostId, setHostId] = useState<string | null>(null); // set → this tab is HOSTING
   const hosting = hostId != null;
-  const { viewers, broadcast } = useWatchHost(hosting, hostId ?? "");
+  const { viewers, broadcast } = useWatchHost(hosting, hostId ?? "", state.field);
 
   // ?watch=<id> → this tab is a VIEWER. useSyncExternalStore reads window SSR-safely
   // (server snapshot = null → no hydration mismatch, no setState-in-effect).
@@ -80,15 +80,16 @@ export default function SubtestsPage() {
         ) : (
           <>
             <Masthead phase={state.phase} teams={state.teams.length} />
-            {/* watch-together needs a deterministic field the viewer can rebuild from
-                fillTo48([]); a drafted roster isn't reproducible, so only host a
-                fully-mock Copa (the "Simular Copa completa" path). */}
+            {/* watch-together broadcasts the real drafted rosters (an ordered Team[]) so
+                the viewer rebuilds THIS Copa, not a mock one — any field can host. Fidelity
+                holds for automatic lineups (deterministic on both ends); the editor is
+                disabled while transmitting so a hand-edit can't desync viewers. */}
             {watchable && (
               <HostBar
                 hosting={hosting}
                 viewers={viewers}
                 hostId={hostId}
-                canHost={state.field.length > 0 && state.field.every((t) => t.owner.includes("🤖"))}
+                canHost={state.field.length > 0}
                 onStart={() => setHostId(Math.random().toString(36).slice(2, 8))}
                 onStop={() => setHostId(null)}
               />
@@ -123,7 +124,7 @@ function HostBar({ hosting, viewers, hostId, canHost, onStart, onStop }: { hosti
         <>
           <button onClick={onStart} disabled={!canHost} style={{ ...primaryBtn, width: "auto", padding: "9px 16px", opacity: canHost ? 1 : 0.4, cursor: canHost ? "pointer" : "not-allowed" }}>📡 Transmitir ao vivo</button>
           <span style={{ fontSize: 12, color: DIM }}>
-            {canHost ? "Assista junto: cada pessoa vê a MESMA partida, sincronizada pelo relógio." : "Transmissão só na Copa mockada (\"Simular Copa completa\") — um elenco sorteado não é reproduzível pro público."}
+            {canHost ? "Assista junto: cada pessoa vê os SEUS times, na MESMA partida sincronizada. Escalações automáticas durante a transmissão." : "Monte a Copa (grupos ou mata-mata) pra poder transmitir."}
           </span>
         </>
       ) : (

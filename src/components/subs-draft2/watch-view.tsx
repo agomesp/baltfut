@@ -10,11 +10,12 @@ import { FlagIcon } from "@/components/live/bf-ui";
 import PitchView from "@/components/subs-draft2/pitch-view";
 import { createWatchChannel } from "@/lib/subs-draft/watch-channel";
 import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
-import { validateBroadcastState, viewerMinute, type BroadcastState } from "@/lib/subs-draft/watch-sync";
+import { validateBroadcastState, validateField, viewerMinute, type BroadcastState } from "@/lib/subs-draft/watch-sync";
 import { replayWorld } from "@/lib/subs-draft/watch-replay";
 import { standings, MATCHDAY_NAMES, groupMatchSeed, type GroupMatch } from "@/lib/subs-draft/groups";
 import { ROUND_NAMES, bracketMatchSeed, type BracketMatch } from "@/lib/subs-draft/tournament";
 import { autoLineup, DEFAULT_FORMATION } from "@/lib/subs-draft/squad";
+import type { Team } from "@/lib/subs-draft/engine";
 
 const LIME = "#c8ff2d";
 const AMBER = "#f2a93b";
@@ -26,16 +27,28 @@ const MONO = "var(--font-jb, ui-monospace)";
 
 export default function WatchView({ id }: { id: string }) {
   const [state, setState] = useState<BroadcastState | null>(null);
+  const [field, setField] = useState<Team[] | null>(null); // the drafted rosters (null until they arrive)
   const [viewers, setViewers] = useState(1);
   const [clock, setClock] = useState(0);
   const stateRef = useRef<BroadcastState | null>(null);
+  const fieldSigRef = useRef<string>("");
 
-  // subscribe: receive snapshots + presence
+  // subscribe: receive snapshots + the room field + presence
   useEffect(() => {
     const ch = createWatchChannel(id);
     ch.onState((raw) => {
       const s = validateBroadcastState(raw);
       if (s) { stateRef.current = s; setState(s); }
+    });
+    ch.onField((raw) => {
+      const f = validateField(raw);
+      if (!f) return;
+      // the host re-sends the field every beat; ignore identical re-sends so an
+      // unchanged field never re-triggers the (expensive) full-tournament replay.
+      const sig = f.length + ":" + f.map((t) => t.id).join(",");
+      if (sig === fieldSigRef.current) return;
+      fieldSigRef.current = sig;
+      setField(f);
     });
     ch.onPresence((n) => setViewers(Math.max(1, n)));
     ch.setPresent();
@@ -52,10 +65,15 @@ export default function WatchView({ id }: { id: string }) {
 
   // reconstruct the world only when the STAGE changes (not on spotlight/minute)
   const teamIdsKey = (state?.teamIds ?? []).join(",");
+  // Gate on the FIELD: rebuild the world only once we have the room's teams. A drafted
+  // room's state can land before its ~35KB field, and replaying against the wrong/absent
+  // roster would silently show a different tournament (or crash drawGroups on a non-48
+  // field). `field` identity changes only when its content changes, so the world (a full
+  // replay) rebuilds when the field first arrives / shrinks 48→32, not on every re-send.
   const world = useMemo(
-    () => (state ? replayWorld(state) : null),
+    () => (state && field && (state.phase !== "groups" || field.length === 48) ? replayWorld(state, field) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state?.phase, state?.seed, state?.stageIdx, state?.done, teamIdsKey],
+    [state?.phase, state?.seed, state?.stageIdx, state?.done, teamIdsKey, field],
   );
 
   const spotMatch = useMemo(() => {

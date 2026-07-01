@@ -11,10 +11,12 @@ import {
   parseBroadcastState,
   viewerMinute,
   createWatchHost,
+  validateField,
   MIN_PER_MS,
   FULL_TIME,
   type BroadcastState,
 } from "./watch-sync";
+import { fillTo48 } from "./tournament";
 
 const base: BroadcastState = {
   v: 1,
@@ -128,5 +130,31 @@ describe("watch-sync — host coalescer", () => {
     const host = createWatchHost((s) => sent.push(s));
     host.beat();
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("validateField — the drafted-roster wire payload", () => {
+  const field = fillTo48([]); // a real 48-team field (drafted rooms broadcast this shape)
+
+  it("round-trips a real field through JSON, preserving TEAM order and roster[cat] order", () => {
+    const wire = JSON.parse(JSON.stringify(field)); // what the transport delivers
+    const out = validateField(wire);
+    expect(out).not.toBeNull();
+    expect(out!.map((t) => t.id)).toEqual(field.map((t) => t.id)); // team order verbatim
+    // roster arrays kept in-order (autoLineup's stable-sort tiebreak depends on it)
+    expect(out![0].roster.Atacante.map((p) => p.id)).toEqual(field[0].roster.Atacante.map((p) => p.id));
+    expect(out![5].roster.Goleiro.map((p) => p.rating)).toEqual(field[5].roster.Goleiro.map((p) => p.rating));
+  });
+
+  it("rejects anything malformed (never feeds a foreign roster into the sim)", () => {
+    expect(validateField(null)).toBeNull();
+    expect(validateField({})).toBeNull(); // not an array
+    expect(validateField([{ id: "t1", owner: "x", code: "BRA" }])).toBeNull(); // no roster
+    const bad = JSON.parse(JSON.stringify(field));
+    bad[0].roster.Atacante[0].rating = "high"; // wrong type
+    expect(validateField(bad)).toBeNull();
+    const missingCat = JSON.parse(JSON.stringify(field));
+    delete missingCat[2].roster["Meio-campo"];
+    expect(validateField(missingCat)).toBeNull();
   });
 });

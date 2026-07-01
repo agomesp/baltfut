@@ -67,6 +67,48 @@ describe("watch-channel — Supabase impl (fake channel)", () => {
     ch.close();
     expect(removeChannel).toHaveBeenCalledWith(channel);
   });
+
+  it("ships the field as its own 'field' event and wires onField", () => {
+    const { client, channel } = fakeSupabase();
+    const ch = makeSupabaseChannel(client, "room-f");
+    ch.broadcastField([{ id: "t1" }, { id: "t2" }]);
+    expect(channel.send).toHaveBeenCalledWith({ type: "broadcast", event: "field", payload: { f: [{ id: "t1" }, { id: "t2" }] } });
+
+    let got: unknown = null;
+    ch.onField((f) => (got = f));
+    channel.emit("broadcast", "field", { payload: { f: [{ id: "tX" }] } });
+    expect(got).toEqual([{ id: "tX" }]);
+  });
+});
+
+describe("watch-channel — BroadcastChannel late-join (real cross-instance)", () => {
+  const tick = () => new Promise((r) => setTimeout(r, 15));
+
+  it("re-sends the FIELD before the STATE to a late joiner (field must land first)", async () => {
+    if (typeof BroadcastChannel === "undefined") return; // env without BC → covered by the guard test
+    const room = "lj-" + Math.random().toString(36).slice(2);
+    const host = createWatchChannel(room);
+    host.broadcastField([{ id: "tA" }]);
+    host.broadcast({ v: 1, seed: 42 });
+    await tick();
+
+    const order: string[] = [];
+    let field: unknown = null;
+    let state: unknown = null;
+    const viewer = createWatchChannel(room); // its constructor pings want=true
+    viewer.onField((f) => { field = f; order.push("field"); });
+    viewer.onState((s) => { state = s; order.push("state"); });
+    await tick();
+    await tick();
+
+    expect(field).toEqual([{ id: "tA" }]);
+    expect(state).toEqual({ v: 1, seed: 42 });
+    // the resync posts field then state, so a viewer never renders state without teams
+    expect(order.indexOf("field")).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf("field")).toBeLessThan(order.indexOf("state"));
+    host.close();
+    viewer.close();
+  });
 });
 
 describe("watch-channel — factory guards", () => {

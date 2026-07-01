@@ -8,6 +8,8 @@
 // in the viewer component, using the same deterministic helpers as the host.
 import { FULL_TIME } from "./tournament";
 import { SECS_PER_MATCH } from "./sim-timing";
+import { CATS } from "./data";
+import type { Team } from "./engine";
 
 export { FULL_TIME };
 export const MIN_PER_MS = FULL_TIME / (SECS_PER_MATCH * 1000);
@@ -49,6 +51,7 @@ export function serializeBroadcastState(s: BroadcastState): string {
 }
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const isStr = (v: unknown): v is string => typeof v === "string";
 
 /** Parse + validate a wire snapshot; returns null on anything unexpected (unknown
  * version, bad shape/types) so a viewer never acts on a malformed/foreign message. */
@@ -83,6 +86,42 @@ export function validateBroadcastState(o: unknown): BroadcastState | null {
     done: s.done,
     teamIds: s.teamIds as string[] | null,
   };
+}
+
+/**
+ * Validate a received FIELD payload — the ORDERED Team[] a drafted room broadcasts so
+ * the viewer rebuilds the tournament from the real rosters instead of fillTo48([]).
+ * Returns null on ANY shape/type mismatch (a viewer never feeds a malformed/foreign
+ * roster into the sim). ORDER is preserved verbatim: drawGroups(ids, seed) shuffles the
+ * INPUT array order, so the viewer's group draw only matches the host's when the team
+ * order — and each roster[cat] array order (autoLineup's stable-sort tiebreak) — is kept
+ * exactly as sent.
+ */
+export function validateField(o: unknown): Team[] | null {
+  if (!Array.isArray(o)) return null;
+  const out: Team[] = [];
+  for (const raw of o) {
+    if (typeof raw !== "object" || raw === null) return null;
+    const t = raw as Record<string, unknown>;
+    if (!isStr(t.id) || !isStr(t.owner) || !isStr(t.code)) return null;
+    if (typeof t.roster !== "object" || t.roster === null) return null;
+    const rosterIn = t.roster as Record<string, unknown>;
+    const roster = {} as Team["roster"];
+    for (const cat of CATS) {
+      const arr = rosterIn[cat];
+      if (!Array.isArray(arr)) return null;
+      const players = [];
+      for (const p of arr) {
+        if (typeof p !== "object" || p === null) return null;
+        const pr = p as Record<string, unknown>;
+        if (!isStr(pr.id) || !isStr(pr.name) || pr.cat !== cat || !isNum(pr.rating)) return null;
+        players.push({ id: pr.id, name: pr.name, cat, rating: pr.rating, club: isStr(pr.club) ? pr.club : "" });
+      }
+      roster[cat] = players;
+    }
+    out.push({ id: t.id, owner: t.owner, code: t.code, roster });
+  }
+  return out;
 }
 
 export interface WatchHost {

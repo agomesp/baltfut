@@ -307,6 +307,7 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
   }
 
   const openEditor = (id: string) => {
+    if (onBroadcast) return; // transmitting → automatic lineups only (viewers rebuild them)
     if (!lineupsRef.current[id]) {
       const t = byId.get(id);
       if (t) setLineups({ ...lineupsRef.current, [id]: autoLineup(t, DEFAULT_FORMATION, statusRef.current) });
@@ -361,7 +362,7 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
           ))}
         </div>
         <button onClick={simulateAll} disabled={champion != null} style={{ ...smallBtn, opacity: champion ? 0.4 : 1 }}>⏩ Simular tudo</button>
-        <button onClick={() => setShowSquads((v) => !v)} style={{ ...smallBtn, borderColor: showSquads ? LIME : LINE }}>⚙ Escalações</button>
+        <button onClick={() => setShowSquads((v) => !v)} disabled={!!onBroadcast} title={onBroadcast ? "Escalações automáticas durante a transmissão" : undefined} style={{ ...smallBtn, borderColor: showSquads && !onBroadcast ? LIME : LINE, opacity: onBroadcast ? 0.4 : 1, cursor: onBroadcast ? "not-allowed" : "pointer" }}>⚙ Escalações</button>
         <button onClick={() => setPauseBetween((v) => !v)} title="Pausar entre as fases pra ajustar escalações" style={{ ...smallBtn, borderColor: pauseBetween ? LIME : LINE, color: pauseBetween ? LIME : INK }}>
           {pauseBetween ? "⏸ Escalar entre fases" : "▷ Auto-avançar"}
         </button>

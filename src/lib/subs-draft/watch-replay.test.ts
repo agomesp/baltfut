@@ -84,4 +84,24 @@ describe("watch-replay", () => {
     expect(checked).toBeGreaterThan(0);
     expect(naiveDiffered).toBeGreaterThan(0); // load-bearing: the wrong lineup DID diverge
   }, SLOW);
+
+  // Drafted-roster broadcast: the viewer rebuilds the world from the PROVIDED field (the
+  // real rosters), not the mock 48 — so people watch THEIR drafted teams.
+  it("rebuilds the world from the broadcast drafted field, not the mock fallback", () => {
+    const drafted = replayField().teams.map((t, i) => ({ ...t, id: `d${i}`, owner: `Sub ${i}` }));
+    const w = replayWorld(gState(), drafted);
+    expect([...w.byId.keys()]).toEqual(drafted.map((t) => t.id)); // the provided teams flow through, in order
+    expect(w.byId.get("d0")!.owner).toBe("Sub 0");
+    expect([...replayWorld(gState()).byId.keys()]).not.toEqual([...w.byId.keys()]); // ≠ the mock fallback
+  }, SLOW);
+
+  // The group draw is a pure function of the INPUT ARRAY ORDER (drawGroups shuffles it),
+  // so the wire MUST preserve team order — this pins that invariant.
+  it("group membership is order-sensitive: the same teams in a different order draw differently", () => {
+    const field = replayField().teams;
+    const g0 = (s: NonNullable<ReturnType<typeof replayWorld>["stage"]>) => standings(s.groups[0], s.seed).map((r) => r.teamId).sort();
+    const a = replayWorld(gState(), field).stage!;
+    const b = replayWorld(gState(), [...field].reverse()).stage!;
+    expect(g0(a)).not.toEqual(g0(b));
+  }, SLOW);
 });

@@ -122,14 +122,26 @@ export function replayBracket(byId: Map<string, Team>, ids: string[], seed: numb
   return bracket;
 }
 
-/** Reconstruct the whole world a viewer should render from a broadcast snapshot. */
-export function replayWorld(state: BroadcastState): ReplayWorld {
-  const { teams, byId } = replayField();
+/**
+ * Reconstruct the whole world a viewer should render from a broadcast snapshot.
+ *
+ * `providedTeams` is the ORDERED field a drafted room broadcasts (the real rosters).
+ * When absent, falls back to the deterministic mock 48 (fillTo48) — used by the fidelity
+ * tests and any all-mock room. ORDER IS LOAD-BEARING for groups: drawGroups(ids, seed)
+ * shuffles the input array order, so groups ids come from providedTeams.map(t=>t.id) in
+ * the exact broadcast order (never a byId key order). The bracket takes its order from
+ * state.teamIds (already order-preserving) and only looks teams up in byId.
+ */
+export function replayWorld(state: BroadcastState, providedTeams?: Team[]): ReplayWorld {
+  const teams = providedTeams ?? replayField().teams;
+  const byId = new Map(teams.map((t) => [t.id, t]));
   const lineups: Record<string, Lineup> = {};
   if (state.phase === "groups") {
     const ids = teams.map((t) => t.id);
     return { phase: "groups", byId, stage: replayGroups(byId, ids, state.seed, state.stageIdx, state.done, lineups), bracket: null, lineups };
   }
+  // state.teamIds ⊆ providedTeams ids (same team objects across groups→bracket), so byId
+  // resolves every teamId; order comes from teamIds, not the (possibly-48-superset) field.
   const ids = state.teamIds ?? teams.slice(0, 32).map((t) => t.id);
   return { phase: "bracket", byId, stage: null, bracket: replayBracket(byId, ids, state.seed, state.stageIdx, state.done, lineups), lineups };
 }
