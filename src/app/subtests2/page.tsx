@@ -30,8 +30,9 @@ import {
   type DraftState,
   type Team,
 } from "@/lib/subs-draft/engine";
-import { goToBracket, mockTournament } from "@/lib/subs-draft/tournament";
+import { fillTo48, goToGroups, mockTournament } from "@/lib/subs-draft/tournament";
 import TournamentView from "@/components/subs-draft2/tournament-view";
+import GroupsView from "@/components/subs-draft2/groups-view";
 import { FlagIcon } from "@/components/live/bf-ui";
 import { teamNamePt } from "@/lib/team-names";
 
@@ -62,6 +63,12 @@ export default function SubtestsPage() {
         {state.phase === "lobby" && <Lobby state={state} setState={setState} />}
         {state.phase === "draft" && <Draft state={state} setState={setState} />}
         {state.phase === "done" && <Done state={state} setState={setState} />}
+        {state.phase === "groups" && (
+          <GroupsView
+            teams={state.field}
+            onAdvance={(q32) => setState({ ...state, phase: "bracket", field: state.field.filter((t) => q32.includes(t.id)) })}
+          />
+        )}
         {state.phase === "bracket" && <TournamentView teams={state.field} />}
       </div>
     </main>
@@ -72,6 +79,7 @@ function Masthead({ phase, teams }: { phase: string; teams: number }) {
   const step =
     phase === "lobby" ? "Dia 1 · Montagem dos times"
     : phase === "draft" ? "Dia 1 · Draft em andamento"
+    : phase === "groups" ? "Fase de grupos · 12 grupos"
     : phase === "bracket" ? "Mata-mata · 32 times"
     : "Times montados";
   return (
@@ -209,11 +217,15 @@ function Lobby({ state, setState }: { state: DraftState; setState: (s: DraftStat
 
         <section style={panel}>
           <Eyebrow>Atalho de teste</Eyebrow>
-          <button onClick={() => setState(mockTournament(state))} style={{ ...primaryBtn, marginTop: 12, background: "transparent", color: LIME, border: `1px solid ${LIME}` }}>
-            ⚡ Simular mata-mata com 32 (mock)
+          <button onClick={() => setState({ ...state, phase: "groups", field: fillTo48([]) })} style={{ ...primaryBtn, marginTop: 12 }}>
+            ⚡ Simular Copa completa (48 · grupos → mata-mata)
+          </button>
+          <button onClick={() => setState(mockTournament(state))} style={{ ...primaryBtn, marginTop: 8, background: "transparent", color: LIME, border: `1px solid ${LIME}` }}>
+            ⚡ Só o mata-mata com 32 (mock)
           </button>
           <p style={{ fontSize: 11, color: DIM, margin: "8px 2px 0", lineHeight: 1.5 }}>
-            Pula o lobby/draft e cria um chaveamento completo de 32 times mockados.
+            Pula o lobby/draft: a Copa completa monta 48 times em 12 grupos; o atalho
+            de mata-mata cria um chaveamento direto de 32.
           </p>
         </section>
       </aside>
@@ -379,10 +391,10 @@ function Done({ state, setState }: { state: DraftState; setState: (s: DraftState
         <div style={{ fontFamily: DISP, fontSize: 26, fontWeight: 800 }}>Draft completo 🎉</div>
         <div style={{ fontSize: 13, color: DIM, marginTop: 6 }}>
           Todos os {state.teams.length} times montaram seus elencos.
-          {state.teams.length < 32 ? ` Completamos até 32 com times mock pro mata-mata.` : ""}
+          {state.teams.length < 48 ? ` Completamos até 48 com times mock pra fase de grupos.` : ""}
         </div>
-        <button onClick={() => setState(goToBracket(state))} style={{ ...primaryBtn, width: "auto", marginTop: 14, padding: "11px 22px" }}>
-          Ir para o mata-mata (32 times) →
+        <button onClick={() => setState(goToGroups(state))} style={{ ...primaryBtn, width: "auto", marginTop: 14, padding: "11px 22px" }}>
+          Ir para a fase de grupos (48 times) →
         </button>
       </section>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px,1fr))", gap: 14 }}>
