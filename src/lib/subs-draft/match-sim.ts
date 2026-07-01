@@ -605,14 +605,20 @@ export function createMatchSim(
 
   function separate(dt: number) {
     const SEP = 4.2;
+    // O(n²) over 22 bodies × 3600 steps, but almost every pair is far apart. Reject on
+    // the cheap axis test first: |dx| > SEP ⟹ hypot(dx,dy) ≥ |dx| > SEP (exact for IEEE
+    // hypot), so those pairs never pushed anyway. Survivors take the ORIGINAL hypot path
+    // verbatim → bit-identical result (determinism preserved), far fewer sqrt calls.
     for (let i = 0; i < all.length; i++) {
-      if (sentOff.has(all[i].id)) continue;
+      const a = all[i];
+      if (sentOff.has(a.id)) continue;
       for (let j = i + 1; j < all.length; j++) {
-        if (sentOff.has(all[j].id)) continue;
-        const a = all[i];
         const b = all[j];
+        if (sentOff.has(b.id)) continue;
         const dx = b.x - a.x;
+        if (dx > SEP || dx < -SEP) continue;
         const dy = b.y - a.y;
+        if (dy > SEP || dy < -SEP) continue;
         const d = Math.hypot(dx, dy);
         if (d > 0.01 && d < SEP) {
           const push = ((SEP - d) / SEP) * 7 * dt;

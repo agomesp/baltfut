@@ -20,14 +20,13 @@ import {
   autoLineup,
   DEFAULT_FORMATION,
   repairLineup,
-  startingPlayers,
   type Lineup,
   type StatusMap,
 } from "@/lib/subs-draft/squad";
 import {
   advanceStatus,
   applyMatchEvents,
-  simulateMatch,
+  simulateMatchOnPitch,
   FULL_TIME,
   type MatchEvent,
   type MatchResult,
@@ -106,7 +105,7 @@ export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: T
       const away = byId.get(awayId)!;
       const hl = lineupsRef.current[homeId] ?? autoLineup(home, DEFAULT_FORMATION, statusRef.current);
       const al = lineupsRef.current[awayId] ?? autoLineup(away, DEFAULT_FORMATION, statusRef.current);
-      return simulateMatch(home, away, startingPlayers(home, hl), startingPlayers(away, al), seed, { allowDraw: true });
+      return simulateMatchOnPitch(home, away, hl, al, seed, { allowDraw: true });
     },
     [byId],
   );

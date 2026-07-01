@@ -10,7 +10,7 @@ import {
   advanceStatus,
   applyMatchEvents,
   championId,
-  simulateMatch,
+  simulateMatchOnPitch,
   type Bracket,
   type MatchResult,
 } from "./tournament";
@@ -28,7 +28,6 @@ import {
   autoLineup,
   DEFAULT_FORMATION,
   repairLineup,
-  startingPlayers,
   type Lineup,
   type StatusMap,
 } from "./squad";
@@ -57,7 +56,7 @@ function hostGroupsLive(byId: Map<string, Team>, ids: string[], seed: number, li
     const away = byId.get(awayId)!;
     const hl = lineupsRef[homeId] ?? autoLineup(home, DEFAULT_FORMATION, status);
     const al = lineupsRef[awayId] ?? autoLineup(away, DEFAULT_FORMATION, status);
-    return simulateMatch(home, away, startingPlayers(home, hl), startingPlayers(away, al), s, { allowDraw: true });
+    return simulateMatchOnPitch(home, away, hl, al, s, { allowDraw: true });
   };
   const simMatch = (m: GroupMatch) => simById(m.homeId, m.awayId, groupMatchSeed(stage.seed, m.group, m.matchday, m.slot));
 
@@ -92,7 +91,7 @@ function hostGroupsDone(byId: Map<string, Team>, ids: string[], seed: number): G
     const away = byId.get(m.awayId)!;
     const hl = lineupsRef[m.homeId] ?? autoLineup(home, DEFAULT_FORMATION, status);
     const al = lineupsRef[m.awayId] ?? autoLineup(away, DEFAULT_FORMATION, status);
-    return simulateMatch(home, away, startingPlayers(home, hl), startingPlayers(away, al), groupMatchSeed(stage.seed, m.group, m.matchday, m.slot), { allowDraw: true });
+    return simulateMatchOnPitch(home, away, hl, al, groupMatchSeed(stage.seed, m.group, m.matchday, m.slot), { allowDraw: true });
   };
   for (let md = 0; md < 3; md++) {
     ensureLineups();
@@ -122,7 +121,7 @@ function hostBracketLive(byId: Map<string, Team>, ids: string[], seed: number, l
     const away = byId.get(awayId)!;
     const hl = lineupsRef[homeId] ?? autoLineup(home, DEFAULT_FORMATION, status);
     const al = lineupsRef[awayId] ?? autoLineup(away, DEFAULT_FORMATION, status);
-    return simulateMatch(home, away, startingPlayers(home, hl), startingPlayers(away, al), bracketMatchSeed(seed, round, slot));
+    return simulateMatchOnPitch(home, away, hl, al, bracketMatchSeed(seed, round, slot));
   };
   for (let r = 0; r < bracket.length; r++) {
     ensureLineups(roundTeamIds(bracket, r));
@@ -148,69 +147,66 @@ describe("replay fidelity: viewer == host, EXACTLY", () => {
   const { teams, byId } = replayField();
   const ids = teams.map((t) => t.id);
 
+  // Each match is now a full headless pitch sim (~23ms), so a whole-tournament replay
+  // costs ~1.6s. Compute the shared done-groups → q32 → bracket field ONCE (reused by
+  // every bracket assertion) and give the multi-replay tests honest timeouts.
+  const doneGroups2026 = hostGroupsDone(byId, ids, 2026);
+  const q32 = qualified32(doneGroups2026);
+  const bracketField = ids.filter((id) => q32.includes(id)); // fillTo48 order, filtered to q32
+  const SLOW = 30_000;
+
   it("groups: every matchday LIVE state is byte-identical to the host", () => {
     for (const liveIdx of [0, 1, 2]) {
       const host = hostGroupsLive(byId, ids, 2026, liveIdx);
       const viewer = replayGroups(byId, ids, 2026, liveIdx, false);
       expect(scorelines(viewer)).toEqual(scorelines(host.stage));
     }
-  });
+  }, SLOW);
 
   it("groups: the DONE stage is byte-identical + same qualified32", () => {
-    const host = hostGroupsDone(byId, ids, 2026);
     const viewer = replayGroups(byId, ids, 2026, 2, true);
-    expect(scorelines(viewer)).toEqual(scorelines(host));
-    expect(qualified32(viewer)).toEqual(qualified32(host));
+    expect(scorelines(viewer)).toEqual(scorelines(doneGroups2026));
+    expect(qualified32(viewer)).toEqual(q32);
     for (const g of viewer.groups) {
-      expect(standings(g, viewer.seed)).toEqual(standings(host.groups.find((x) => x.name === g.name)!, host.seed));
+      expect(standings(g, viewer.seed)).toEqual(standings(doneGroups2026.groups.find((x) => x.name === g.name)!, doneGroups2026.seed));
     }
-  });
+  }, SLOW);
 
   it("bracket: every round LIVE state is byte-identical to the host (real q32 field)", () => {
-    // The REAL field the host feeds the bracket: fillTo48 order filtered to q32
-    // (page.tsx onAdvance: state.field.filter(t => q32.includes(t.id))).
-    const doneGroups = hostGroupsDone(byId, ids, 2026);
-    const q32 = qualified32(doneGroups);
-    const bracketField = ids.filter((id) => q32.includes(id)); // fillTo48 order, filtered
     for (const liveIdx of [0, 1, 2, 3, 4]) {
       const host = hostBracketLive(byId, bracketField, 2026, liveIdx);
       const viewer = replayBracket(byId, bracketField, 2026, liveIdx, false);
       expect(bracketScorelines(viewer)).toEqual(bracketScorelines(host.bracket));
     }
-  });
+  }, SLOW);
 
   it("bracket: full replay crowns the SAME champion as the host", () => {
-    const doneGroups = hostGroupsDone(byId, ids, 2026);
-    const q32 = qualified32(doneGroups);
-    const bracketField = ids.filter((id) => q32.includes(id));
     const host = hostBracketLive(byId, bracketField, 2026, 4); // final live
     const hostDone = finishRound(host.bracket, 4);
     const viewer = replayBracket(byId, bracketField, 2026, 4, true);
     expect(championId(viewer)).toBe(championId(hostDone));
-  });
+  }, SLOW);
 
-  it("REFUTATION PROBE: does status carryover actually change scorelines? "
-    + "(if replay ignored status, would it still match?)", () => {
-    // Sanity: a replay that does NOT thread status should DIFFER from the host on
-    // some seed, proving the carryover threading is load-bearing (not a no-op).
+  it("REFUTATION PROBE: status carryover actually changes scorelines (threading is load-bearing)", () => {
+    // A replay that does NOT thread status must DIFFER from the host on some seed —
+    // else the carryover threading would be a no-op. Same pitch model on both sides,
+    // so any divergence isolates the STATUS threading. Stop at the first divergence.
     const naiveGroups = (seed: number): GroupStage => {
       let stage = drawGroups(ids, seed);
       const sim = (m: GroupMatch) => {
         const h = byId.get(m.homeId)!;
         const a = byId.get(m.awayId)!;
         // NO status, NO lineup threading — always the fresh auto XI
-        return simulateMatch(h, a, startingPlayers(h, autoLineup(h, DEFAULT_FORMATION, {})), startingPlayers(a, autoLineup(a, DEFAULT_FORMATION, {})), groupMatchSeed(seed, m.group, m.matchday, m.slot), { allowDraw: true });
+        return simulateMatchOnPitch(h, a, autoLineup(h, DEFAULT_FORMATION, {}), autoLineup(a, DEFAULT_FORMATION, {}), groupMatchSeed(seed, m.group, m.matchday, m.slot), { allowDraw: true });
       };
       for (let md = 0; md < 3; md++) stage = finishMatchday(playMatchday(stage, md, sim), md);
       return stage;
     };
     let anyDiff = false;
-    for (const seed of [1, 2, 2026, 99999, 7]) {
-      const host = hostGroupsDone(byId, ids, seed);
-      if (JSON.stringify(scorelines(naiveGroups(seed))) !== JSON.stringify(scorelines(host))) anyDiff = true;
+    for (const seed of [2026, 1, 7]) {
+      const host = seed === 2026 ? doneGroups2026 : hostGroupsDone(byId, ids, seed);
+      if (JSON.stringify(scorelines(naiveGroups(seed))) !== JSON.stringify(scorelines(host))) { anyDiff = true; break; }
     }
-    // Threading is load-bearing: a seed-only replay that ignores status DOES
-    // diverge from the host, so the viewer MUST re-thread it (and does — above).
     expect(anyDiff).toBe(true);
-  });
+  }, SLOW);
 });

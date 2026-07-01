@@ -14,7 +14,7 @@ import {
   fillTo48,
   finishRound,
   playRound,
-  simulateMatch,
+  simulateMatchOnPitch,
   type Bracket,
 } from "./tournament";
 import {
@@ -25,7 +25,7 @@ import {
   type GroupMatch,
   type GroupStage,
 } from "./groups";
-import { autoLineup, DEFAULT_FORMATION, repairLineup, startingPlayers, type Lineup, type StatusMap } from "./squad";
+import { autoLineup, DEFAULT_FORMATION, repairLineup, type Lineup, type StatusMap } from "./squad";
 import type { Team } from "./engine";
 import type { BroadcastState } from "./watch-sync";
 
@@ -57,10 +57,10 @@ export function replayGroups(byId: Map<string, Team>, ids: string[], seed: numbe
   const sim = (m: GroupMatch) => {
     const h = byId.get(m.homeId)!;
     const a = byId.get(m.awayId)!;
-    return simulateMatch(
+    return simulateMatchOnPitch(
       h, a,
-      startingPlayers(h, lineups[m.homeId] ?? autoLineup(h, DEFAULT_FORMATION, status)),
-      startingPlayers(a, lineups[m.awayId] ?? autoLineup(a, DEFAULT_FORMATION, status)),
+      lineups[m.homeId] ?? autoLineup(h, DEFAULT_FORMATION, status),
+      lineups[m.awayId] ?? autoLineup(a, DEFAULT_FORMATION, status),
       groupMatchSeed(seed, m.group, m.matchday, m.slot),
       { allowDraw: true },
     );
@@ -94,10 +94,10 @@ export function replayBracket(byId: Map<string, Team>, ids: string[], seed: numb
   const sim = (homeId: string, awayId: string, round: number, slot: number) => {
     const h = byId.get(homeId)!;
     const a = byId.get(awayId)!;
-    return simulateMatch(
+    return simulateMatchOnPitch(
       h, a,
-      startingPlayers(h, lineups[homeId] ?? autoLineup(h, DEFAULT_FORMATION, status)),
-      startingPlayers(a, lineups[awayId] ?? autoLineup(a, DEFAULT_FORMATION, status)),
+      lineups[homeId] ?? autoLineup(h, DEFAULT_FORMATION, status),
+      lineups[awayId] ?? autoLineup(a, DEFAULT_FORMATION, status),
       bracketMatchSeed(seed, round, slot),
     );
   };

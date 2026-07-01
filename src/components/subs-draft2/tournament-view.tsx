@@ -24,7 +24,6 @@ import {
   autoLineup,
   DEFAULT_FORMATION,
   repairLineup,
-  startingPlayers,
   type Lineup,
   type StatusMap,
 } from "@/lib/subs-draft/squad";
@@ -38,7 +37,7 @@ import {
   FULL_TIME,
   playRound,
   ROUND_NAMES,
-  simulateMatch,
+  simulateMatchOnPitch,
   type Bracket,
   type BracketMatch,
   type MatchEvent,
@@ -110,7 +109,7 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
       const away = byId.get(awayId)!;
       const hl = lineupsRef.current[homeId] ?? autoLineup(home, DEFAULT_FORMATION, statusRef.current);
       const al = lineupsRef.current[awayId] ?? autoLineup(away, DEFAULT_FORMATION, statusRef.current);
-      return simulateMatch(home, away, startingPlayers(home, hl), startingPlayers(away, al), bracketMatchSeed(bracketSeedRef.current, round, slot));
+      return simulateMatchOnPitch(home, away, hl, al, bracketMatchSeed(bracketSeedRef.current, round, slot));
     },
     [byId],
   );

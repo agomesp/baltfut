@@ -9,7 +9,9 @@
 import { CATS, COUNTRIES, BRACKET_SIZE, GROUP_TOTAL, MOCK_SUBS, ROSTER, mockName, type Cat, type Player } from "./data";
 import { emptyRoster, squadCount, type DraftState, type Team } from "./engine";
 import { mulberry32, randInt32 } from "./prng";
-import type { PlayerStatus, StatusMap } from "./squad";
+import { createMatchSim } from "./match-sim";
+import { FIXED_DT, TOTAL_STEPS } from "./sim-timing";
+import { fieldLayout, startingPlayers, type Lineup, type PlayerStatus, type StatusMap } from "./squad";
 
 /** A random stream in [0,1). Threaded through the sim so a match is a pure
  * function of its seed (see prng.ts). */
@@ -193,6 +195,72 @@ export function simulateMatch(
       winnerId = "";
     } else {
       pens = shootout(sh, sa, rng);
+      winnerId = pens.home > pens.away ? home.id : away.id;
+    }
+  } else {
+    winnerId = homeGoals > awayGoals ? home.id : away.id;
+  }
+  return { homeGoals, awayGoals, events, pens, winnerId };
+}
+
+/** Golden-ratio salt: injuries + the shootout draw from a SEPARATE stream so the match
+ * seed stays reserved for the pitch (headless == the live spotlight). */
+const PITCH_SIDE_SALT = 0x9e3779b9;
+
+/**
+ * xG-unified match: the SCORELINE and cards come from a headless run of the on-pitch
+ * simulation (createMatchSim {scoring}) at the match seed — the exact simulation the
+ * live spotlight will run for that seed, so a precomputed result and the live pitch
+ * agree goal-for-goal. Injuries and the penalty shootout are NOT modelled on the pitch,
+ * so they draw from a salted side stream (leaving the match seed purely the pitch's).
+ * Same MatchResult contract as simulateMatch. v2-only; v1 keeps the Poisson model.
+ */
+export function simulateMatchOnPitch(
+  home: Team,
+  away: Team,
+  homeLineup: Lineup,
+  awayLineup: Lineup,
+  seed: number = randInt32(),
+  opts: { allowDraw?: boolean } = {},
+): MatchResult {
+  const homeSlots = fieldLayout(home, homeLineup, "home");
+  const awaySlots = fieldLayout(away, awayLineup, "away");
+  const homeXI = startingPlayers(home, homeLineup);
+  const awayXI = startingPlayers(away, awayLineup);
+
+  const sim = createMatchSim(homeSlots, awaySlots, seed, { scoring: true });
+  for (let i = 0; i < TOTAL_STEPS; i++) sim.step(FIXED_DT);
+  const r = sim.getResult();
+  const homeGoals = r.goals.home;
+  const awayGoals = r.goals.away;
+  const events: MatchEvent[] = r.events.map((e) => ({
+    minute: e.minute,
+    teamId: e.side === "home" ? home.id : away.id,
+    type: e.type,
+    player: e.player,
+    playerId: e.playerId,
+  }));
+
+  // Injuries (not on the pitch) + the shootout: a salted side stream keeps the pitch
+  // seed pure. Mirrors the Poisson model's per-team injury odds + minute + length.
+  const side = mulberry32((seed ^ PITCH_SIDE_SALT) >>> 0);
+  const injure = (teamId: string, xi: Player[]) => {
+    if (side() < 0.2) {
+      const p = anyone(xi, side);
+      if (p) events.push({ minute: 1 + Math.floor(side() * FULL_TIME), teamId, type: "injury", player: p.name, playerId: p.id, out: injuryLength(side) });
+    }
+  };
+  injure(home.id, homeXI);
+  injure(away.id, awayXI);
+  events.sort((a, b) => a.minute - b.minute);
+
+  let pens: { home: number; away: number } | null = null;
+  let winnerId: string;
+  if (homeGoals === awayGoals) {
+    if (opts.allowDraw) {
+      winnerId = ""; // group stage: a level match is a draw (no shootout, matches simulateMatch)
+    } else {
+      pens = shootout(avgRating(homeXI), avgRating(awayXI), side);
       winnerId = pens.home > pens.away ? home.id : away.id;
     }
   } else {

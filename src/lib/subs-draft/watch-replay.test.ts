@@ -13,10 +13,14 @@ const gState = (over: Partial<BroadcastState> = {}): BroadcastState => ({
   speed: 1, playing: true, spotlight: null, done: true, teamIds: null, ...over,
 });
 
+// Each replay now runs a full headless pitch sim per match (~23ms), so a done-stage
+// replay costs ~1.6s. These integration tests get an honest timeout.
+const SLOW = 30_000;
+
 describe("watch-replay", () => {
   it("is deterministic — two viewers reconstruct the identical world", () => {
     expect(replayWorld(gState())).toEqual(replayWorld(gState()));
-  });
+  }, SLOW);
 
   it("a finished group stage yields exactly 32 unique qualifiers", () => {
     const w = replayWorld(gState());
@@ -25,7 +29,7 @@ describe("watch-replay", () => {
     expect(q).toHaveLength(32);
     expect(new Set(q).size).toBe(32);
     for (const g of w.stage!.groups) for (const r of standings(g, w.stage!.seed)) expect(r.P).toBe(3);
-  });
+  }, SLOW);
 
   it("mid-tournament: finished matchdays counted, current matchday LIVE", () => {
     const { byId, teams } = { ...replayField(), teams: replayField().teams };
@@ -37,7 +41,7 @@ describe("watch-replay", () => {
       expect(g.matchdays[2].every((m) => m.status === "pending")).toBe(true); // md2 not started
       for (const r of standings(g, stage.seed)) expect(r.P).toBe(1); // only md0 counts
     }
-  });
+  }, SLOW);
 
   it("bracket phase: a full replay crowns a champion", () => {
     const teams = replayField().teams;
@@ -45,9 +49,9 @@ describe("watch-replay", () => {
     const w = replayWorld(gState({ phase: "bracket", seed: 7, stageIdx: 4, done: true, teamIds: ids }));
     expect(w.bracket).not.toBeNull();
     expect(championId(w.bracket!)).not.toBeNull();
-  });
+  }, SLOW);
 
   it("a different seed reconstructs a different group stage", () => {
     expect(replayWorld(gState({ seed: 1 }))).not.toEqual(replayWorld(gState({ seed: 2 })));
-  });
+  }, SLOW);
 });
