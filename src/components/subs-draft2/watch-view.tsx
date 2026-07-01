@@ -50,7 +50,7 @@ export default function WatchView({ id }: { id: string }) {
       fieldSigRef.current = sig;
       setField(f);
     });
-    ch.onPresence((n) => setViewers(Math.max(1, n)));
+    ch.onPresence((n) => setViewers(Math.max(1, n - 1))); // exclude the host, matching its own count
     ch.setPresent();
     return () => ch.close();
   }, [id]);

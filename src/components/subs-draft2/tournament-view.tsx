@@ -449,7 +449,7 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
         </aside>
       </div>
 
-      {editTeam && lineups[editTeam] && byId.get(editTeam) && (
+      {editTeam && !onBroadcast && lineups[editTeam] && byId.get(editTeam) && (
         <LineupEditor
           team={byId.get(editTeam)!}
           lineup={lineups[editTeam]}

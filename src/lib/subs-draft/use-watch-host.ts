@@ -20,8 +20,9 @@ export function useWatchHost(enabled: boolean, id: string, field: Team[]): { vie
     chanRef.current = ch;
     hostRef.current = createWatchHost((s) => ch.broadcast(s));
     ch.onPresence((n) => setViewers(Math.max(0, n - 1))); // exclude self
-    ch.broadcastField(fieldRef.current); // the drafted rosters the viewer rebuilds from
-    // the beat re-emits state AND the field so a late joiner on ANY transport eventually
+    // NB: the initial field broadcast is the field-effect below (it also runs on mount,
+    // once chanRef is set) — doing it here too would double-send the ~35KB payload.
+    // The beat re-emits state AND the field so a late joiner on ANY transport eventually
     // has the teams (BroadcastChannel also answers a want-ping instantly; Supabase relies
     // on this since it has no server retention). The field content is stable, so a viewer
     // ignores identical re-sends — no repeated full-tournament replay.
