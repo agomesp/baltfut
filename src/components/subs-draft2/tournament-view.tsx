@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlagIcon } from "@/components/live/bf-ui";
 import PitchView from "@/components/subs-draft2/pitch-view";
 import LineupEditor from "@/components/subs-draft/lineup-editor";
+import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
 import type { Team } from "@/lib/subs-draft/engine";
 import {
   autoLineup,
@@ -198,9 +199,11 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
       setClock(next);
       if (next >= FULL_TIME) finalize();
     };
-    timer.current = setInterval(tick, TICK_MS);
+    timer.current = setInterval(tick, TICK_MS); // drives when visible (also the no-Worker fallback)
+    const unsubMetro = subscribeMetronome(tick); // A0.3: keeps the minute advancing while hidden
     return () => {
       if (timer.current) clearInterval(timer.current);
+      unsubMetro();
     };
   }, [playing, roundIdx, finalize, code]);
 

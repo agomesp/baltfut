@@ -22,6 +22,7 @@ import type { Team } from "@/lib/subs-draft/engine";
 import { fieldLayout, type FieldSlot, type Lineup } from "@/lib/subs-draft/squad";
 import { createMatchSim, type MatchSim, type Snapshot } from "@/lib/subs-draft/match-sim";
 import { createSimClock, lerpSnapshot, reconcileEvents, FIXED_DT, type SimClock } from "@/lib/subs-draft/sim-clock";
+import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
 import type { MatchEvent } from "@/lib/subs-draft/tournament";
 
 const HOME = "#c8ff2d";
@@ -95,7 +96,6 @@ export default function PitchView({
   const simClockRef = useRef<SimClock | null>(null);
   const prevSnapRef = useRef<Snapshot | null>(null);
   const currSnapRef = useRef<Snapshot | null>(null);
-  const pumpRef = useRef<((nowMs: number) => void) | null>(null); // A0.3: background metronome reuses this
 
   const prevBallSpeed = useRef(0);
   const lastCap = useRef<string | null>(null);
@@ -211,7 +211,10 @@ export default function PitchView({
       updVel(snap.home, base.home, skels.current.home);
       updVel(snap.away, base.away, skels.current.away);
     };
-    pumpRef.current = pump;
+    // A0.3: keep the sim advancing while the tab is hidden (rAF is paused there).
+    // The worker metronome and rAF both drive the SAME elapsed-based pump, so they
+    // never double-step; drawing stays in the rAF frame (a hidden tab can't paint).
+    const unsubMetro = subscribeMetronome(() => pump(performance.now()));
 
     const frame = () => {
       const now = performance.now();
@@ -237,7 +240,7 @@ export default function PitchView({
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => { cancelAnimationFrame(raf); pumpRef.current = null; };
+    return () => { cancelAnimationFrame(raf); unsubMetro(); };
   }, [playing, homeXI, awayXI]);
 
   const hg = goals.filter((e) => e.teamId === home.id && e.minute <= clock).length;
