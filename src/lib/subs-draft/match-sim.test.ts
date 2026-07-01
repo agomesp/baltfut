@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createMatchSim, laneClearance } from "./match-sim";
 import { autoLineup, fieldLayout, type FieldSlot } from "./squad";
 import { mockField } from "./tournament";
+import { TOTAL_STEPS } from "./sim-timing";
 import type { Cat } from "./data";
 
 const ROLES: Cat[] = ["Goleiro", "Defensor", "Defensor", "Defensor", "Defensor", "Meio-campo", "Meio-campo", "Meio-campo", "Meio-campo", "Atacante", "Atacante"];
@@ -275,5 +276,78 @@ describe("match-sim produces real, flowing movement (not lined up)", () => {
       expect(p.y).toBeGreaterThanOrEqual(0);
       expect(p.y).toBeLessThanOrEqual(100);
     }
+  });
+});
+
+// xG-unification (stage 1): the pitch itself PRODUCES the scoreline when opted in.
+// Headless-only for now — nothing in the app runs {scoring:true} yet.
+function playScored(homeSlots: FieldSlot[], awaySlots: FieldSlot[], seed: number) {
+  const sim = createMatchSim(homeSlots, awaySlots, seed, { scoring: true });
+  for (let i = 0; i < TOTAL_STEPS; i++) sim.step(1 / 60);
+  return sim.getResult();
+}
+
+describe("match-sim {scoring} — the pitch produces the scoreline (xG-unification)", () => {
+  it("stays inert on the cosmetic (flag-off) default: no goals, no events", () => {
+    const sim = createMatchSim(home, away, 3); // no {scoring}
+    for (let i = 0; i < TOTAL_STEPS; i++) sim.step(1 / 60, i / TOTAL_STEPS);
+    const r = sim.getResult();
+    expect(r.goals).toEqual({ home: 0, away: 0 });
+    expect(r.events).toEqual([]);
+    expect(sim.snapshot().goals).toEqual({ home: 0, away: 0 });
+  });
+
+  it("is deterministic: the same seed replays the identical result", () => {
+    expect(playScored(home, away, 7)).toEqual(playScored(home, away, 7));
+    expect(playScored(home, away, 21)).toEqual(playScored(home, away, 21));
+  });
+
+  it("ignores the external progress arg — the internal fixed-step clock is authoritative", () => {
+    // same seed, but one run is fed a bogus external progress and the other isn't:
+    // the scoring result must be byte-identical (headless == live spotlight).
+    const a = createMatchSim(home, away, 9, { scoring: true });
+    const b = createMatchSim(home, away, 9, { scoring: true });
+    for (let i = 0; i < TOTAL_STEPS; i++) { a.step(1 / 60); b.step(1 / 60, Math.min(1, (i * 7) % TOTAL_STEPS / TOTAL_STEPS)); }
+    expect(a.getResult()).toEqual(b.getResult());
+  });
+
+  it("the produced scoreline is internally consistent (goals == goal events, sane minutes)", () => {
+    const ids = new Set([...home, ...away].map((s) => s.id));
+    for (const seed of [1, 5, 12, 30]) {
+      const r = playScored(home, away, seed);
+      const homeGoals = r.events.filter((e) => e.type === "goal" && e.side === "home").length;
+      const awayGoals = r.events.filter((e) => e.type === "goal" && e.side === "away").length;
+      expect({ home: homeGoals, away: awayGoals }).toEqual(r.goals);
+      for (const e of r.events) {
+        expect(e.minute).toBeGreaterThanOrEqual(1);
+        expect(e.minute).toBeLessThanOrEqual(90);
+        expect(ids.has(e.playerId)).toBe(true); // a real player from the XIs scored/was carded
+      }
+    }
+  });
+
+  it("a much stronger XI outscores a weak one across seeded matches (rating drives GOALS, not just shots)", () => {
+    const strong = xi(88, "home");
+    const weak = xi(60, "away");
+    let strongGoals = 0;
+    let weakGoals = 0;
+    for (let k = 0; k < 12; k++) {
+      const r = playScored(strong, weak, 200 + k);
+      strongGoals += r.goals.home;
+      weakGoals += r.goals.away;
+    }
+    expect(strongGoals).toBeGreaterThan(weakGoals);
+  });
+
+  it("produces goals at a plausible rate (not a 0-0 desert nor a basketball score)", () => {
+    let total = 0;
+    const N = 12;
+    for (let k = 0; k < N; k++) {
+      const r = playScored(home, away, 300 + k);
+      total += r.goals.home + r.goals.away;
+    }
+    const perMatch = total / N;
+    expect(perMatch).toBeGreaterThan(1.2); // football scores goals
+    expect(perMatch).toBeLessThan(7); // but it isn't basketball
   });
 });

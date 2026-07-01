@@ -19,8 +19,25 @@
 // Coords: x = width 0..100, y = length 0..100. Home attacks toward y=100, away y=0.
 
 import { mulberry32, randInt32 } from "./prng";
+import { TOTAL_STEPS } from "./sim-timing";
 import type { Cat } from "./data";
 import type { FieldSlot } from "./squad";
+
+const FULL_MIN = 90; // a match is 90 minutes for the recorded event timestamps
+
+/** A goal/card the pitch actually PRODUCED (xG-unification: the scoreline emerges
+ * from play). Side-keyed + team-agnostic so the sim stays standalone. */
+export interface PitchEvent {
+  minute: number;
+  side: Side;
+  type: "goal" | "yellow" | "red";
+  player: string;
+  playerId: string;
+}
+export interface PitchResult {
+  goals: { home: number; away: number };
+  events: PitchEvent[];
+}
 
 export type Side = "home" | "away";
 export type Card = "yellow" | "red";
@@ -32,6 +49,9 @@ export interface Snapshot {
   controlled: boolean;
   caption: string | null;
   shots: { home: number; away: number };
+  /** Live tally the pitch has PRODUCED (only moves when scoring is on; stays 0/0 in
+   * the cosmetic v1 path where scoreFor() is authoritative instead). */
+  goals: { home: number; away: number };
   possHome: number;
   bookings: Record<string, Card>;
   sentOff: string[];
@@ -42,10 +62,14 @@ export interface MatchSim {
   step(dt: number, progress?: number): void;
   snapshot(): Snapshot;
   scoreFor(side: Side): void;
+  /** The full-time result the pitch PRODUCED (xG-unification). Only meaningful when
+   * created with {scoring:true}; otherwise goals stay 0-0 with no events. */
+  getResult(): PitchResult;
 }
 
 interface P {
   id: string;
+  name: string;
   side: Side;
   role: Cat;
   rating: number;
@@ -99,11 +123,21 @@ export function laneClearance(fx: number, fy: number, tx: number, ty: number, li
 // A0 keystone: the whole sim draws from ONE seeded stream (see prng.ts), so the
 // same seed replays the exact same match. `seed` defaults to entropy → the UI and
 // variety-seeking tests behave randomly as before; pass a seed for a fixed replay.
-export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], seed: number = randInt32()): MatchSim {
+export function createMatchSim(
+  homeSlots: FieldSlot[],
+  awaySlots: FieldSlot[],
+  seed: number = randInt32(),
+  opts: { scoring?: boolean } = {},
+): MatchSim {
+  // xG-unification: when scoring is on, the pitch PRODUCES the scoreline (goals emerge
+  // from resolved chances) and progress is driven by an internal fixed-step counter so
+  // a headless run and the live spotlight land on the identical result. Off (the v1
+  // default) the sim stays purely cosmetic — no goals, external progress.
+  const scoring = opts.scoring ?? false;
   const R = mulberry32(seed);
   const rnd = (a: number, b: number) => a + R() * (b - a);
   const mk = (s: FieldSlot, side: Side): P => ({
-    id: s.id, side, role: s.role, rating: s.rating ?? 78, ax: s.x, ay: s.y, x: s.x, y: s.y, vx: 0, vy: 0, tx: s.x, ty: s.y, rt: 0,
+    id: s.id, name: s.name, side, role: s.role, rating: s.rating ?? 78, ax: s.x, ay: s.y, x: s.x, y: s.y, vx: 0, vy: 0, tx: s.x, ty: s.y, rt: 0,
     pace: 0.85 + ((s.rating ?? 78) - 70) / 60,
   });
   const home = homeSlots.map((s) => mk(s, "home"));
@@ -133,11 +167,23 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
   let cornerDelivery = false;
   let freeKick = false;
   let matchProgress = 0;
+  let stepIndex = 0; // fixed-step counter — the authoritative clock when scoring
   let captionText = "";
   let captionT = 0;
   let eventSeq = 0;
   let eventText = "";
   let wallPos = new Map<P, { x: number; y: number }>();
+
+  // xG-unification produced state (all inert when scoring is off)
+  const goals = { home: 0, away: 0 };
+  const recorded: PitchEvent[] = [];
+  let attemptXG = 0; // captured at the strike, resolved when the shot reaches the line
+  let attemptShooter: P | null = null;
+  let attemptKeeper: P | null = null;
+  const nowMin = () => clamp(Math.round(matchProgress * FULL_MIN), 1, FULL_MIN);
+  const record = (type: PitchEvent["type"], side: Side, p: P) => {
+    recorded.push({ minute: nowMin(), side, type, player: p.name, playerId: p.id });
+  };
 
   const team = (s: Side) => (s === "home" ? home : away).filter((p) => !sentOff.has(p.id));
   const opp = (s: Side) => (s === "home" ? away : home).filter((p) => !sentOff.has(p.id));
@@ -256,6 +302,17 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     const aimX = clamp(g.x + (1 - acc) * rnd(-9, 9) + rnd(-3, 3) + dg * 0.06 * rnd(-1, 1), 28, 72);
     attemptOnTarget = Math.abs(aimX - g.x) < 8;
     attemptSide = p.side;
+    if (scoring) {
+      // xG for THIS strike — angle (central > wide), distance, finishing. Pure
+      // arithmetic (no R() draws) so the flag-off cursor is untouched; resolved into
+      // a goal/save when the shot reaches the line.
+      const shotAngle = 1 - Math.abs(ball.x - 50) / 50; // 1 central, 0 by the touchline
+      const distF = clamp(1 - (dg - 6) / 34, 0.05, 1); // 1 in the six-yard box → ~0 at range
+      const finish = clamp((p.rating - 55) / 45, 0.25, 1) * (header ? 0.72 : 1);
+      attemptXG = clamp(0.09 + 0.62 * distF * (0.45 + 0.55 * shotAngle) * (0.55 + 0.45 * finish), 0.02, 0.83);
+      attemptShooter = p;
+      attemptKeeper = keeper(p.side === "home" ? "away" : "home");
+    }
     const d = Math.max(1, dist(ball.x, ball.y, aimX, g.y));
     const power = header ? 100 : 128;
     ball.vx = ((aimX - ball.x) / d) * power;
@@ -272,8 +329,20 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     if (type === "yellow" && bookings[p.id] === "yellow") type = "red"; // second yellow
     if (bookings[p.id] !== "red") bookings[p.id] = type;
     if (type === "red" && team(p.side).length > 8) sentOff.add(p.id); // sent off (keep ≥ 8 on the pitch)
+    if (scoring) record(type, p.side, p); // a second-yellow records as its resulting red (still a ban)
     caption(type === "red" ? "Cartão vermelho!" : "Cartão amarelo!");
     ticker(type === "red" ? "🟥 Vermelho" : "🟨 Amarelo");
+  }
+
+  /** A goal the pitch PRODUCED (scoring path only): tally it, log the scorer, restart
+   * with the conceding side kicking off. This is the xG-unification counterpart of the
+   * cosmetic scoreFor() — here the scoreline is an OUTPUT of play, not an input. */
+  function goal(side: Side, shooter: P) {
+    goals[side] += 1;
+    record("goal", side, shooter);
+    caption("GOL!");
+    ticker("⚽️ GOL");
+    kickoff(side === "home" ? "away" : "home"); // the team that conceded restarts
   }
 
   function foul(victim: P, fouler: P) {
@@ -578,7 +647,10 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
 
   function step(dt: number, progress = 0) {
     dt = Math.min(dt, 0.05);
-    matchProgress = clamp(progress, 0, 1);
+    stepIndex += 1;
+    // scoring drives the clock from the fixed-step counter (headless == live); the
+    // cosmetic path keeps taking the caller's external progress unchanged.
+    matchProgress = scoring ? clamp(stepIndex / TOTAL_STEPS, 0, 1) : clamp(progress, 0, 1);
     if (captionT > 0) captionT -= dt;
     if (settleT > 0) settleT -= dt;
     // ball height: gravity pulls it down, then it settles on the pitch (with a small bounce)
@@ -614,7 +686,18 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
         const reached = attemptSide === "home" ? ball.y >= 95 : ball.y <= 5;
         if (reached) {
           if (attemptOnTarget) {
-            if (R() < 0.55) { goalKick(defSide, "Defesa!"); ticker("Defesa"); }
+            let scored = false;
+            if (scoring && attemptShooter && attemptSide) {
+              // resolve the on-target chance: xG vs this keeper. save=0.62 is the
+              // reference (xG is average-keeper-calibrated); a better/worse GK bends it.
+              const gk = attemptKeeper;
+              const save = gk ? clamp(0.5 + (gk.rating - 70) / 90, 0.42, 0.82) : 0.5;
+              const pGoal = clamp(attemptXG * ((1 - save) / (1 - 0.62)), 0.01, 0.95);
+              if (R() < pGoal) { const sd = attemptSide, sc = attemptShooter; attemptSide = null; goal(sd, sc); scored = true; }
+            }
+            if (scored) {
+              // goal produced — kickoff already restarted play; nothing more to resolve
+            } else if (R() < 0.55) { goalKick(defSide, "Defesa!"); ticker("Defesa"); }
             else {
               ball.y = attemptSide === "home" ? 88 : 12;
               ball.x = clamp(ball.x + rnd(-6, 6), 8, 92);
@@ -760,6 +843,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
       controlled: ballState === "dribble" || ballState === "pass",
       caption: captionT > 0 ? captionText : null,
       shots: { home: shots.home, away: shots.away },
+      goals: { home: goals.home, away: goals.away },
       possHome: totalP ? possFrames.home / totalP : 0.5,
       bookings: { ...bookings },
       sentOff: [...sentOff],
@@ -768,5 +852,9 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     };
   }
 
-  return { step, snapshot, scoreFor };
+  function getResult(): PitchResult {
+    return { goals: { ...goals }, events: recorded.map((e) => ({ ...e })) };
+  }
+
+  return { step, snapshot, scoreFor, getResult };
 }
