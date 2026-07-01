@@ -137,6 +137,7 @@ export default function PitchView({
     simClockRef.current?.reset(performance.now()); // fresh timebase on (re)start → no phantom catch-up
     lastTs.current = 0;
     let raf = 0;
+    const flashTimers = new Set<ReturnType<typeof setTimeout>>(); // card-flash dismissals to cancel on unmount
 
     // AUTHORITY: run the sim in fixed steps up to `nowMs`, then read the snapshot
     // ONCE and refresh overlay + authoritative velocity. Elapsed-based, so calling
@@ -171,7 +172,8 @@ export default function PitchView({
             const id = snap.eventSeq;
             const type = /Vermelho/.test(snap.eventText) ? "red" : "yellow";
             setCardFlash({ type, id });
-            setTimeout(() => setCardFlash((cf) => (cf?.id === id ? null : cf)), 1700);
+            const h = setTimeout(() => { flashTimers.delete(h); setCardFlash((cf) => (cf?.id === id ? null : cf)); }, 1700);
+            flashTimers.add(h);
           }
         }
       }
@@ -240,7 +242,7 @@ export default function PitchView({
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => { cancelAnimationFrame(raf); unsubMetro(); };
+    return () => { cancelAnimationFrame(raf); unsubMetro(); flashTimers.forEach(clearTimeout); };
   }, [playing, homeXI, awayXI]);
 
   const hg = goals.filter((e) => e.teamId === home.id && e.minute <= clock).length;

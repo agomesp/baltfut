@@ -86,6 +86,7 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
   const speedRef = useRef(1);
   const anchorRef = useRef<ClockAnchor | null>(null); // A0.2 wall-clock anchor for the match minute
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const nextRoundTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // inter-round auto-advance
   useEffect(() => { speedRef.current = speed; }, [speed]);
 
   const setBracket = useCallback((b: Bracket) => { bracketRef.current = b; setBracketState(b); }, []);
@@ -124,6 +125,8 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
   const stop = useCallback(() => {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
+    if (nextRoundTimer.current) clearTimeout(nextRoundTimer.current); // cancel a pending auto-advance
+    nextRoundTimer.current = null;
   }, []);
 
   const roundTeamIds = (b: Bracket, idx: number) => b[idx].flatMap((m) => [m.homeId, m.awayId]).filter((x): x is string => x != null);
@@ -134,6 +137,7 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
       const withResults = playRound(from, idx, simById);
       roundRef.current = idx;
       clockRef.current = 0;
+      anchorRef.current = null; // drop the previous round's anchor so a still-live tick bails until re-anchored
       setBracket(withResults);
       setRoundIdx(idx);
       setClock(0);
@@ -172,7 +176,7 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
       setFeed((f) => [`✅ ${ROUND_NAMES[r]} encerrada — ajuste as escalações e siga`, ...f].slice(0, 80));
     } else {
       setFeed((f) => [`✅ ${ROUND_NAMES[r]} encerrada — vencedores avançam`, ...f].slice(0, 80));
-      setTimeout(() => startRound(r + 1, done), 1300);
+      nextRoundTimer.current = setTimeout(() => startRound(r + 1, done), 1300);
     }
   }, [code, nick, pauseBetween, setBracket, setStatus, startRound, stop]);
 
@@ -188,14 +192,21 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
       const next = minuteFrom(a, performance.now());
       if (next <= prev) return; // no wall time elapsed since last tick
       clockRef.current = next;
-      const shouts: string[] = [];
-      for (const m of bracketRef.current[roundRef.current] ?? []) {
-        if (m.status !== "live" || !m.result) continue;
-        for (const e of m.result.events) {
-          if (e.minute > prev && e.minute <= next) shouts.push(describe(e, m, code));
+      // A huge single-tick jump = a resume from full-window occlusion (the worker
+      // escapes throttling but not occlusion). Don't replay the whole window of
+      // goals/cards at once — collapse to one line, like the pitch ticker does.
+      if (next - prev > 30) {
+        setFeed((f) => ["⏩ recuperando a transmissão…", ...f].slice(0, 80));
+      } else {
+        const shouts: string[] = [];
+        for (const m of bracketRef.current[roundRef.current] ?? []) {
+          if (m.status !== "live" || !m.result) continue;
+          for (const e of m.result.events) {
+            if (e.minute > prev && e.minute <= next) shouts.push(describe(e, m, code));
+          }
         }
+        if (shouts.length) setFeed((f) => [...shouts.reverse(), ...f].slice(0, 80));
       }
-      if (shouts.length) setFeed((f) => [...shouts.reverse(), ...f].slice(0, 80));
       setClock(next);
       if (next >= FULL_TIME) finalize();
     };
