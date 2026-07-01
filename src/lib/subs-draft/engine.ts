@@ -20,7 +20,7 @@ export interface Team {
   roster: Record<Cat, Player[]>;
 }
 
-export type Phase = "lobby" | "draft" | "done" | "bracket";
+export type Phase = "lobby" | "draft" | "done" | "groups" | "bracket";
 
 export interface DraftState {
   phase: Phase;

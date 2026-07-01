@@ -6,7 +6,7 @@
 // by minute over the match clock. Team strength = the squad's average rating, so a
 // better-drafted squad really does win more often.
 
-import { CATS, COUNTRIES, BRACKET_SIZE, MOCK_SUBS, ROSTER, mockName, type Cat, type Player } from "./data";
+import { CATS, COUNTRIES, BRACKET_SIZE, GROUP_TOTAL, MOCK_SUBS, ROSTER, mockName, type Cat, type Player } from "./data";
 import { emptyRoster, squadCount, type DraftState, type Team } from "./engine";
 import { mulberry32, randInt32 } from "./prng";
 import type { PlayerStatus, StatusMap } from "./squad";
@@ -52,7 +52,8 @@ export interface BracketMatch {
 /** rounds[r][slot] — round 0 = the 16-avos (16 matches). */
 export type Bracket = BracketMatch[][];
 
-function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
+/** Seeded Fisher-Yates — the ONE shuffle the group draw + bracket share. */
+export function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
@@ -140,6 +141,7 @@ export function simulateMatch(
   homeXI: Player[],
   awayXI: Player[],
   seed: number = randInt32(),
+  opts: { allowDraw?: boolean } = {},
 ): MatchResult {
   const rng = mulberry32(seed);
   const sh = avgRating(homeXI);
@@ -185,8 +187,14 @@ export function simulateMatch(
   let pens: { home: number; away: number } | null = null;
   let winnerId: string;
   if (homeGoals === awayGoals) {
-    pens = shootout(sh, sa, rng);
-    winnerId = pens.home > pens.away ? home.id : away.id;
+    if (opts.allowDraw) {
+      // Group stage: a level match is a draw. Skip the shootout so it consumes NO
+      // rng → a knockout match with the same seed stays bit-identical.
+      winnerId = "";
+    } else {
+      pens = shootout(sh, sa, rng);
+      winnerId = pens.home > pens.away ? home.id : away.id;
+    }
   } else {
     winnerId = homeGoals > awayGoals ? home.id : away.id;
   }
@@ -327,7 +335,7 @@ function mockSquad(seed: number): Team["roster"] {
  * not already taken. Mock teams get a full auto-generated squad so they have a real
  * strength in the sim.
  */
-export function fillTo32(teams: Team[]): Team[] {
+function fillTo(teams: Team[], size: number): Team[] {
   const out = [...teams];
   const usedCodes = new Set(teams.map((t) => t.code));
   const usedNames = new Set(teams.map((t) => t.owner.toLowerCase()));
@@ -335,7 +343,7 @@ export function fillTo32(teams: Team[]): Team[] {
   let ci = 0;
   let ni = 0;
   let seed = teams.length;
-  while (out.length < BRACKET_SIZE && ci < freeCodes.length) {
+  while (out.length < size && ci < freeCodes.length) {
     const code = freeCodes[ci++];
     let owner = MOCK_SUBS[ni % MOCK_SUBS.length];
     while (usedNames.has(owner.toLowerCase())) owner = `${MOCK_SUBS[ni % MOCK_SUBS.length]}${Math.floor(ni / MOCK_SUBS.length) + 2}`;
@@ -347,6 +355,16 @@ export function fillTo32(teams: Team[]): Team[] {
   return out;
 }
 
+/** `teams` + mock teams up to 32 (the standalone knockout field). */
+export function fillTo32(teams: Team[]): Team[] {
+  return fillTo(teams, BRACKET_SIZE);
+}
+
+/** `teams` + mock teams up to 48 (the 12-group stage field). */
+export function fillTo48(teams: Team[]): Team[] {
+  return fillTo(teams, GROUP_TOTAL);
+}
+
 /** A fully mocked 32-team field (skips the lobby/draft entirely). */
 export function mockField(): Team[] {
   return fillTo32([]);
@@ -355,6 +373,11 @@ export function mockField(): Team[] {
 /** Enter the knockout with the drafted teams, mock-filled up to 32. */
 export function goToBracket(s: DraftState): DraftState {
   return { ...s, phase: "bracket", field: fillTo32(s.teams) };
+}
+
+/** Enter the group stage with the drafted teams, mock-filled up to 48. */
+export function goToGroups(s: DraftState): DraftState {
+  return { ...s, phase: "groups", field: fillTo48(s.teams) };
 }
 
 /** Enter the knockout with a fully mocked 32-team field (skips lobby + draft). */

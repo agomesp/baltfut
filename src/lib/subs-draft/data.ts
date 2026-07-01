@@ -31,23 +31,39 @@ export const ROSTER: Record<Cat, number> = {
 };
 export const SQUAD_SIZE = (Object.values(ROSTER) as number[]).reduce((a, b) => a + b, 0);
 
-/** Countries a sub can claim — first to pick it gets it. 32 = a full bracket. */
+/**
+ * Countries a sub can claim — first to pick it gets it. 48 = a full 2026-style
+ * group stage; the first 32 also seed a standalone bracket. NOTE: the first 32
+ * entries are frozen (fillTo32 + snapshots depend on their order) — only APPEND.
+ */
 export const COUNTRIES = [
   "BRA", "ARG", "FRA", "ESP", "ENG", "GER", "POR", "NED",
   "ITA", "BEL", "CRO", "URU", "COL", "MEX", "USA", "JPN",
   "KOR", "MAR", "SEN", "GHA", "CMR", "EGY", "NGA", "SUI",
   "DEN", "SRB", "POL", "SWE", "AUS", "QAT", "ECU", "NOR",
+  // + 16 for the 48-team group stage (all flag-supported via flagFileBase)
+  "CAN", "CHI", "PER", "PAR", "CRC", "PAN", "NZL", "TUN",
+  "ALG", "IRN", "KSA", "RSA", "TUR", "CIV", "SCO", "WAL",
 ];
 
 /** Bracket size — a single-elimination knockout needs a power of two. */
 export const BRACKET_SIZE = 32;
 
-/** Nicknames for mock (auto-filled) subs when a real lobby is short of 32. */
+/** 2026 group stage: 12 groups of 4 = 48 teams → top 2 + 8 best thirds = 32. */
+export const GROUP_COUNT = 12;
+export const GROUP_SIZE = 4;
+export const GROUP_TOTAL = GROUP_COUNT * GROUP_SIZE; // 48
+
+/** Nicknames for mock (auto-filled) subs when a real lobby is short. First 32
+ * frozen (fillTo32 snapshots depend on order) — only APPEND. */
 export const MOCK_SUBS = [
   "Zé", "Tonho", "Duda", "NegoVê", "WillG", "Rai", "Dedé", "Lela",
   "Bibi", "Téo", "Vavá", "Nina", "Gugu", "PêH", "Cacá", "Dão",
   "Sasa", "Tutu", "Juca", "Mara", "FêT", "Babi", "Rota", "Kiko",
   "Zuza", "Lipe", "Dani", "ViniJ", "Manu", "Pedrin", "Gabi", "Rik",
+  // + 16 for the 48-team field
+  "Tavin", "Bel", "Nando", "Grazi", "Digão", "Paty", "Well", "Fê",
+  "Rique", "Bea", "Marcin", "Lulu", "Dedeco", "Naná", "Guto", "Rafa",
 ];
 
 export interface Player {
