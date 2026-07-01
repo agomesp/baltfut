@@ -26,8 +26,8 @@ const field = mockField();
 const home = fieldLayout(field[0], autoLineup(field[0], "4-4-2", {}), "home");
 const away = fieldLayout(field[1], autoLineup(field[1], "4-3-3", {}), "away");
 
-function run(steps: number) {
-  const sim = createMatchSim(home, away);
+function run(steps: number, seed = 3) {
+  const sim = createMatchSim(home, away, seed);
   const ball: { x: number; y: number }[] = [];
   const trails: { x: number; y: number }[][] = home.map(() => []);
   for (let i = 0; i < steps; i++) {
@@ -172,6 +172,25 @@ describe("match-sim produces real, flowing movement (not lined up)", () => {
       if (b.y > 90 && b.y < 97) atLine = b.x;
     }
     expect(Math.abs(atLine - 50)).toBeGreaterThan(5); // not straight down the middle at the keeper
+  });
+
+  it("attacking teams hold WIDTH (a coached shape, not a central blob)", () => {
+    const span = (xs: number[]) => Math.max(...xs) - Math.min(...xs);
+    let widthSum = 0;
+    let n = 0;
+    for (const seed of [0, 1, 2, 3]) {
+      const sim = createMatchSim(xi(80, "home"), xi(80, "away"), seed);
+      for (let i = 0; i < 2400; i++) {
+        sim.step(0.016);
+        if (i % 25 === 0) {
+          const s = sim.snapshot();
+          const atk = s.poss === "home" ? s.home : s.away;
+          widthSum += span(atk.slice(1).map((p) => p.x)); // outfield x-spread
+          n += 1;
+        }
+      }
+    }
+    expect(widthSum / n).toBeGreaterThan(45); // stretched across the pitch
   });
 
   it("the ball goes airborne on aerial deliveries and settles back to the pitch", () => {

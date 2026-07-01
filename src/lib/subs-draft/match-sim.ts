@@ -480,24 +480,34 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
       let sy: number;
       if (p.role === "Atacante") sy = ball.y + dir * rnd(8, 30); // strikers gamble on runs in behind
       else if (p.role === "Meio-campo") sy = ball.y + dir * rnd(-4, 12);
-      else sy = ball.y + dir * rnd(-20, -8);
-      const baseX = clamp(p.ax + (ball.x - 50) * 0.22, 7, 93);
-      const wide = p.ax < 50 ? ball.x - rnd(8, 22) : ball.x + rnd(8, 22);
-      return { tx: clamp((wide + baseX) / 2, 8, 92), ty: clamp(sy, 6, 94) };
+      else sy = ball.y + dir * rnd(-14, -6); // fullbacks push up to overlap (not as high as mids)
+      // WIDTH: wide players hug their channel to STRETCH the pitch instead of drifting
+      // onto the ball; central players shift with it. A coached team keeps its width.
+      let tx: number;
+      if (p.ax < 28) tx = clamp(p.ax + (ball.x - 50) * 0.1 + rnd(-3, 3), 5, 30); // left channel
+      else if (p.ax > 72) tx = clamp(p.ax + (ball.x - 50) * 0.1 + rnd(-3, 3), 70, 95); // right channel
+      else tx = clamp(p.ax * 0.5 + ball.x * 0.5 + rnd(-4, 4), 15, 85); // central
+      return { tx, ty: clamp(sy, 6, 94) };
     }
 
     if (presser) return { tx: ball.x + ball.vx * 0.1 + rnd(-2, 2), ty: ball.y + (up ? -2 : 2) };
-    // Off the ball, HOLD FORMATION SHAPE — anchor to the home slot and only SHIFT
-    // toward the ball, instead of everyone collapsing onto it (the "swarm").
+    // OFF-BALL DEFENDING (A2.4): a coached BLOCK — one coordinated back line that
+    // steps as a unit, a compact midfield band ahead of it, and lateral MARKING
+    // (each defender shifts toward the nearest attacker's channel) instead of ball-
+    // watching. The two pressers still hunt the ball (above), so pressure is intact.
+    const marks = outfield(poss).filter((a) => a !== carrier); // attackers to pick up
+    const lo = up ? 8 : 50;
+    const hi = up ? 50 : 92;
+    const line = clamp(ball.y - dir * 20, lo, hi); // the shared defensive line
     if (p.role === "Defensor") {
-      const lo = up ? 10 : 55;
-      const hi = up ? 45 : 90;
-      // flat back line that slides with the ball but keeps its lateral slot
-      return { tx: clamp(p.ax * 0.7 + ball.x * 0.3, 12, 88), ty: clamp(ball.y - dir * 22, lo, hi) };
+      const m = marks.length ? nearest(marks, p.x, p.y) : null;
+      const markX = m ? clamp(m.x, 8, 92) : ball.x;
+      return { tx: clamp(p.ax * 0.45 + markX * 0.55, 10, 90), ty: line }; // hold the line, mark the width
     }
-    const g = OWN[p.side];
-    // midfielders keep a compact band: mostly their slot, shifted toward the ball
-    return { tx: clamp(p.ax * 0.6 + ball.x * 0.4, 8, 92), ty: clamp(p.ay * 0.4 + ball.y * 0.4 + g.y * 0.2, 6, 94) };
+    const m = marks.length ? nearest(marks, p.x, p.y) : null;
+    const band = clamp(line + dir * 15, 6, 94); // compact screen ~15 ahead of the line
+    const mx = m ? clamp(p.ax * 0.5 + m.x * 0.3 + ball.x * 0.2, 8, 92) : clamp(p.ax * 0.6 + ball.x * 0.4, 8, 92);
+    return { tx: mx, ty: clamp(band * 0.55 + ball.y * 0.45, 6, 94) };
   }
 
   function steer(p: P, sprint: boolean, dt: number) {
