@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createMatchSim } from "./match-sim";
+import { createMatchSim, laneClearance } from "./match-sim";
 import { autoLineup, fieldLayout, type FieldSlot } from "./squad";
 import { mockField } from "./tournament";
 import type { Cat } from "./data";
@@ -172,6 +172,17 @@ describe("match-sim produces real, flowing movement (not lined up)", () => {
       if (b.y > 90 && b.y < 97) atLine = b.x;
     }
     expect(Math.abs(atLine - 50)).toBeGreaterThan(5); // not straight down the middle at the keeper
+  });
+
+  it("laneClearance sees defenders in a pass lane (utility AI reads the pitch)", () => {
+    // pass lane from (10,50) to (90,50)
+    const clear = laneClearance(10, 50, 90, 50, [{ x: 50, y: 80 }]); // well off the line
+    const blocked = laneClearance(10, 50, 90, 50, [{ x: 50, y: 51 }]); // sitting in the lane
+    expect(clear).toBeGreaterThan(20);
+    expect(blocked).toBeLessThan(3);
+    expect(laneClearance(10, 50, 90, 50, [])).toBe(99); // nobody → wide open
+    // a body PAST the endpoints doesn't count (not between the passer and receiver)
+    expect(laneClearance(10, 50, 90, 50, [{ x: 95, y: 50 }])).toBe(99);
   });
 
   it("reveals scripted goals from a box position, never from midfield", () => {

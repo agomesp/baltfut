@@ -74,6 +74,27 @@ const dist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax -
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.min(1, t);
 
+/**
+ * How CLEAR a pass/shot lane is: the smallest perpendicular distance of any point
+ * in `list` whose projection falls BETWEEN the endpoints. Large = an open lane; small
+ * = a defender sitting in the pass. The utility AI uses this so passes "see" the
+ * defence instead of firing blind.
+ */
+export function laneClearance(fx: number, fy: number, tx: number, ty: number, list: { x: number; y: number }[]): number {
+  const dx = tx - fx;
+  const dy = ty - fy;
+  const len2 = dx * dx + dy * dy || 1;
+  const len = Math.sqrt(len2);
+  let min = 99;
+  for (const p of list) {
+    const t = ((p.x - fx) * dx + (p.y - fy) * dy) / len2;
+    if (t <= 0.05 || t >= 0.98) continue; // only bodies between the two points
+    const perp = Math.abs((p.x - fx) * dy - (p.y - fy) * dx) / len;
+    if (perp < min) min = perp;
+  }
+  return min;
+}
+
 // A0 keystone: the whole sim draws from ONE seeded stream (see prng.ts), so the
 // same seed replays the exact same match. `seed` defaults to entropy → the UI and
 // variety-seeking tests behave randomly as before; pass a seed for a fixed replay.
@@ -336,78 +357,81 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     const clearOnGoal = dg < 36 && goalsideDefs.length === 0;
     if (clearOnGoal) { shoot(carrier); return; }
 
-    if (dg < 24) {
-      const shootP = clamp(0.16 + (carrier.rating - 70) / 130, 0.08, 0.5) * (dg < 13 ? 1.7 : 1);
-      if (R() < shootP) { shoot(carrier); return; }
-    }
-    if ((carrier.x < 24 || carrier.x > 76) && dg < 34 && R() < 0.45) { doCross(carrier); return; }
-
-    if (dg < 26) {
-      // lose it only to a defender actually CHALLENGING (a tackle), not a deliberate
-      // giveaway to a distant opponent
-      const d = nearest(defenders, carrier.x, carrier.y);
-      if (dist(d.x, d.y, carrier.x, carrier.y) < 4 && R() < clamp(0.3 * (d.rating / carrier.rating), 0.08, 0.45)) { giveBallTo(d); return; }
-    }
-
+    // ── UTILITY AI: score every option, then pick (a better player picks the best
+    // more reliably). Passes are penalized by INTERCEPT RISK — the clearance of the
+    // pass lane — so they stop firing blind; shooting is an xG estimate (distance ×
+    // angle × how clear the shot lane is); dribbling holds the ball into space.
     const mates = outfield(side).filter((p) => p !== carrier);
-
-    if (dg > 20 && mates.length && R() < 0.18) {
-      const runners = mates.filter((m) => (side === "home" ? m.y > carrier!.y - 4 : m.y < carrier!.y + 4));
-      if (runners.length) {
-        const r = runners[Math.floor(R() * runners.length)];
-        const tx = clamp(r.x + rnd(-5, 5), 8, 92);
-        const ty = clamp(r.y + dir * rnd(10, 26), 6, 98);
-        const d = Math.max(1, dist(ball.x, ball.y, tx, ty));
-        const power = clamp(32 + d * 1.2, 48, 102);
-        ball.vx = ((tx - ball.x) / d) * power;
-        ball.vy = ((ty - ball.y) / d) * power;
-        ballState = "pass";
-        passTo = r;
-        // through-balls in behind: offside if geometrically beyond the line, or a mistimed run
-        offsidePending = offsideAt(r, side) || R() < 0.18;
-        if (offsidePending) offsideT = 0.35;
-        return;
-      }
-    }
-
+    const oppOut = defenders.filter((d) => d.role !== "Goleiro");
+    const opps = oppOut.length ? oppOut : defenders;
     const pd = nearest(defenders, carrier.x, carrier.y);
     const pressed = dist(pd.x, pd.y, carrier.x, carrier.y) < 4.5;
-    const scored = mates
-      .map((m) => {
-        const ahead = side === "home" ? m.y - carrier!.y : carrier!.y - m.y;
-        const nd = nearest(defenders, m.x, m.y);
-        // forward options strongly preferred; a backward option only wins when nothing
-        // ahead is on (recycling under pressure), not on random noise.
-        const prog = ahead >= 0 ? ahead * 1.3 : ahead * 2.6;
-        return { m, s: prog + dist(nd.x, nd.y, m.x, m.y) - dist(carrier!.x, carrier!.y, m.x, m.y) * 0.25 + rnd(0, 3) };
-      })
-      .sort((a, b) => b.s - a.s);
 
-    const passProb = pressed ? 0.92 : dg < 35 ? 0.8 : 0.66;
-    if (scored.length && R() < passProb) {
-      const tg = scored[Math.floor(R() * Math.min(3, scored.length))].m;
-      const strayChance = clamp(0.26 - (carrier.rating - 70) / 110, 0.03, 0.32);
-      const acc = clamp((carrier.rating - 55) / 45, 0.3, 1);
-      const stray = R() < strayChance;
-      let lx = tg.x + tg.vx * 0.16;
-      let ly = tg.y + tg.vy * 0.16;
-      const d0 = Math.max(1, dist(ball.x, ball.y, lx, ly));
-      const ux = (lx - ball.x) / d0;
-      const uy = (ly - ball.y) / d0;
-      const err = (1 - acc) * rnd(-7, 7) + (stray ? rnd(-15, 15) : 0);
-      lx += -uy * err;
-      ly += ux * err;
-      const d = Math.max(1, dist(ball.x, ball.y, lx, ly));
-      const power = clamp(24 + d * 1.25, 38, 105);
-      ball.vx = ((lx - ball.x) / d) * power;
-      ball.vy = ((ly - ball.y) / d) * power;
-      ballState = stray ? "loose" : "pass";
-      passTo = stray ? null : tg;
-      offsidePending = !stray && offsideAt(tg, side);
-      if (offsidePending) offsideT = 0.35;
-    } else {
-      decideT = rnd(0.4, 0.85);
+    type Opt = { kind: "shoot" | "cross" | "pass" | "dribble"; target?: P; score: number };
+    const opts: Opt[] = [];
+
+    // SHOOT — an xG-ish estimate
+    const angle = 1 - Math.abs(carrier.x - 50) / 50; // 1 central, 0 at the touchline
+    const distF = clamp(1 - (dg - 6) / 32, 0, 1); // 1 close, 0 by ~38 out
+    const shotLane = clamp(laneClearance(carrier.x, carrier.y, goal.x, goal.y, oppOut) / 6, 0, 1);
+    const xg = distF * (0.35 + 0.65 * angle) * (0.25 + 0.75 * shotLane);
+    opts.push({ kind: "shoot", score: xg * 1.25 });
+
+    // CROSS from wide + advanced
+    if ((carrier.x < 26 || carrier.x > 74) && dg < 36) {
+      const boxMates = mates.filter((m) => (dir > 0 ? m.y > 76 : m.y < 24)).length;
+      opts.push({ kind: "cross", score: 0.32 + boxMates * 0.16 });
     }
+
+    // PASS to each mate — progress × openness × lane-safety × sensible range
+    for (const m of mates) {
+      const ahead = dir > 0 ? m.y - carrier.y : carrier.y - m.y;
+      const nd = nearest(opps, m.x, m.y);
+      const openness = clamp(dist(nd.x, nd.y, m.x, m.y) / 12, 0.05, 1);
+      const lane = clamp(laneClearance(ball.x, ball.y, m.x, m.y, oppOut) / 5, 0, 1);
+      const range = dist(carrier.x, carrier.y, m.x, m.y);
+      const rangeF = clamp(1 - Math.abs(range - 20) / 46, 0.25, 1);
+      const progF = clamp(0.5 + ahead / 38, 0.05, 1.25);
+      opts.push({ kind: "pass", target: m, score: progF * (0.4 + 0.6 * openness) * (0.3 + 0.7 * lane) * rangeF });
+    }
+
+    // DRIBBLE — hold the ball, drive into space (worse under pressure)
+    const carryLane = clamp(laneClearance(carrier.x, carrier.y, carrier.x, goal.y, oppOut) / 12, 0, 1);
+    opts.push({ kind: "dribble", score: 0.34 + carryLane * 0.34 - (pressed ? 0.28 : 0) });
+
+    // pick — a higher-rated carrier takes the top option more reliably
+    opts.sort((a, b) => b.score - a.score);
+    const bias = clamp((carrier.rating - 58) / 40, 0.25, 0.94);
+    let chosen = opts[0];
+    if (opts.length > 1 && R() > bias) chosen = opts[1 + Math.floor(R() * Math.min(2, opts.length - 1))];
+
+    if (chosen.kind === "shoot") { shoot(carrier); return; }
+    if (chosen.kind === "cross") { doCross(carrier); return; }
+    if (chosen.kind === "dribble" || !chosen.target) { decideT = rnd(0.35, 0.75); return; }
+
+    // PASS — accuracy + stray + through-ball lead + offside
+    const tg = chosen.target;
+    const aheadTg = dir > 0 ? tg.y - carrier.y : carrier.y - tg.y;
+    const through = aheadTg > 8 && R() < 0.5; // slipped into space ahead of a run
+    const strayChance = clamp(0.24 - (carrier.rating - 70) / 120, 0.03, 0.3);
+    const acc = clamp((carrier.rating - 55) / 45, 0.3, 1);
+    const stray = R() < strayChance;
+    let lx = tg.x + tg.vx * 0.16;
+    let ly = tg.y + tg.vy * 0.16 + (through ? dir * rnd(8, 20) : 0);
+    const d0 = Math.max(1, dist(ball.x, ball.y, lx, ly));
+    const ux = (lx - ball.x) / d0;
+    const uy = (ly - ball.y) / d0;
+    const err = (1 - acc) * rnd(-7, 7) + (stray ? rnd(-15, 15) : 0);
+    lx += -uy * err;
+    ly += ux * err;
+    const d = Math.max(1, dist(ball.x, ball.y, lx, ly));
+    const power = clamp(24 + d * 1.25, 38, 108);
+    ball.vx = ((lx - ball.x) / d) * power;
+    ball.vy = ((ly - ball.y) / d) * power;
+    ballState = stray ? "loose" : "pass";
+    passTo = stray ? null : tg;
+    offsidePending = !stray && (offsideAt(tg, side) || (through && R() < 0.15));
+    if (offsidePending) offsideT = 0.35;
   }
 
   function integrateBall(dt: number, friction: number) {
