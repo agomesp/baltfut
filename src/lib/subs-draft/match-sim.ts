@@ -18,6 +18,7 @@
 //
 // Coords: x = width 0..100, y = length 0..100. Home attacks toward y=100, away y=0.
 
+import { mulberry32, randInt32 } from "./prng";
 import type { Cat } from "./data";
 import type { FieldSlot } from "./squad";
 
@@ -71,10 +72,14 @@ const BLOCK_R = 2.3;
 
 const dist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax - bx, ay - by);
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.min(1, t);
 
-export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): MatchSim {
+// A0 keystone: the whole sim draws from ONE seeded stream (see prng.ts), so the
+// same seed replays the exact same match. `seed` defaults to entropy → the UI and
+// variety-seeking tests behave randomly as before; pass a seed for a fixed replay.
+export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], seed: number = randInt32()): MatchSim {
+  const R = mulberry32(seed);
+  const rnd = (a: number, b: number) => a + R() * (b - a);
   const mk = (s: FieldSlot, side: Side): P => ({
     id: s.id, side, role: s.role, rating: s.rating ?? 78, ax: s.x, ay: s.y, x: s.x, y: s.y, vx: 0, vy: 0, tx: s.x, ty: s.y, rt: 0,
     pace: 0.85 + ((s.rating ?? 78) - 70) / 60,
@@ -88,7 +93,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
   const bookings: Record<string, Card> = {};
   const sentOff = new Set<string>();
 
-  let poss: Side = Math.random() < 0.5 ? "home" : "away";
+  let poss: Side = R() < 0.5 ? "home" : "away";
   let offsidePending = false;
   let offsideT = 0;
   let carrier: P | null = null;
@@ -253,7 +258,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
     decideT = rnd(1.0, 1.5); // dead ball — the wall forms
     caption("Falta!");
     ticker("Falta");
-    if (Math.random() < 0.25) card(fouler, Math.random() < 0.06 ? "red" : "yellow");
+    if (R() < 0.25) card(fouler, R() < 0.06 ? "red" : "yellow");
   }
 
   function doCross(p: P) {
@@ -268,7 +273,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
     if (isCorner) {
       const nearPost = ball.x < 50 ? 40 : 60;
       const farPost = ball.x < 50 ? 60 : 40;
-      bx = Math.random() < 0.5 ? nearPost : farPost;
+      bx = R() < 0.5 ? nearPost : farPost;
     } else {
       bx = clamp((mates[0].x + 50) / 2 + rnd(-8, 8), 28, 72);
     }
@@ -288,7 +293,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
     const dir = gk.side === "home" ? 1 : -1;
     const mates = outfield(gk.side);
     if (!mates.length) { decideT = rnd(0.4, 0.8); return; }
-    const long = Math.random() < 0.4;
+    const long = R() < 0.4;
     const tgt = long
       ? mates.reduce((b, m) => ((dir > 0 ? m.y > b.y : m.y < b.y) ? m : b), mates[0])
       : mates.reduce((b, m) => (dist(gk.x, gk.y, m.x, m.y) < dist(gk.x, gk.y, b.x, b.y) ? m : b), mates[0]);
@@ -317,26 +322,26 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
 
     if (freeKick) {
       freeKick = false;
-      if (dg < 26 && Math.abs(carrier.x - 50) < 16 && Math.random() < 0.5) { shoot(carrier); return; } // direct free kick
+      if (dg < 26 && Math.abs(carrier.x - 50) < 16 && R() < 0.5) { shoot(carrier); return; } // direct free kick
     }
 
     if (dg < 24) {
       const shootP = clamp(0.16 + (carrier.rating - 70) / 130, 0.08, 0.5) * (dg < 13 ? 1.7 : 1);
-      if (Math.random() < shootP) { shoot(carrier); return; }
+      if (R() < shootP) { shoot(carrier); return; }
     }
-    if ((carrier.x < 24 || carrier.x > 76) && dg < 34 && Math.random() < 0.45) { doCross(carrier); return; }
+    if ((carrier.x < 24 || carrier.x > 76) && dg < 34 && R() < 0.45) { doCross(carrier); return; }
 
     if (dg < 26) {
       const d = nearest(defenders, ball.x, ball.y);
-      if (Math.random() < clamp(0.35 * (d.rating / carrier.rating), 0.1, 0.55)) { giveBallTo(d); return; }
+      if (R() < clamp(0.35 * (d.rating / carrier.rating), 0.1, 0.55)) { giveBallTo(d); return; }
     }
 
     const mates = outfield(side).filter((p) => p !== carrier);
 
-    if (dg > 20 && mates.length && Math.random() < 0.18) {
+    if (dg > 20 && mates.length && R() < 0.18) {
       const runners = mates.filter((m) => (side === "home" ? m.y > carrier!.y - 4 : m.y < carrier!.y + 4));
       if (runners.length) {
-        const r = runners[Math.floor(Math.random() * runners.length)];
+        const r = runners[Math.floor(R() * runners.length)];
         const tx = clamp(r.x + rnd(-5, 5), 8, 92);
         const ty = clamp(r.y + dir * rnd(10, 26), 6, 98);
         const d = Math.max(1, dist(ball.x, ball.y, tx, ty));
@@ -346,7 +351,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
         ballState = "pass";
         passTo = r;
         // through-balls in behind: offside if geometrically beyond the line, or a mistimed run
-        offsidePending = offsideAt(r, side) || Math.random() < 0.18;
+        offsidePending = offsideAt(r, side) || R() < 0.18;
         if (offsidePending) offsideT = 0.35;
         return;
       }
@@ -363,11 +368,11 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
       .sort((a, b) => b.s - a.s);
 
     const passProb = pressed ? 0.92 : dg < 35 ? 0.8 : 0.66;
-    if (scored.length && Math.random() < passProb) {
-      const tg = scored[Math.floor(Math.random() * Math.min(3, scored.length))].m;
+    if (scored.length && R() < passProb) {
+      const tg = scored[Math.floor(R() * Math.min(3, scored.length))].m;
       const strayChance = clamp(0.26 - (carrier.rating - 70) / 110, 0.03, 0.32);
       const acc = clamp((carrier.rating - 55) / 45, 0.3, 1);
-      const stray = Math.random() < strayChance;
+      const stray = R() < strayChance;
       let lx = tg.x + tg.vx * 0.16;
       let ly = tg.y + tg.vy * 0.16;
       const d0 = Math.max(1, dist(ball.x, ball.y, lx, ly));
@@ -544,7 +549,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
         const reached = attemptSide === "home" ? ball.y >= 95 : ball.y <= 5;
         if (reached) {
           if (attemptOnTarget) {
-            if (Math.random() < 0.55) { goalKick(defSide, "Defesa!"); ticker("Defesa"); }
+            if (R() < 0.55) { goalKick(defSide, "Defesa!"); ticker("Defesa"); }
             else {
               ball.y = attemptSide === "home" ? 88 : 12;
               ball.x = clamp(ball.x + rnd(-6, 6), 8, 92);
@@ -591,8 +596,8 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
       const near = dist(presser.x, presser.y, carrier.x, carrier.y) < 3.6;
       const foulRate = clamp(0.5 * (carrier.rating / presser.rating), 0.3, 1.1);
       const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6);
-      if (near && Math.random() < foulRate * dt) foul(carrier, presser);
-      else if (near && Math.random() < tackleRate * dt) giveBallTo(presser);
+      if (near && R() < foulRate * dt) foul(carrier, presser);
+      else if (near && R() < tackleRate * dt) giveBallTo(presser);
       else if (decideT <= 0) decide();
     } else {
       integrateBall(dt, BALL_FRICTION);
@@ -606,7 +611,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
         }
         if (best && dist(best.x, best.y, ball.x, ball.y) < CONTROL) {
           const g = ATTACK[best.side];
-          if (best.role !== "Goleiro" && dist(best.x, best.y, g.x, g.y) < 16 && Math.random() < 0.6) { lastTouch = best.side; shoot(best); }
+          if (best.role !== "Goleiro" && dist(best.x, best.y, g.x, g.y) < 16 && R() < 0.6) { lastTouch = best.side; shoot(best); }
           else giveBallTo(best);
         }
       }
@@ -644,7 +649,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[]): 
     ball.x = shooter.x;
     ball.y = shooter.y;
     const g = ATTACK[side];
-    const cx = clamp(50 + (Math.random() < 0.5 ? -1 : 1) * rnd(9, 15), 33, 67); // into a corner, past the keeper
+    const cx = clamp(50 + (R() < 0.5 ? -1 : 1) * rnd(9, 15), 33, 67); // into a corner, past the keeper
     const d = Math.max(1, dist(ball.x, ball.y, cx, g.y));
     ball.vx = ((cx - ball.x) / d) * 122;
     ball.vy = ((g.y - ball.y) / d) * 122;

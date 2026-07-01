@@ -8,7 +8,12 @@
 
 import { CATS, COUNTRIES, BRACKET_SIZE, MOCK_SUBS, ROSTER, mockName, type Cat, type Player } from "./data";
 import { emptyRoster, squadCount, type DraftState, type Team } from "./engine";
+import { mulberry32, randInt32 } from "./prng";
 import type { PlayerStatus, StatusMap } from "./squad";
+
+/** A random stream in [0,1). Threaded through the sim so a match is a pure
+ * function of its seed (see prng.ts). */
+type Rng = () => number;
 
 export const ROUND_NAMES = ["16-avos", "Oitavas", "Quartas", "Semis", "Final"];
 export const FULL_TIME = 90; // simulated minutes per match
@@ -47,10 +52,10 @@ export interface BracketMatch {
 /** rounds[r][slot] — round 0 = the 16-avos (16 matches). */
 export type Bracket = BracketMatch[][];
 
-function shuffle<T>(arr: readonly T[]): T[] {
+function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
@@ -68,11 +73,11 @@ function avgRating(xi: Player[]): number {
 }
 
 /** Pick a random player from the XI, weighted by `weight(role)`. */
-function pickWeighted(xi: Player[], weight: (c: Cat) => number): Player | null {
+function pickWeighted(xi: Player[], weight: (c: Cat) => number, rng: Rng): Player | null {
   if (xi.length === 0) return null;
   const ws = xi.map((p) => weight(p.cat));
   const total = ws.reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
+  let r = rng() * total;
   for (let i = 0; i < xi.length; i++) {
     r -= ws[i];
     if (r <= 0) return xi[i];
@@ -82,13 +87,13 @@ function pickWeighted(xi: Player[], weight: (c: Cat) => number): Player | null {
 
 const SCORER_WEIGHT: Record<Cat, number> = { Atacante: 6, "Meio-campo": 3, Defensor: 1, Goleiro: 0.05 };
 const CARD_WEIGHT: Record<Cat, number> = { Defensor: 3, "Meio-campo": 2.5, Atacante: 1.5, Goleiro: 0.6 };
-const scorer = (xi: Player[]) => pickWeighted(xi, (c) => SCORER_WEIGHT[c]);
-const carded = (xi: Player[]) => pickWeighted(xi, (c) => CARD_WEIGHT[c]);
-const anyone = (xi: Player[]) => pickWeighted(xi, () => 1);
+const scorer = (xi: Player[], rng: Rng) => pickWeighted(xi, (c) => SCORER_WEIGHT[c], rng);
+const carded = (xi: Player[], rng: Rng) => pickWeighted(xi, (c) => CARD_WEIGHT[c], rng);
+const anyone = (xi: Player[], rng: Rng) => pickWeighted(xi, () => 1, rng);
 
 /** Realistic-ish injury length: usually a match or two, rarely season-ending. */
-function injuryLength(): number | "cup" {
-  const r = Math.random();
+function injuryLength(rng: Rng): number | "cup" {
+  const r = rng();
   if (r < 0.06) return "cup";
   if (r < 0.22) return 3;
   if (r < 0.5) return 2;
@@ -96,30 +101,30 @@ function injuryLength(): number | "cup" {
 }
 
 /** Knuth's Poisson sampler — goal counts cluster realistically around λ. */
-function poisson(lambda: number): number {
+function poisson(lambda: number, rng: Rng): number {
   const L = Math.exp(-lambda);
   let k = 0;
   let p = 1;
   do {
     k++;
-    p *= Math.random();
+    p *= rng();
   } while (p > L);
   return k - 1;
 }
 
 /** A best-effort shootout: each kick weighted by strength, first to a clear lead. */
-function shootout(sh: number, sa: number): { home: number; away: number } {
+function shootout(sh: number, sa: number, rng: Rng): { home: number; away: number } {
   const pH = 0.7 + 0.25 * (sh / (sh + sa));
   const pA = 0.7 + 0.25 * (sa / (sh + sa));
   let home = 0;
   let away = 0;
   for (let i = 0; i < 5; i++) {
-    if (Math.random() < pH) home++;
-    if (Math.random() < pA) away++;
+    if (rng() < pH) home++;
+    if (rng() < pA) away++;
   }
   while (home === away) {
-    if (Math.random() < pH) home++;
-    if (Math.random() < pA) away++;
+    if (rng() < pH) home++;
+    if (rng() < pA) away++;
   }
   return { home, away };
 }
@@ -129,36 +134,43 @@ function shootout(sh: number, sa: number): { home: number; away: number } {
  * strength (so lineup choices matter), plus yellow/red cards and injuries. Never a
  * draw: level ties go to penalties.
  */
-export function simulateMatch(home: Team, away: Team, homeXI: Player[], awayXI: Player[]): MatchResult {
+export function simulateMatch(
+  home: Team,
+  away: Team,
+  homeXI: Player[],
+  awayXI: Player[],
+  seed: number = randInt32(),
+): MatchResult {
+  const rng = mulberry32(seed);
   const sh = avgRating(homeXI);
   const sa = avgRating(awayXI);
   const total = sh + sa;
-  const homeGoals = poisson(0.35 + 2.4 * (sh / total));
-  const awayGoals = poisson(0.35 + 2.4 * (sa / total));
+  const homeGoals = poisson(0.35 + 2.4 * (sh / total), rng);
+  const awayGoals = poisson(0.35 + 2.4 * (sa / total), rng);
 
   const events: MatchEvent[] = [];
-  const min = () => 1 + Math.floor(Math.random() * FULL_TIME);
+  const min = () => 1 + Math.floor(rng() * FULL_TIME);
   const goal = (teamId: string, xi: Player[], n: number) => {
     for (let i = 0; i < n; i++) {
-      const p = scorer(xi);
+      const p = scorer(xi, rng);
       if (p) events.push({ minute: min(), teamId, type: "goal", player: p.name, playerId: p.id });
     }
   };
   const cards = (teamId: string, xi: Player[]) => {
-    const yellows = poisson(1.3);
+    const yellows = poisson(1.3, rng);
     for (let i = 0; i < yellows; i++) {
-      const p = carded(xi);
+      const p = carded(xi, rng);
       if (p) events.push({ minute: min(), teamId, type: "yellow", player: p.name, playerId: p.id });
     }
-    if (Math.random() < 0.08) {
-      const p = carded(xi);
+    if (rng() < 0.08) {
+      const p = carded(xi, rng);
       if (p) events.push({ minute: min(), teamId, type: "red", player: p.name, playerId: p.id });
     }
   };
   const injuries = (teamId: string, xi: Player[]) => {
-    if (Math.random() < 0.2) {
-      const p = anyone(xi);
-      if (p) events.push({ minute: min(), teamId, type: "injury", player: p.name, playerId: p.id, out: injuryLength() });
+    if (rng() < 0.2) {
+      const p = anyone(xi, rng);
+      if (p) events.push({ minute: min(), teamId, type: "injury", player: p.name, playerId: p.id, out: injuryLength(rng) });
     }
   };
 
@@ -173,7 +185,7 @@ export function simulateMatch(home: Team, away: Team, homeXI: Player[], awayXI: 
   let pens: { home: number; away: number } | null = null;
   let winnerId: string;
   if (homeGoals === awayGoals) {
-    pens = shootout(sh, sa);
+    pens = shootout(sh, sa, rng);
     winnerId = pens.home > pens.away ? home.id : away.id;
   } else {
     winnerId = homeGoals > awayGoals ? home.id : away.id;
@@ -217,8 +229,8 @@ export function applyMatchEvents(status: StatusMap, events: MatchEvent[]): Statu
 }
 
 /** Build an empty bracket over a shuffled seeding of exactly 32 team ids. */
-export function buildBracket(teamIds: string[]): Bracket {
-  const seeded = shuffle(teamIds);
+export function buildBracket(teamIds: string[], seed: number = randInt32()): Bracket {
+  const seeded = shuffle(teamIds, mulberry32(seed));
   const rounds: Bracket = [];
   let size = BRACKET_SIZE; // teams in this round
   for (let r = 0; size >= 2; r++, size /= 2) {
