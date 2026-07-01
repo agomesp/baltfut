@@ -34,6 +34,12 @@ export interface ReplayWorld {
   byId: Map<string, Team>;
   stage: GroupStage | null; // groups
   bracket: Bracket | null; // bracket
+  /** The status-threaded, repaired lineups the replay USED for the current live stage's
+   * matches, keyed by team id. The viewer's spotlight pitch MUST feed the SAME lineup
+   * into its {scoring} sim — same seed + a different XI (e.g. a naive autoLineup that
+   * ignores suspensions) makes the on-pitch scoreline diverge from the bracket/standings
+   * rendered beside it (xG-unification INV-1 on the viewer). */
+  lineups: Record<string, Lineup>;
 }
 
 /** Build the 48-team mock field once — deterministic, identical to the host's. */
@@ -44,10 +50,12 @@ export function replayField(): { teams: Team[]; byId: Map<string, Team> } {
 
 /** Replay the group stage to `stageIdx` (that matchday LIVE unless `done`), threading
  * lineups + status exactly like the host so scorelines match. */
-export function replayGroups(byId: Map<string, Team>, ids: string[], seed: number, stageIdx: number, done: boolean): GroupStage {
+export function replayGroups(byId: Map<string, Team>, ids: string[], seed: number, stageIdx: number, done: boolean, outLineups?: Record<string, Lineup>): GroupStage {
   let stage = drawGroups(ids, seed);
   let status: StatusMap = {};
-  const lineups: Record<string, Lineup> = {};
+  // populate the caller's map (if given) so the viewer can feed the SAME lineup into
+  // its spotlight sim — after the live stage's ensure(), this holds the exact XI `sim` used.
+  const lineups: Record<string, Lineup> = outLineups ?? {};
   const ensure = () => {
     for (const id of ids) {
       const t = byId.get(id);
@@ -80,10 +88,10 @@ export function replayGroups(byId: Map<string, Team>, ids: string[], seed: numbe
 }
 
 /** Replay the knockout to `stageIdx` (that round LIVE unless `done`). */
-export function replayBracket(byId: Map<string, Team>, ids: string[], seed: number, stageIdx: number, done: boolean): Bracket {
+export function replayBracket(byId: Map<string, Team>, ids: string[], seed: number, stageIdx: number, done: boolean, outLineups?: Record<string, Lineup>): Bracket {
   let bracket = buildBracket(ids, seed);
   let status: StatusMap = {};
-  const lineups: Record<string, Lineup> = {};
+  const lineups: Record<string, Lineup> = outLineups ?? {};
   const roundTeamIds = (b: Bracket, r: number) => b[r].flatMap((m) => [m.homeId, m.awayId]).filter((x): x is string => x != null);
   const ensure = (b: Bracket, r: number) => {
     for (const id of roundTeamIds(b, r)) {
@@ -117,10 +125,11 @@ export function replayBracket(byId: Map<string, Team>, ids: string[], seed: numb
 /** Reconstruct the whole world a viewer should render from a broadcast snapshot. */
 export function replayWorld(state: BroadcastState): ReplayWorld {
   const { teams, byId } = replayField();
+  const lineups: Record<string, Lineup> = {};
   if (state.phase === "groups") {
     const ids = teams.map((t) => t.id);
-    return { phase: "groups", byId, stage: replayGroups(byId, ids, state.seed, state.stageIdx, state.done), bracket: null };
+    return { phase: "groups", byId, stage: replayGroups(byId, ids, state.seed, state.stageIdx, state.done, lineups), bracket: null, lineups };
   }
   const ids = state.teamIds ?? teams.slice(0, 32).map((t) => t.id);
-  return { phase: "bracket", byId, stage: null, bracket: replayBracket(byId, ids, state.seed, state.stageIdx, state.done) };
+  return { phase: "bracket", byId, stage: null, bracket: replayBracket(byId, ids, state.seed, state.stageIdx, state.done, lineups), lineups };
 }

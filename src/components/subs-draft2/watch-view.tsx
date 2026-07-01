@@ -122,8 +122,8 @@ export default function WatchView({ id }: { id: string }) {
             key={spotMatch.id}
             home={world.byId.get(spotMatch.homeId)!}
             away={world.byId.get(spotMatch.awayId)!}
-            homeLineup={autoLineup(world.byId.get(spotMatch.homeId)!, DEFAULT_FORMATION, {})}
-            awayLineup={autoLineup(world.byId.get(spotMatch.awayId)!, DEFAULT_FORMATION, {})}
+            homeLineup={world.lineups[spotMatch.homeId] ?? autoLineup(world.byId.get(spotMatch.homeId)!, DEFAULT_FORMATION, {})}
+            awayLineup={world.lineups[spotMatch.awayId] ?? autoLineup(world.byId.get(spotMatch.awayId)!, DEFAULT_FORMATION, {})}
             homeCode={code(spotMatch.homeId)}
             awayCode={code(spotMatch.awayId)}
             progressAt={progressAt}

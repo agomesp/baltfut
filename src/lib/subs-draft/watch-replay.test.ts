@@ -5,7 +5,8 @@
 import { describe, it, expect } from "vitest";
 import { replayWorld, replayGroups, replayField } from "./watch-replay";
 import { standings, qualified32 } from "./groups";
-import { championId } from "./tournament";
+import { championId, simulateMatchOnPitch, bracketMatchSeed } from "./tournament";
+import { autoLineup, DEFAULT_FORMATION } from "./squad";
 import type { BroadcastState } from "./watch-sync";
 
 const gState = (over: Partial<BroadcastState> = {}): BroadcastState => ({
@@ -53,5 +54,34 @@ describe("watch-replay", () => {
 
   it("a different seed reconstructs a different group stage", () => {
     expect(replayWorld(gState({ seed: 1 }))).not.toEqual(replayWorld(gState({ seed: 2 })));
+  }, SLOW);
+
+  // xG-unification INV-1 on the VIEWER: the spotlight pitch must run the SAME lineup the
+  // headless scoreline used, or (same seed, different XI) its on-pitch score diverges from
+  // the bracket it renders. replayWorld exposes those exact lineups; the viewer feeds them in.
+  it("exposes the exact lineups the replay used → viewer's spotlight sim reproduces the bracket (INV-1)", () => {
+    const ids = replayField().teams.slice(0, 32).map((t) => t.id);
+    let checked = 0;
+    let naiveDiffered = 0;
+    for (const seed of [7, 2026, 3]) {
+      const stageIdx = 1; // a live round late enough that suspensions have altered some XIs
+      const w = replayWorld(gState({ phase: "bracket", seed, stageIdx, done: false, teamIds: ids }));
+      for (const m of w.bracket![stageIdx]) {
+        if (!m.homeId || !m.awayId || !m.result) continue;
+        const home = w.byId.get(m.homeId)!;
+        const away = w.byId.get(m.awayId)!;
+        const s = bracketMatchSeed(seed, stageIdx, m.slot);
+        // the exposed lineup reproduces the bracket's scoreline EXACTLY (what the pitch shows)
+        const rep = simulateMatchOnPitch(home, away, w.lineups[m.homeId]!, w.lineups[m.awayId]!, s);
+        expect(rep.homeGoals).toBe(m.result.homeGoals);
+        expect(rep.awayGoals).toBe(m.result.awayGoals);
+        // the naive default XI (the old viewer bug) does NOT reliably match — the fix matters
+        const naive = simulateMatchOnPitch(home, away, autoLineup(home, DEFAULT_FORMATION, {}), autoLineup(away, DEFAULT_FORMATION, {}), s);
+        if (naive.homeGoals !== m.result.homeGoals || naive.awayGoals !== m.result.awayGoals) naiveDiffered++;
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+    expect(naiveDiffered).toBeGreaterThan(0); // load-bearing: the wrong lineup DID diverge
   }, SLOW);
 });
