@@ -17,6 +17,7 @@ import PitchView from "@/components/subs-draft2/pitch-view";
 import LineupEditor from "@/components/subs-draft/lineup-editor";
 import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
 import { randInt32 } from "@/lib/subs-draft/prng";
+import { SECS_PER_MATCH } from "@/lib/subs-draft/sim-timing";
 import type { BroadcastState } from "@/lib/subs-draft/watch-sync";
 import type { Team } from "@/lib/subs-draft/engine";
 import {
@@ -51,7 +52,6 @@ const LINE = "rgba(200,255,45,0.14)";
 const DISP = "var(--font-bric, system-ui)";
 const MONO = "var(--font-jb, ui-monospace)";
 const TICK_MS = 100;
-const SECS_PER_MATCH = 60; // a match runs 0'→90' over this many wall seconds at 1×
 const MIN_PER_MS = FULL_TIME / (SECS_PER_MATCH * 1000);
 const DEFAULT_BRACKET_SEED = 2026; // fixed → reproducible (replay + watch-together); Reiniciar reseeds
 
@@ -413,6 +413,7 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
             events={spotMatch.result!.events}
             clock={clock}
             playing={playing}
+            seed={bracketMatchSeed(bracketSeed, spotMatch.round, spotMatch.slot)}
           />
         </section>
       )}

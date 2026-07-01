@@ -7,9 +7,9 @@
 // minute; the view-level replay (drawGroups/buildBracket with the real teams) lives
 // in the viewer component, using the same deterministic helpers as the host.
 import { FULL_TIME } from "./tournament";
+import { SECS_PER_MATCH } from "./sim-timing";
 
 export { FULL_TIME };
-const SECS_PER_MATCH = 60; // matches the views' clock (0'→90' over 60s at 1×)
 export const MIN_PER_MS = FULL_TIME / (SECS_PER_MATCH * 1000);
 
 /** The broadcast snapshot (~120 bytes). `seed` is the keystone: it replaces

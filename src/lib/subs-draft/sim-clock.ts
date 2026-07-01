@@ -13,10 +13,10 @@
 // double-stepping. A long hidden-tab freeze is bounded by MAX_CATCHUP so resume
 // catches up in one small burst instead of a spiral of thousands of steps.
 import type { Snapshot } from "./match-sim";
+import { FIXED_DT } from "./sim-timing";
 
-/** Authority tick — 60 Hz. The sim was tuned at ~16ms variable dt and clamps
- * dt≤0.05 internally, so this sits comfortably inside its stable range. */
-export const FIXED_DT = 1 / 60;
+/** Authority tick — 60 Hz (the shared cadence; headless scoring uses it too). */
+export { FIXED_DT };
 /** Most simulated time a single `advance` will consume — caps the resume hitch
  * after the tab was hidden (motion catches up; the match MINUTE is re-derived
  * independently from the tournament wall-clock anchor, so it stays correct). */

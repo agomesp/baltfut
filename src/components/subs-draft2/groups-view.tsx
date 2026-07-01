@@ -13,6 +13,7 @@ import PitchView from "@/components/subs-draft2/pitch-view";
 import LineupEditor from "@/components/subs-draft/lineup-editor";
 import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
 import { randInt32 } from "@/lib/subs-draft/prng";
+import { SECS_PER_MATCH } from "@/lib/subs-draft/sim-timing";
 import type { BroadcastState } from "@/lib/subs-draft/watch-sync";
 import type { Team } from "@/lib/subs-draft/engine";
 import {
@@ -54,7 +55,6 @@ const LINE = "rgba(200,255,45,0.14)";
 const DISP = "var(--font-bric, system-ui)";
 const MONO = "var(--font-jb, ui-monospace)";
 const TICK_MS = 100;
-const SECS_PER_MATCH = 60;
 const MIN_PER_MS = FULL_TIME / (SECS_PER_MATCH * 1000);
 const DEFAULT_CUP_SEED = 2026;
 
@@ -394,6 +394,7 @@ export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: T
             events={spotMatch.result!.events}
             clock={clock}
             playing={playing}
+            seed={groupMatchSeed(stage.seed, spotMatch.group, spotMatch.matchday, spotMatch.slot)}
           />
         </section>
       )}

@@ -63,10 +63,10 @@ function proj(fx: number, fy: number) {
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
 export default function PitchView({
-  home, away, homeLineup, awayLineup, homeCode, awayCode, events, clock, playing,
+  home, away, homeLineup, awayLineup, homeCode, awayCode, events, clock, playing, seed,
 }: {
   home: Team; away: Team; homeLineup: Lineup; awayLineup: Lineup;
-  homeCode: string; awayCode: string; events: MatchEvent[]; clock: number; playing: boolean;
+  homeCode: string; awayCode: string; events: MatchEvent[]; clock: number; playing: boolean; seed?: number;
 }) {
   const homeXI = useMemo(() => fieldLayout(home, homeLineup, "home"), [home, homeLineup]);
   const awayXI = useMemo(() => fieldLayout(away, awayLineup, "away"), [away, awayLineup]);
@@ -109,14 +109,16 @@ export default function PitchView({
       vx: 0, vy: 0, ax: 0, ay: 0, gait: Math.random() * 6.28, lean: 0, kickT: 0, kx: 0, ky: 1, fall: 0,
     }));
     skels.current = { home: mk(homeXI), away: mk(awayXI) };
-    const sim = createMatchSim(homeXI, awayXI);
+    // Seed the pitch sim so the live spotlight is REPRODUCIBLE (the prerequisite for
+    // making it agree with the headless scoring run — xG unification).
+    const sim = createMatchSim(homeXI, awayXI, seed);
     simRef.current = sim;
     // The clock steps the sim at a FIXED dt (progress supplied live via the ref).
     simClockRef.current = createSimClock((dt) => sim.step(dt, progressRef.current));
     const snap0 = sim.snapshot();
     prevSnapRef.current = snap0;
     currSnapRef.current = snap0;
-  }, [homeXI, awayXI]);
+  }, [homeXI, awayXI, seed]);
 
   useEffect(() => {
     const crossed = goals.filter((e) => e.minute <= clock).length;

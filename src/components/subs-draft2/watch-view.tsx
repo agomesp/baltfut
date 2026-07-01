@@ -12,8 +12,8 @@ import { createWatchChannel } from "@/lib/subs-draft/watch-channel";
 import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
 import { validateBroadcastState, viewerMinute, type BroadcastState } from "@/lib/subs-draft/watch-sync";
 import { replayWorld } from "@/lib/subs-draft/watch-replay";
-import { standings, MATCHDAY_NAMES, type GroupMatch } from "@/lib/subs-draft/groups";
-import { ROUND_NAMES, type BracketMatch } from "@/lib/subs-draft/tournament";
+import { standings, MATCHDAY_NAMES, groupMatchSeed, type GroupMatch } from "@/lib/subs-draft/groups";
+import { ROUND_NAMES, bracketMatchSeed, type BracketMatch } from "@/lib/subs-draft/tournament";
 import { autoLineup, DEFAULT_FORMATION } from "@/lib/subs-draft/squad";
 
 const LIME = "#c8ff2d";
@@ -122,6 +122,9 @@ export default function WatchView({ id }: { id: string }) {
             events={spotMatch.result!.events}
             clock={clock}
             playing={state.playing}
+            seed={"matchday" in spotMatch
+              ? groupMatchSeed(state.seed, spotMatch.group, spotMatch.matchday, spotMatch.slot)
+              : bracketMatchSeed(state.seed, spotMatch.round, spotMatch.slot)}
           />
         </section>
       )}
