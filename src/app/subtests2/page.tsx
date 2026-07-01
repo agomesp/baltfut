@@ -80,7 +80,19 @@ export default function SubtestsPage() {
         ) : (
           <>
             <Masthead phase={state.phase} teams={state.teams.length} />
-            {watchable && <HostBar hosting={hosting} viewers={viewers} hostId={hostId} onStart={() => setHostId(Math.random().toString(36).slice(2, 8))} onStop={() => setHostId(null)} />}
+            {/* watch-together needs a deterministic field the viewer can rebuild from
+                fillTo48([]); a drafted roster isn't reproducible, so only host a
+                fully-mock Copa (the "Simular Copa completa" path). */}
+            {watchable && (
+              <HostBar
+                hosting={hosting}
+                viewers={viewers}
+                hostId={hostId}
+                canHost={state.field.length > 0 && state.field.every((t) => t.owner.includes("🤖"))}
+                onStart={() => setHostId(Math.random().toString(36).slice(2, 8))}
+                onStop={() => setHostId(null)}
+              />
+            )}
             {state.phase === "lobby" && <Lobby state={state} setState={setState} />}
             {state.phase === "draft" && <Draft state={state} setState={setState} />}
             {state.phase === "done" && <Done state={state} setState={setState} />}
@@ -102,15 +114,17 @@ export default function SubtestsPage() {
 /** Host controls for watch-together — start a room, share the ?watch link, see the
  * viewer count. The channel persists across the groups→bracket transition (it lives
  * here, in the page). */
-function HostBar({ hosting, viewers, hostId, onStart, onStop }: { hosting: boolean; viewers: number; hostId: string | null; onStart: () => void; onStop: () => void }) {
+function HostBar({ hosting, viewers, hostId, canHost, onStart, onStop }: { hosting: boolean; viewers: number; hostId: string | null; canHost: boolean; onStart: () => void; onStop: () => void }) {
   const [copied, setCopied] = useState(false);
   const link = hostId && typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?watch=${hostId}` : "";
   return (
     <section style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 14px", borderRadius: 12, border: `1px solid ${hosting ? LIME : LINE}`, background: hosting ? "rgba(200,255,45,0.06)" : "transparent", marginBottom: 16 }}>
       {!hosting ? (
         <>
-          <button onClick={onStart} style={{ ...primaryBtn, width: "auto", padding: "9px 16px" }}>📡 Transmitir ao vivo</button>
-          <span style={{ fontSize: 12, color: DIM }}>Assista junto: cada pessoa vê a MESMA partida, sincronizada pelo relógio.</span>
+          <button onClick={onStart} disabled={!canHost} style={{ ...primaryBtn, width: "auto", padding: "9px 16px", opacity: canHost ? 1 : 0.4, cursor: canHost ? "pointer" : "not-allowed" }}>📡 Transmitir ao vivo</button>
+          <span style={{ fontSize: 12, color: DIM }}>
+            {canHost ? "Assista junto: cada pessoa vê a MESMA partida, sincronizada pelo relógio." : "Transmissão só na Copa mockada (\"Simular Copa completa\") — um elenco sorteado não é reproduzível pro público."}
+          </span>
         </>
       ) : (
         <>
