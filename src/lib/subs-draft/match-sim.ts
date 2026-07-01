@@ -199,7 +199,10 @@ export function createMatchSim(
     let best = list[0];
     let bd = Infinity;
     for (const p of list) {
-      const d = dist(p.x, p.y, x, y);
+      // squared distance — argmin is identical to hypot's, no sqrt (called many
+      // times per step; the selection is bit-identical so determinism is preserved)
+      const dx = p.x - x, dy = p.y - y;
+      const d = dx * dx + dy * dy;
       if (d < bd) { bd = d; best = p; }
     }
     return best;
@@ -632,8 +635,10 @@ export function createMatchSim(
   }
 
   function updateWall() {
+    // only (re)build the wall on a free kick; the rest of the match it stays empty.
+    // Avoids allocating a fresh Map on all ~3600 non-dead-ball steps.
+    if (!freeKick) { if (wallPos.size) wallPos = new Map(); return; }
     wallPos = new Map();
-    if (!freeKick) return;
     const dSide: Side = poss === "home" ? "away" : "home";
     const g = OWN[dSide];
     if (dist(ball.x, ball.y, g.x, g.y) > 36) return; // wall only near goal
