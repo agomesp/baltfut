@@ -461,8 +461,11 @@ function GroupCard({
       <div style={{ display: "grid", gridTemplateColumns: "16px 1fr 16px 16px 22px", gap: 4, padding: "4px 9px", fontFamily: MONO, fontSize: 8.5, color: DIM, letterSpacing: 0.3 }}>
         <span>#</span><span>TIME</span><span style={{ textAlign: "center" }}>P</span><span style={{ textAlign: "center" }}>SG</span><span style={{ textAlign: "right" }}>PTS</span>
       </div>
+      {/* only tint qualification once matches have been played (not on the draw reveal,
+          where a lot-ordered 0-0-0 table would read as a spoiler prediction) */}
       {table.map((r, pos) => {
-        const q = pos < 2 ? LIME : pos === 2 && thirdsIn.has(r.teamId) ? AMBER : null;
+        const played = table.some((x) => x.P > 0);
+        const q = !played ? null : pos < 2 ? LIME : pos === 2 && thirdsIn.has(r.teamId) ? AMBER : null;
         return (
           <div key={r.teamId} style={{ display: "grid", gridTemplateColumns: "16px 1fr 16px 16px 22px", gap: 4, alignItems: "center", padding: "3px 9px", borderTop: `1px solid rgba(255,255,255,0.03)`, background: q ? `${q}14` : "transparent" }}>
             <span style={{ fontFamily: MONO, fontSize: 10, color: q ?? DIM, fontWeight: q ? 800 : 500 }}>{pos + 1}</span>
