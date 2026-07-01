@@ -98,7 +98,7 @@ export function lerpSnapshot(prev: Snapshot, curr: Snapshot, a: number): Snapsho
     ...curr,
     home: curr.home.map((p, i) => lerpPt(prev.home[i] ?? p, p, t)),
     away: curr.away.map((p, i) => lerpPt(prev.away[i] ?? p, p, t)),
-    ball: lerpPt(prev.ball ?? curr.ball, curr.ball, t),
+    ball: { ...lerpPt(prev.ball ?? curr.ball, curr.ball, t), z: lerp((prev.ball ?? curr.ball).z, curr.ball.z, t) },
   };
 }
 

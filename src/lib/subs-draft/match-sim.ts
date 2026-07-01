@@ -27,7 +27,7 @@ export type Card = "yellow" | "red";
 export interface Snapshot {
   home: { x: number; y: number }[];
   away: { x: number; y: number }[];
-  ball: { x: number; y: number };
+  ball: { x: number; y: number; z: number };
   poss: Side;
   controlled: boolean;
   caption: string | null;
@@ -69,6 +69,7 @@ const CONTROL = 2.7;
 const DRIBBLE_LEAD = 2.0;
 const TACKLE_RATE = 3.0;
 const BLOCK_R = 2.3;
+const GRAVITY = 52; // ball-height (z) fall rate — crosses/corners/long balls arc
 
 const dist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax - bx, ay - by);
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -108,7 +109,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
   const home = homeSlots.map((s) => mk(s, "home"));
   const away = awaySlots.map((s) => mk(s, "away"));
   const all = [...home, ...away];
-  const ball = { x: 50, y: 50, vx: 0, vy: 0 };
+  const ball = { x: 50, y: 50, vx: 0, vy: 0, z: 0, vz: 0 }; // z = height above the pitch
   const shots = { home: 0, away: 0 };
   const possFrames = { home: 0, away: 0 };
   const bookings: Record<string, Card> = {};
@@ -172,6 +173,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     offsidePending = false;
     ball.vx *= 0.15;
     ball.vy *= 0.15;
+    ball.z = 0; ball.vz = 0; // controlled → at the player's feet
     decideT = rnd(0.4, 0.9);
     settleT = 0.35; // protect the new carrier from an instant re-tackle
   }
@@ -305,6 +307,8 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     const power = clamp(40 + d * 1.1, 45, 92);
     ball.vx = ((bx - ball.x) / d) * power;
     ball.vy = ((boxY - ball.y) / d) * power;
+    ball.z = 0;
+    ball.vz = isCorner ? rnd(24, 32) : rnd(18, 26); // loft it into the box — an arcing delivery
     ballState = "pass";
     passTo = tgt;
     pendingCross = true;
@@ -326,6 +330,8 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     const power = clamp(30 + d * 1.2, 45, 115);
     ball.vx = ((lx - ball.x) / d) * power;
     ball.vy = ((tgt.y - ball.y) / d) * power;
+    ball.z = 0;
+    ball.vz = long ? rnd(26, 36) : 0; // a long clearance is lofted; a short throw stays low
     ballState = "pass";
     passTo = tgt;
     lastTouch = gk.side;
@@ -565,6 +571,10 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     matchProgress = clamp(progress, 0, 1);
     if (captionT > 0) captionT -= dt;
     if (settleT > 0) settleT -= dt;
+    // ball height: gravity pulls it down, then it settles on the pitch (with a small bounce)
+    ball.z += ball.vz * dt;
+    ball.vz -= GRAVITY * dt;
+    if (ball.z <= 0) { ball.z = 0; ball.vz = ball.vz < -8 ? -ball.vz * 0.3 : 0; }
     if (ballState === "dribble" || ballState === "pass") possFrames[poss] += 1;
     updateWall();
 
@@ -735,7 +745,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     return {
       home: home.map((p) => ({ x: p.x, y: p.y })),
       away: away.map((p) => ({ x: p.x, y: p.y })),
-      ball: { x: ball.x, y: ball.y },
+      ball: { x: ball.x, y: ball.y, z: ball.z },
       poss,
       controlled: ballState === "dribble" || ballState === "pass",
       caption: captionT > 0 ? captionText : null,

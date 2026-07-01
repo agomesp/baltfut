@@ -174,6 +174,18 @@ describe("match-sim produces real, flowing movement (not lined up)", () => {
     expect(Math.abs(atLine - 50)).toBeGreaterThan(5); // not straight down the middle at the keeper
   });
 
+  it("the ball goes airborne on aerial deliveries and settles back to the pitch", () => {
+    let maxZ = 0;
+    let endZ = 1;
+    for (const seed of [0, 1, 2, 3, 4, 5]) {
+      const sim = createMatchSim(xi(80, "home"), xi(80, "away"), seed);
+      for (let i = 0; i < 3600; i++) { sim.step(0.016); maxZ = Math.max(maxZ, sim.snapshot().ball.z); }
+      endZ = Math.min(endZ, sim.snapshot().ball.z);
+    }
+    expect(maxZ).toBeGreaterThan(4); // crosses/corners/long balls arc up
+    expect(endZ).toBeGreaterThanOrEqual(0); // and always come down (z never goes negative)
+  });
+
   it("laneClearance sees defenders in a pass lane (utility AI reads the pitch)", () => {
     // pass lane from (10,50) to (90,50)
     const clear = laneClearance(10, 50, 90, 50, [{ x: 50, y: 80 }]); // well off the line

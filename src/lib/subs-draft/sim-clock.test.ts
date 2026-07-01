@@ -115,11 +115,11 @@ describe("A0.2 — cosmetic interpolation is read-only", () => {
   });
 
   it("lerpSnapshot at alpha 0 and 1 returns prev and curr respectively", () => {
-    const prev = { home: [{ x: 0, y: 0 }], away: [{ x: 0, y: 0 }], ball: { x: 0, y: 0 } } as unknown as Snapshot;
-    const curr = { home: [{ x: 10, y: 20 }], away: [{ x: 0, y: 0 }], ball: { x: 4, y: 8 } } as unknown as Snapshot;
+    const prev = { home: [{ x: 0, y: 0 }], away: [{ x: 0, y: 0 }], ball: { x: 0, y: 0, z: 0 } } as unknown as Snapshot;
+    const curr = { home: [{ x: 10, y: 20 }], away: [{ x: 0, y: 0 }], ball: { x: 4, y: 8, z: 10 } } as unknown as Snapshot;
     expect(lerpSnapshot(prev, curr, 0).home[0]).toEqual({ x: 0, y: 0 });
     expect(lerpSnapshot(prev, curr, 1).home[0]).toEqual({ x: 10, y: 20 });
-    expect(lerpSnapshot(prev, curr, 0.5).ball).toEqual({ x: 2, y: 4 });
+    expect(lerpSnapshot(prev, curr, 0.5).ball).toEqual({ x: 2, y: 4, z: 5 }); // ball height interpolates too
   });
 });
 

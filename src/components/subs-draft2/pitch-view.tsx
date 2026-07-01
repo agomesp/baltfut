@@ -378,7 +378,7 @@ function stepGait(s: Skel, p: Pt, dt: number) {
 
 interface DrawArgs {
   homeXI: FieldSlot[]; awayXI: FieldSlot[];
-  homePos: Pt[]; awayPos: Pt[]; ball: Pt;
+  homePos: Pt[]; awayPos: Pt[]; ball: Pt & { z?: number };
   homeSkel: Skel[]; awaySkel: Skel[];
   bookings: Record<string, "yellow" | "red">; sentOff: Set<string>; trail: Pt[]; style: Style;
 }
@@ -510,12 +510,19 @@ function drawFallen(ctx: CanvasRenderingContext2D, sx: number, sy: number, sc: n
   ctx.restore();
 }
 
-function drawBall(ctx: CanvasRenderingContext2D, ball: Pt, trail: Pt[]) {
+function drawBall(ctx: CanvasRenderingContext2D, ball: Pt & { z?: number }, trail: Pt[]) {
   trail.slice(1).forEach((t, i) => { const q = proj(t.x, t.y); ctx.fillStyle = `rgba(255,255,255,${0.16 * (1 - i / trail.length)})`; ctx.beginPath(); ctx.arc(q.sx, q.sy, 3, 0, Math.PI * 2); ctx.fill(); });
   const { sx, sy, s } = proj(ball.x, ball.y);
   const r = Math.max(4, 5 * s);
-  ctx.fillStyle = "rgba(0,0,0,0.4)"; ctx.beginPath(); ctx.ellipse(sx, sy + r * 0.5, r * 1.1, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(sx, sy - r * 0.4, r, 0, Math.PI * 2); ctx.fill();
+  const z = ball.z ?? 0;
+  const lift = z * s * 2.2; // screen-pixels of height (perspective-scaled)
+  const shf = Math.max(0.35, Math.min(1, 1 - z / 14)); // shadow shrinks + fades as it climbs
+  // shadow stays on the GROUND at the ball's x/y
+  ctx.fillStyle = `rgba(0,0,0,${0.4 * shf})`; ctx.beginPath(); ctx.ellipse(sx, sy + r * 0.5, r * 1.1 * shf, r * 0.5 * shf, 0, 0, Math.PI * 2); ctx.fill();
+  // the ball, lifted by its height (and a touch bigger up high)
+  const by = sy - r * 0.4 - lift;
+  const br = r * (1 + z * 0.02);
+  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(sx, by, br, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = "#10160f"; ctx.lineWidth = 1; ctx.stroke();
-  ctx.fillStyle = "#1b241a"; ctx.beginPath(); ctx.arc(sx - r * 0.15, sy - r * 0.5, r * 0.28, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#1b241a"; ctx.beginPath(); ctx.arc(sx - br * 0.15, by - br * 0.1, br * 0.28, 0, Math.PI * 2); ctx.fill();
 }
