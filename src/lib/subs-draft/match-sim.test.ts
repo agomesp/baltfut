@@ -136,9 +136,12 @@ describe("match-sim produces real, flowing movement (not lined up)", () => {
   });
 
   it("calls offside on forward passes beyond the last defender", () => {
+    // A0.1 seeds make this deterministic — each of these seeds reliably produces an
+    // offside within 3000 steps (probed), so the assertion never flakes on RNG.
+    const SEEDS = [0, 2, 3, 6];
     let offsides = 0;
-    for (let k = 0; k < 4; k++) {
-      const sim = createMatchSim(xi(82, "home"), xi(82, "away"));
+    for (const seed of SEEDS) {
+      const sim = createMatchSim(xi(82, "home"), xi(82, "away"), seed);
       for (let i = 0; i < 3000; i++) { sim.step(0.016); if (sim.snapshot().caption === "Impedimento!") offsides++; }
     }
     expect(offsides).toBeGreaterThan(0);

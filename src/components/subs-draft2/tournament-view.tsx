@@ -47,6 +47,16 @@ const LINE = "rgba(200,255,45,0.14)";
 const DISP = "var(--font-bric, system-ui)";
 const MONO = "var(--font-jb, ui-monospace)";
 const TICK_MS = 100;
+const SECS_PER_MATCH = 60; // a match runs 0'→90' over this many wall seconds at 1×
+const MIN_PER_MS = FULL_TIME / (SECS_PER_MATCH * 1000);
+
+/** A0.2: the displayed match minute, derived from a WALL-CLOCK anchor rather than
+ * accumulated ticks — so a hidden/throttled tab doesn't fall behind and the clock
+ * catches up correctly on resume. performance.now() only sets how far the reveal
+ * is; it never touches the seeded sim. */
+type ClockAnchor = { atMs: number; baseMin: number; speed: number };
+const minuteFrom = (a: ClockAnchor, nowMs: number): number =>
+  Math.max(0, Math.min(FULL_TIME, a.baseMin + (nowMs - a.atMs) * MIN_PER_MS * a.speed));
 
 export default function TournamentView({ teams }: { teams: Team[] }) {
   const byId = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
@@ -73,6 +83,7 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
   const roundRef = useRef(-1);
   const clockRef = useRef(0);
   const speedRef = useRef(1);
+  const anchorRef = useRef<ClockAnchor | null>(null); // A0.2 wall-clock anchor for the match minute
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => { speedRef.current = speed; }, [speed]);
 
@@ -164,13 +175,17 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
     }
   }, [code, nick, pauseBetween, setBracket, setStatus, startRound, stop]);
 
-  // The match clock — advances while playing; reveals events; finalizes at 90'.
+  // The match clock — derived from a wall-clock anchor (survives a hidden tab and
+  // catches up on resume); reveals events in the (prev, next] window; finalizes at 90'.
   useEffect(() => {
     if (!playing) return;
+    anchorRef.current = { atMs: performance.now(), baseMin: clockRef.current, speed: speedRef.current };
     const tick = () => {
+      const a = anchorRef.current;
+      if (!a) return;
       const prev = clockRef.current;
-      const delta = (FULL_TIME * TICK_MS * speedRef.current) / 60000;
-      const next = Math.min(FULL_TIME, prev + delta);
+      const next = minuteFrom(a, performance.now());
+      if (next <= prev) return; // no wall time elapsed since last tick
       clockRef.current = next;
       const shouts: string[] = [];
       for (const m of bracketRef.current[roundRef.current] ?? []) {
@@ -189,6 +204,13 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
     };
   }, [playing, roundIdx, finalize, code]);
 
+  // Re-anchor the wall clock when speed changes mid-match so past elapsed keeps its
+  // old rate and future elapsed uses the new one (no retroactive jump).
+  useEffect(() => {
+    if (!playing) return;
+    anchorRef.current = { atMs: performance.now(), baseMin: clockRef.current, speed };
+  }, [speed, playing]);
+
   useEffect(() => () => stop(), [stop]);
 
   const begin = () => (roundRef.current < 0 ? startRound(0, bracketRef.current) : setPlaying((p) => !p));
@@ -196,6 +218,7 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
   function simulateAll() {
     stop();
     setPlaying(false);
+    anchorRef.current = null;
     let b = bracketRef.current;
     let st = statusRef.current;
     let lu = { ...lineupsRef.current };
@@ -229,6 +252,7 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
     const fresh = buildBracket(ids);
     roundRef.current = -1;
     clockRef.current = 0;
+    anchorRef.current = null;
     setBracket(fresh);
     setLineups({});
     setStatus({});

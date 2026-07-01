@@ -20,7 +20,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FlagIcon } from "@/components/live/bf-ui";
 import type { Team } from "@/lib/subs-draft/engine";
 import { fieldLayout, type FieldSlot, type Lineup } from "@/lib/subs-draft/squad";
-import { createMatchSim, type MatchSim } from "@/lib/subs-draft/match-sim";
+import { createMatchSim, type MatchSim, type Snapshot } from "@/lib/subs-draft/match-sim";
+import { createSimClock, lerpSnapshot, reconcileEvents, FIXED_DT, type SimClock } from "@/lib/subs-draft/sim-clock";
 import type { MatchEvent } from "@/lib/subs-draft/tournament";
 
 const HOME = "#c8ff2d";
@@ -88,8 +89,14 @@ export default function PitchView({
   const sentOffRef = useRef<Set<string>>(new Set());
   const bookRef = useRef<Record<string, "yellow" | "red">>({});
   const trailRef = useRef<Pt[]>([]);
-  const prevRef = useRef<{ home: Pt[]; away: Pt[] } | null>(null);
-  const prevBall = useRef<Pt | null>(null);
+  // A0.2: the fixed-step clock + the two most-recent AUTHORITATIVE snapshots.
+  // Motion/velocity read these (over FIXED_DT); the render interpolates between
+  // them. prevBallSpeed/lastCap track cosmetic kick/foul edges.
+  const simClockRef = useRef<SimClock | null>(null);
+  const prevSnapRef = useRef<Snapshot | null>(null);
+  const currSnapRef = useRef<Snapshot | null>(null);
+  const pumpRef = useRef<((nowMs: number) => void) | null>(null); // A0.3: background metronome reuses this
+
   const prevBallSpeed = useRef(0);
   const lastCap = useRef<string | null>(null);
   useEffect(() => { progressRef.current = clock / 90; }, [clock]);
@@ -102,8 +109,13 @@ export default function PitchView({
       vx: 0, vy: 0, ax: 0, ay: 0, gait: Math.random() * 6.28, lean: 0, kickT: 0, kx: 0, ky: 1, fall: 0,
     }));
     skels.current = { home: mk(homeXI), away: mk(awayXI) };
-    prevRef.current = null; prevBall.current = null;
-    simRef.current = createMatchSim(homeXI, awayXI);
+    const sim = createMatchSim(homeXI, awayXI);
+    simRef.current = sim;
+    // The clock steps the sim at a FIXED dt (progress supplied live via the ref).
+    simClockRef.current = createSimClock((dt) => sim.step(dt, progressRef.current));
+    const snap0 = sim.snapshot();
+    prevSnapRef.current = snap0;
+    currSnapRef.current = snap0;
   }, [homeXI, awayXI]);
 
   useEffect(() => {
@@ -122,24 +134,38 @@ export default function PitchView({
   useEffect(() => {
     if (!playing) return;
     const ctx = canvasRef.current?.getContext("2d");
+    simClockRef.current?.reset(performance.now()); // fresh timebase on (re)start → no phantom catch-up
+    lastTs.current = 0;
     let raf = 0;
-    const frame = (ts: number) => {
-      const dt = Math.min(0.05, (ts - (lastTs.current || ts)) / 1000);
-      lastTs.current = ts;
-      const sim = simRef.current;
-      if (sim && ctx) {
-        sim.step(dt, progressRef.current);
-        const snap = sim.snapshot();
-        const invDt = dt > 0.0001 ? 1 / dt : 0;
 
-        // overlay state
-        setCaption((c) => (snap.caption !== c ? snap.caption : c));
-        setStats((s) => (s.possHome !== snap.possHome || s.shots.home !== snap.shots.home || s.shots.away !== snap.shots.away ? { possHome: snap.possHome, shots: snap.shots } : s));
-        const sig = Object.entries(snap.bookings).map(([k, v]) => k + v).join(",");
-        if (sig !== bookingsSig.current) { bookingsSig.current = sig; bookRef.current = snap.bookings; }
-        if (snap.sentOff.length !== sentOffRef.current.size) sentOffRef.current = new Set(snap.sentOff);
-        if (snap.eventSeq !== eventSeqRef.current) {
-          eventSeqRef.current = snap.eventSeq;
+    // AUTHORITY: run the sim in fixed steps up to `nowMs`, then read the snapshot
+    // ONCE and refresh overlay + authoritative velocity. Elapsed-based, so calling
+    // it from both rAF and the worker metronome (A0.3) never double-steps.
+    const pump = (nowMs: number) => {
+      const sim = simRef.current;
+      const clk = simClockRef.current;
+      if (!sim || !clk) return;
+      const ran = clk.advance(nowMs);
+      if (ran <= 0) return;
+      const base = currSnapRef.current ?? sim.snapshot();
+      const snap = sim.snapshot();
+      prevSnapRef.current = base;
+      currSnapRef.current = snap;
+      const invStep = 1 / (FIXED_DT * ran); // per-second velocity over the steps just run
+
+      // overlay state
+      setCaption((c) => (snap.caption !== c ? snap.caption : c));
+      setStats((s) => (s.possHome !== snap.possHome || s.shots.home !== snap.shots.home || s.shots.away !== snap.shots.away ? { possHome: snap.possHome, shots: snap.shots } : s));
+      const sig = Object.entries(snap.bookings).map(([k, v]) => k + v).join(",");
+      if (sig !== bookingsSig.current) { bookingsSig.current = sig; bookRef.current = snap.bookings; }
+      if (snap.sentOff.length !== sentOffRef.current.size) sentOffRef.current = new Set(snap.sentOff);
+
+      // events: at most ONE ticker line per pump; a catch-up (resync) skips the
+      // transient flashes rather than replaying a burst of stale captions.
+      const rec = reconcileEvents(eventSeqRef.current, snap, clk.wasCapped());
+      if (rec.ticker.length) {
+        eventSeqRef.current = rec.nextSeq;
+        if (!rec.resync) {
           setTicker((t) => [{ min: Math.round(progressRef.current * 90), text: snap.eventText }, ...t].slice(0, 6));
           if (/Vermelho|Amarelo/.test(snap.eventText)) {
             const id = snap.eventSeq;
@@ -148,50 +174,62 @@ export default function PitchView({
             setTimeout(() => setCardFlash((cf) => (cf?.id === id ? null : cf)), 1700);
           }
         }
+      }
 
-        // ball velocity + kick / foul detection
-        const bv = prevBall.current ? { x: (snap.ball.x - prevBall.current.x) * invDt, y: (snap.ball.y - prevBall.current.y) * invDt } : { x: 0, y: 0 };
-        const bspeed = Math.hypot(bv.x, bv.y);
-        const nearestToBall = () => {
-          let best: Skel | null = null, bd = Infinity;
-          const scan = (pos: Pt[], sk: Skel[]) => pos.forEach((p, i) => { const d = Math.hypot(p.x - snap.ball.x, p.y - snap.ball.y); if (d < bd) { bd = d; best = sk[i]; } });
-          scan(snap.home, skels.current.home); scan(snap.away, skels.current.away);
-          return { s: best as Skel | null, d: bd };
-        };
-        if (prevBallSpeed.current < 22 && bspeed > 34) { // a ball was just STRUCK
-          const nb = nearestToBall();
-          if (nb.s && nb.d < 3.2 && nb.s.fall <= 0) { const n = Math.max(1, bspeed); nb.s.kickT = 0.3; nb.s.kx = bv.x / n; nb.s.ky = bv.y / n; }
-        }
-        if (snap.caption === "Falta!" && lastCap.current !== "Falta!") { // a foul → ragdoll the nearest man
-          const nb = nearestToBall();
-          if (nb.s) nb.s.fall = 1.0;
-        }
-        lastCap.current = snap.caption;
-        prevBall.current = { ...snap.ball };
-        prevBallSpeed.current = bspeed;
+      // ball velocity + kick / foul detection — from the authoritative prev→curr
+      const bv = { x: (snap.ball.x - base.ball.x) * invStep, y: (snap.ball.y - base.ball.y) * invStep };
+      const bspeed = Math.hypot(bv.x, bv.y);
+      const nearestToBall = () => {
+        let best: Skel | null = null, bd = Infinity;
+        const scan = (pos: Pt[], sk: Skel[]) => pos.forEach((p, i) => { const d = Math.hypot(p.x - snap.ball.x, p.y - snap.ball.y); if (d < bd) { bd = d; best = sk[i]; } });
+        scan(snap.home, skels.current.home); scan(snap.away, skels.current.away);
+        return { s: best as Skel | null, d: bd };
+      };
+      if (!clk.wasCapped() && prevBallSpeed.current < 22 && bspeed > 34) { // a ball was just STRUCK
+        const nb = nearestToBall();
+        if (nb.s && nb.d < 3.2 && nb.s.fall <= 0) { const n = Math.max(1, bspeed); nb.s.kickT = 0.3; nb.s.kx = bv.x / n; nb.s.ky = bv.y / n; }
+      }
+      if (!clk.wasCapped() && snap.caption === "Falta!" && lastCap.current !== "Falta!") { // a foul → ragdoll the nearest man
+        const nb = nearestToBall();
+        if (nb.s) nb.s.fall = 1.0;
+      }
+      lastCap.current = snap.caption;
+      prevBallSpeed.current = bspeed;
 
-        // per-player velocity + gait
-        const prev = prevRef.current;
-        const upd = (cur: Pt[], pv: Pt[] | undefined, sk: Skel[]) => {
-          cur.forEach((p, i) => {
-            const s = sk[i]; if (!s) return;
-            const q = pv?.[i];
-            let vx = 0, vy = 0;
-            if (q) { vx = (p.x - q.x) * invDt; vy = (p.y - q.y) * invDt; }
-            if (q && Math.hypot(p.x - q.x, p.y - q.y) > 8) { s.feet = [{ x: p.x - 1.1, y: p.y }, { x: p.x + 1.1, y: p.y }]; s.vx = 0; s.vy = 0; s.swing = -1; return; }
-            const nax = (vx - s.vx) * invDt, nay = (vy - s.vy) * invDt;
-            s.ax += (nax - s.ax) * 0.2; s.ay += (nay - s.ay) * 0.2;
-            s.vx += (vx - s.vx) * 0.35; s.vy += (vy - s.vy) * 0.35;
-            stepGait(s, p, dt);
-          });
-        };
-        upd(snap.home, prev?.home, skels.current.home);
-        upd(snap.away, prev?.away, skels.current.away);
-        prevRef.current = { home: snap.home.map((p) => ({ ...p })), away: snap.away.map((p) => ({ ...p })) };
+      // per-player AUTHORITATIVE velocity (the gait PHASE advances on the render frame)
+      const updVel = (cur: Pt[], pv: Pt[], sk: Skel[]) => {
+        cur.forEach((p, i) => {
+          const s = sk[i]; if (!s) return;
+          const q = pv[i];
+          const vx = q ? (p.x - q.x) * invStep : 0, vy = q ? (p.y - q.y) * invStep : 0;
+          if (q && Math.hypot(p.x - q.x, p.y - q.y) > 8) { s.feet = [{ x: p.x - 1.1, y: p.y }, { x: p.x + 1.1, y: p.y }]; s.vx = 0; s.vy = 0; s.swing = -1; return; }
+          const nax = (vx - s.vx) * invStep, nay = (vy - s.vy) * invStep;
+          s.ax += (nax - s.ax) * 0.2; s.ay += (nay - s.ay) * 0.2;
+          s.vx += (vx - s.vx) * 0.35; s.vy += (vy - s.vy) * 0.35;
+        });
+      };
+      updVel(snap.home, base.home, skels.current.home);
+      updVel(snap.away, base.away, skels.current.away);
+    };
+    pumpRef.current = pump;
 
-        trailRef.current = [{ ...snap.ball }, ...trailRef.current].slice(0, 7);
+    const frame = () => {
+      const now = performance.now();
+      pump(now);
+      const rdt = Math.min(0.05, (now - (lastTs.current || now)) / 1000);
+      lastTs.current = now;
+      const cur = currSnapRef.current;
+      if (ctx && cur) {
+        const prev = prevSnapRef.current;
+        // RENDER (cosmetic, read-only): interpolate positions between the two
+        // authoritative snapshots; gait animates on the render frame.
+        const view = prev ? lerpSnapshot(prev, cur, simClockRef.current?.alpha() ?? 0) : cur;
+        const gait = (pos: Pt[], sk: Skel[]) => pos.forEach((p, i) => { const s = sk[i]; if (s) stepGait(s, p, rdt); });
+        gait(view.home, skels.current.home);
+        gait(view.away, skels.current.away);
+        trailRef.current = [{ ...view.ball }, ...trailRef.current].slice(0, 7);
         draw(ctx, {
-          homeXI, awayXI, homePos: snap.home, awayPos: snap.away, ball: snap.ball,
+          homeXI, awayXI, homePos: view.home, awayPos: view.away, ball: view.ball,
           homeSkel: skels.current.home, awaySkel: skels.current.away,
           bookings: bookRef.current, sentOff: sentOffRef.current, trail: trailRef.current, style: styleRef.current,
         });
@@ -199,7 +237,7 @@ export default function PitchView({
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); pumpRef.current = null; };
   }, [playing, homeXI, awayXI]);
 
   const hg = goals.filter((e) => e.teamId === home.id && e.minute <= clock).length;
