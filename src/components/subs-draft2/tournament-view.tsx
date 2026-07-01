@@ -101,6 +101,13 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
 
   const nick = useCallback((id: string | null) => (id ? byId.get(id)?.owner.replace(" 🤖", "") ?? "?" : "?"), [byId]);
   const code = useCallback((id: string | null) => (id ? byId.get(id)?.code ?? "" : ""), [byId]);
+  // Smooth match progress (0..1) at a given performance.now() — the SAME wall-clock
+  // anchor that drives the displayed minute, sampled per render frame so the authoritative
+  // spotlight sim steps ~1 tick/frame instead of in the coarse clock's 100 ms bursts.
+  const progressAt = useCallback((now: number) => {
+    const a = anchorRef.current;
+    return a ? Math.max(0, Math.min(1, minuteFrom(a, now) / 90)) : clockRef.current / 90;
+  }, []);
 
   // Resolve a match's two starting XIs and simulate it.
   const simById = useCallback(
@@ -409,7 +416,7 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
             awayLineup={lineupFor(spotMatch.awayId)!}
             homeCode={code(spotMatch.homeId)}
             awayCode={code(spotMatch.awayId)}
-            events={spotMatch.result!.events}
+            progressAt={progressAt}
             clock={clock}
             playing={playing}
             seed={bracketMatchSeed(bracketSeed, spotMatch.round, spotMatch.slot)}

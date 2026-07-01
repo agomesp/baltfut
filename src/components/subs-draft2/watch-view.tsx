@@ -5,7 +5,7 @@
 // no controls, it just follows. Reuses the real PitchView + the deterministic
 // replay; the pitch motion is cosmetic (unseeded) so only the scoreline + timing
 // sync, which is the point.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlagIcon } from "@/components/live/bf-ui";
 import PitchView from "@/components/subs-draft2/pitch-view";
 import { createWatchChannel } from "@/lib/subs-draft/watch-channel";
@@ -72,6 +72,13 @@ export default function WatchView({ id }: { id: string }) {
     return null;
   }, [world, state]);
 
+  // Smooth match progress (0..1) from the SHARED clock — so the viewer's authoritative
+  // spotlight sim (same seed as the host) steps ~1 tick/frame and stays goal-synced.
+  const progressAt = useCallback(() => {
+    const s = stateRef.current;
+    return s ? Math.max(0, Math.min(1, viewerMinute(s, Date.now()) / 90)) : 0;
+  }, []);
+
   const code = (tid: string | null) => (tid ? world?.byId.get(tid)?.code ?? "" : "");
   const nick = (tid: string | null) => (tid ? world?.byId.get(tid)?.owner.replace(" 🤖", "") ?? "?" : "?");
 
@@ -119,7 +126,7 @@ export default function WatchView({ id }: { id: string }) {
             awayLineup={autoLineup(world.byId.get(spotMatch.awayId)!, DEFAULT_FORMATION, {})}
             homeCode={code(spotMatch.homeId)}
             awayCode={code(spotMatch.awayId)}
-            events={spotMatch.result!.events}
+            progressAt={progressAt}
             clock={clock}
             playing={state.playing}
             seed={"matchday" in spotMatch

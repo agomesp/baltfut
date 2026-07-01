@@ -97,6 +97,12 @@ export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: T
 
   const nick = useCallback((id: string | null) => (id ? byId.get(id)?.owner.replace(" 🤖", "") ?? "?" : "?"), [byId]);
   const code = useCallback((id: string | null) => (id ? byId.get(id)?.code ?? "" : ""), [byId]);
+  // Smooth match progress (0..1) at a performance.now() — the same anchor that drives
+  // the displayed minute, so the authoritative spotlight sim steps ~1 tick/frame.
+  const progressAt = useCallback((now: number) => {
+    const a = anchorRef.current;
+    return a ? Math.max(0, Math.min(1, minuteFrom(a, now) / 90)) : clockRef.current / 90;
+  }, []);
 
   // Resolve a match's two starting XIs and simulate it — DRAWS allowed (groups).
   const simById = useCallback(
@@ -390,7 +396,7 @@ export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: T
             awayLineup={lineupFor(spotMatch.awayId)!}
             homeCode={code(spotMatch.homeId)}
             awayCode={code(spotMatch.awayId)}
-            events={spotMatch.result!.events}
+            progressAt={progressAt}
             clock={clock}
             playing={playing}
             seed={groupMatchSeed(stage.seed, spotMatch.group, spotMatch.matchday, spotMatch.slot)}

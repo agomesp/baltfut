@@ -21,9 +21,9 @@ import { FlagIcon } from "@/components/live/bf-ui";
 import type { Team } from "@/lib/subs-draft/engine";
 import { fieldLayout, type FieldSlot, type Lineup } from "@/lib/subs-draft/squad";
 import { createMatchSim, type MatchSim, type Snapshot } from "@/lib/subs-draft/match-sim";
-import { createSimClock, lerpSnapshot, reconcileEvents, FIXED_DT, type SimClock } from "@/lib/subs-draft/sim-clock";
+import { createProgressClock, lerpSnapshot, reconcileEvents, FIXED_DT, type ProgressClock } from "@/lib/subs-draft/sim-clock";
+import { TOTAL_STEPS } from "@/lib/subs-draft/sim-timing";
 import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
-import type { MatchEvent } from "@/lib/subs-draft/tournament";
 
 const HOME = "#c8ff2d";
 const AWAY = "#5fb0ff";
@@ -63,43 +63,50 @@ function proj(fx: number, fy: number) {
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
 export default function PitchView({
-  home, away, homeLineup, awayLineup, homeCode, awayCode, events, clock, playing, seed,
+  home, away, homeLineup, awayLineup, homeCode, awayCode, clock, playing, seed, progressAt,
 }: {
   home: Team; away: Team; homeLineup: Lineup; awayLineup: Lineup;
-  homeCode: string; awayCode: string; events: MatchEvent[]; clock: number; playing: boolean; seed?: number;
+  homeCode: string; awayCode: string; clock: number; playing: boolean; seed?: number;
+  /** Smooth match progress (0..1) at a given performance.now(). Lets the pitch step
+   * the sim ~1 tick/frame between the parent's coarse clock samples; falls back to
+   * clock/90. The sim is now AUTHORITATIVE (xG-unification): goals emerge from play. */
+  progressAt?: (nowMs: number) => number;
 }) {
   const homeXI = useMemo(() => fieldLayout(home, homeLineup, "home"), [home, homeLineup]);
   const awayXI = useMemo(() => fieldLayout(away, awayLineup, "away"), [away, awayLineup]);
-  const goals = useMemo(() => events.filter((e) => e.type === "goal"), [events]);
 
   const [caption, setCaption] = useState<string | null>(null);
   const [stats, setStats] = useState<{ possHome: number; shots: { home: number; away: number } }>({ possHome: 0.5, shots: { home: 0, away: 0 } });
   const [ticker, setTicker] = useState<{ min: number; text: string }[]>([]);
   const [cardFlash, setCardFlash] = useState<{ type: "yellow" | "red"; id: number } | null>(null);
   const [flash, setFlash] = useState<{ teamId: string; scorer: string } | null>(null);
+  const [score, setScore] = useState<{ home: number; away: number }>({ home: 0, away: 0 });
   const [style, setStyle] = useState<Style>("ik");
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const simRef = useRef<MatchSim | null>(null);
   const lastTs = useRef(0);
   const progressRef = useRef(0);
+  const progressAtRef = useRef(progressAt);
   const styleRef = useRef<Style>("ik");
-  const celebrated = useRef(goals.filter((e) => e.minute <= clock).length);
+  const prevGoalsRef = useRef<{ home: number; away: number }>({ home: 0, away: 0 });
   const bookingsSig = useRef("");
   const eventSeqRef = useRef(0);
   const sentOffRef = useRef<Set<string>>(new Set());
   const bookRef = useRef<Record<string, "yellow" | "red">>({});
   const trailRef = useRef<Pt[]>([]);
-  // A0.2: the fixed-step clock + the two most-recent AUTHORITATIVE snapshots.
-  // Motion/velocity read these (over FIXED_DT); the render interpolates between
-  // them. prevBallSpeed/lastCap track cosmetic kick/foul edges.
-  const simClockRef = useRef<SimClock | null>(null);
+  // Stage 3: a PROGRESS-driven fixed-step clock + the two most-recent AUTHORITATIVE
+  // snapshots. The sim runs {scoring} so goals emerge from play; the clock pulls it to
+  // the step matching the match minute (headless==live). The render interpolates between
+  // the two snapshots. prevBallSpeed/lastCap track cosmetic kick/foul edges.
+  const simClockRef = useRef<ProgressClock | null>(null);
   const prevSnapRef = useRef<Snapshot | null>(null);
   const currSnapRef = useRef<Snapshot | null>(null);
 
   const prevBallSpeed = useRef(0);
   const lastCap = useRef<string | null>(null);
   useEffect(() => { progressRef.current = clock / 90; }, [clock]);
+  useEffect(() => { progressAtRef.current = progressAt; }, [progressAt]);
   useEffect(() => { styleRef.current = style; }, [style]);
 
   const skels = useRef<{ home: Skel[]; away: Skel[] }>({ home: [], away: [] });
@@ -109,46 +116,38 @@ export default function PitchView({
       vx: 0, vy: 0, ax: 0, ay: 0, gait: Math.random() * 6.28, lean: 0, kickT: 0, kx: 0, ky: 1, fall: 0,
     }));
     skels.current = { home: mk(homeXI), away: mk(awayXI) };
-    // Seed the pitch sim so the live spotlight is REPRODUCIBLE (the prerequisite for
-    // making it agree with the headless scoring run — xG unification).
-    const sim = createMatchSim(homeXI, awayXI, seed);
+    // xG-unification: the spotlight sim is AUTHORITATIVE ({scoring}) and seeded with the
+    // SAME seed the headless scoring run used, so the live match reaches the identical
+    // scoreline. The progress clock pulls it to the step matching the match minute.
+    const sim = createMatchSim(homeXI, awayXI, seed, { scoring: true });
     simRef.current = sim;
-    // The clock steps the sim at a FIXED dt (progress supplied live via the ref).
-    simClockRef.current = createSimClock((dt) => sim.step(dt, progressRef.current));
+    simClockRef.current = createProgressClock((dt) => sim.step(dt), TOTAL_STEPS);
     const snap0 = sim.snapshot();
     prevSnapRef.current = snap0;
     currSnapRef.current = snap0;
+    // sentinel: the next pump resyncs the scoreboard to the (fresh) sim's tally without
+    // firing a spurious goal flash (see the pg.home >= 0 guard). A new match remounts
+    // via key= so score state also resets on its own; this covers a mid-match rebuild.
+    prevGoalsRef.current = { home: -1, away: -1 };
   }, [homeXI, awayXI, seed]);
-
-  useEffect(() => {
-    const crossed = goals.filter((e) => e.minute <= clock).length;
-    if (crossed > celebrated.current) {
-      const e = goals.filter((ev) => ev.minute <= clock)[crossed - 1];
-      celebrated.current = crossed;
-      simRef.current?.scoreFor(e.teamId === home.id ? "home" : "away");
-      setFlash({ teamId: e.teamId, scorer: e.player });
-      const t = setTimeout(() => setFlash(null), 1500);
-      return () => clearTimeout(t);
-    }
-    if (crossed < celebrated.current) celebrated.current = crossed;
-  }, [clock, goals, home.id]);
 
   useEffect(() => {
     if (!playing) return;
     const ctx = canvasRef.current?.getContext("2d");
-    simClockRef.current?.reset(performance.now()); // fresh timebase on (re)start → no phantom catch-up
     lastTs.current = 0;
     let raf = 0;
     const flashTimers = new Set<ReturnType<typeof setTimeout>>(); // card-flash dismissals to cancel on unmount
 
-    // AUTHORITY: run the sim in fixed steps up to `nowMs`, then read the snapshot
-    // ONCE and refresh overlay + authoritative velocity. Elapsed-based, so calling
-    // it from both rAF and the worker metronome (A0.3) never double-steps.
+    // AUTHORITY: pull the sim forward to the step matching the match PROGRESS (smooth
+    // via progressAt, falling back to the coarse clock), then read the snapshot ONCE
+    // and refresh overlay + authoritative velocity. Progress-based, so calling it from
+    // both rAF and the worker metronome (A0.3) never double-steps.
     const pump = (nowMs: number) => {
       const sim = simRef.current;
       const clk = simClockRef.current;
       if (!sim || !clk) return;
-      const ran = clk.advance(nowMs);
+      const p = progressAtRef.current ? progressAtRef.current(nowMs) : progressRef.current;
+      const ran = clk.advance(p);
       if (ran <= 0) return;
       const base = currSnapRef.current ?? sim.snapshot();
       const snap = sim.snapshot();
@@ -162,6 +161,25 @@ export default function PitchView({
       const sig = Object.entries(snap.bookings).map(([k, v]) => k + v).join(",");
       if (sig !== bookingsSig.current) { bookingsSig.current = sig; bookRef.current = snap.bookings; }
       if (snap.sentOff.length !== sentOffRef.current.size) sentOffRef.current = new Set(snap.sentOff);
+
+      // goals: the pitch PRODUCES them now. Track the live tally for the scoreboard and
+      // fire the GOOOL flash on the increment edge (suppressed during a catch-up burst).
+      const pg = prevGoalsRef.current;
+      if (snap.goals.home !== pg.home || snap.goals.away !== pg.away) {
+        const scoredHome = snap.goals.home > pg.home;
+        // a real goal (prev was a genuine tally, not the -1 resync sentinel)
+        const scored = pg.home >= 0 && (scoredHome || snap.goals.away > pg.away);
+        prevGoalsRef.current = { home: snap.goals.home, away: snap.goals.away };
+        setScore({ home: snap.goals.home, away: snap.goals.away });
+        if (scored && !clk.wasCapped()) {
+          const gev = sim.getResult().events.filter((e) => e.type === "goal");
+          const last = gev[gev.length - 1];
+          const teamId = last ? (last.side === "home" ? home.id : away.id) : scoredHome ? home.id : away.id;
+          setFlash({ teamId, scorer: last?.player ?? "" });
+          const t = setTimeout(() => { flashTimers.delete(t); setFlash((f) => (f ? null : f)); }, 1600);
+          flashTimers.add(t);
+        }
+      }
 
       // events: at most ONE ticker line per pump; a catch-up (resync) skips the
       // transient flashes rather than replaying a burst of stale captions.
@@ -245,16 +263,13 @@ export default function PitchView({
     };
     raf = requestAnimationFrame(frame);
     return () => { cancelAnimationFrame(raf); unsubMetro(); flashTimers.forEach(clearTimeout); };
-  }, [playing, homeXI, awayXI]);
-
-  const hg = goals.filter((e) => e.teamId === home.id && e.minute <= clock).length;
-  const ag = goals.filter((e) => e.teamId === away.id && e.minute <= clock).length;
+  }, [playing, homeXI, awayXI, home.id, away.id]);
 
   return (
     <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", border: "1px solid rgba(200,255,45,0.18)", background: "#06140b" }}>
       <div style={{ position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", zIndex: 5, display: "flex", alignItems: "center", gap: 12, background: "rgba(0,0,0,0.55)", padding: "6px 14px", borderRadius: 999 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: MONO, fontSize: 13, color: HOME }}><FlagIcon code={homeCode} size={13} /> {homeCode}</span>
-        <span style={{ fontFamily: DISP, fontSize: 20, fontWeight: 800, color: "#fff" }}>{hg} <span style={{ color: "#6f7d73" }}>×</span> {ag}</span>
+        <span style={{ fontFamily: DISP, fontSize: 20, fontWeight: 800, color: "#fff" }}>{score.home} <span style={{ color: "#6f7d73" }}>×</span> {score.away}</span>
         <span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: MONO, fontSize: 13, color: AWAY }}>{awayCode} <FlagIcon code={awayCode} size={13} /></span>
         <span style={{ fontFamily: MONO, fontSize: 12, color: "#9fb0a4", marginLeft: 4 }}>{Math.round(clock)}&apos;</span>
       </div>

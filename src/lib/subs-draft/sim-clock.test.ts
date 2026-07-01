@@ -7,7 +7,7 @@
 // steps to run — wall time never enters the sim's maths. Interpolation between
 // the two most recent authoritative snapshots is strictly cosmetic (read-only).
 import { describe, it, expect, vi } from "vitest";
-import { createSimClock, lerpSnapshot, reconcileEvents, FIXED_DT, MAX_STEPS } from "./sim-clock";
+import { createSimClock, createProgressClock, lerpSnapshot, reconcileEvents, FIXED_DT, MAX_STEPS } from "./sim-clock";
 import { createMatchSim, type Snapshot } from "./match-sim";
 import { autoLineup, fieldLayout } from "./squad";
 import { mockField } from "./tournament";
@@ -140,5 +140,69 @@ describe("A0.2 — reconcileEvents (catch-up caption reconciliation)", () => {
 
   it("wasCapped forces resync even for a single-step jump", () => {
     expect(reconcileEvents(3, snap(4, "Gol"), true)).toEqual({ ticker: ["Gol"], resync: true, nextSeq: 4 });
+  });
+});
+
+describe("createProgressClock — progress ties the sim to the match clock (xG-unification)", () => {
+  it("runs floor(progress × totalSteps) steps and no more; each step gets FIXED_DT", () => {
+    const dts: number[] = [];
+    const clk = createProgressClock((dt) => dts.push(dt), 20);
+    expect(clk.advance(0.5)).toBe(10); // 10 < MAX_STEPS, one call
+    expect(clk.stepsRun()).toBe(10);
+    expect(dts).toHaveLength(10);
+    expect(dts.every((d) => d === FIXED_DT)).toBe(true);
+  });
+
+  it("only ever pulls forward — advancing to the same/earlier progress runs nothing", () => {
+    const clk = createProgressClock(() => {}, 40);
+    clk.advance(0.3); // 12 steps
+    expect(clk.advance(0.3)).toBe(0); // same → no steps
+    expect(clk.advance(0.1)).toBe(0); // earlier (forward-only) → no steps
+    expect(clk.stepsRun()).toBe(12);
+    expect(clk.advance(0.325)).toBe(1); // floor(0.325×40)=13 → the one-step delta
+  });
+
+  it("progress = 1 lands exactly on totalSteps over successive frames (scoreline complete at 90')", () => {
+    let n = 0;
+    const clk = createProgressClock(() => n++, 3600);
+    let guard = 0;
+    while (clk.stepsRun() < 3600 && guard++ < 100000) clk.advance(1);
+    expect(clk.stepsRun()).toBe(3600);
+    expect(n).toBe(3600);
+  });
+
+  it("alpha is the sub-step fraction when caught up", () => {
+    const clk = createProgressClock(() => {}, 100);
+    clk.advance(0.005); // exact = 0.5, target = 0 → 0 steps, half a step into it
+    expect(clk.stepsRun()).toBe(0);
+    expect(clk.alpha()).toBeCloseTo(0.5, 5);
+  });
+
+  it("caps a huge jump at MAX_STEPS and flags wasCapped, then catches up over calls", () => {
+    const clk = createProgressClock(() => {}, 10000);
+    const ran = clk.advance(1); // wants 10000 at once
+    expect(ran).toBe(MAX_STEPS);
+    expect(clk.wasCapped()).toBe(true);
+    expect(clk.alpha()).toBe(1); // still behind → show latest fully
+    // keep advancing at the same target → it drains in MAX_STEPS bursts
+    let guard = 0;
+    while (clk.stepsRun() < 10000 && guard++ < 10000) clk.advance(1);
+    expect(clk.stepsRun()).toBe(10000);
+    expect(clk.wasCapped()).toBe(false); // final top-up ran < MAX_STEPS
+  });
+
+  it("drives a real sim to the same result a full headless run produces (lumpy progress, any speed)", () => {
+    const home = fieldLayout(field[0], autoLineup(field[0], "4-4-2", {}), "home");
+    const away = fieldLayout(field[1], autoLineup(field[1], "4-3-3", {}), "away");
+    // headless reference
+    const ref = createMatchSim(home, away, 42, { scoring: true });
+    for (let i = 0; i < 3600; i++) ref.step(FIXED_DT);
+    // progress-clocked, fed a lumpy multi-step-per-frame curve (like 10× playback):
+    // steps of 10 stay under the cap yet exercise the multi-step advance.
+    const live = createMatchSim(home, away, 42, { scoring: true });
+    const clk = createProgressClock((dt) => live.step(dt), 3600);
+    for (let s = 10; s <= 3600; s += 10) clk.advance(s / 3600);
+    expect(clk.stepsRun()).toBe(3600);
+    expect(live.getResult()).toEqual(ref.getResult());
   });
 });

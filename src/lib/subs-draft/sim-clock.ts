@@ -83,6 +83,55 @@ export function createSimClock(step: (dt: number) => void): SimClock {
   };
 }
 
+/**
+ * A PROGRESS-driven fixed-step clock (xG-unification stage 3). Where SimClock reads
+ * wall time, this reads the match PROGRESS (0..1) and runs the sim forward until its
+ * step count reaches floor(progress × totalSteps). That ties the on-pitch simulation
+ * to the SAME clock a headless scoring run used — so the live spotlight reaches the
+ * identical scoreline at 90', at any playback speed, after any pause. The sim never
+ * rewinds; progress only ever pulls it forward. A single advance is capped at MAX_STEPS
+ * (a hidden-tab catch-up spreads over frames instead of freezing).
+ */
+export interface ProgressClock {
+  /** Run fixed steps until stepsRun == floor(progress × totalSteps). Returns how many
+   * ran this call (0 if already at target). progress is clamped to 0..1. */
+  advance(progress: number): number;
+  /** Sub-step fraction for render interpolation between the last two snapshots. */
+  alpha(): number;
+  /** True when this advance hit the per-call MAX_STEPS cap (a big catch-up) — the
+   * caller should suppress transient flashes + resync, as with SimClock. */
+  wasCapped(): boolean;
+  /** Total fixed steps executed so far (0..totalSteps). */
+  stepsRun(): number;
+}
+
+export function createProgressClock(step: (dt: number) => void, totalSteps: number): ProgressClock {
+  let run = 0;
+  let frac = 0;
+  let capped = false;
+  return {
+    advance(progress: number): number {
+      const exact = clamp01(progress) * totalSteps;
+      const target = Math.floor(exact);
+      capped = false;
+      let ran = 0;
+      while (run < target) {
+        if (ran >= MAX_STEPS) { capped = true; break; }
+        step(FIXED_DT);
+        run += 1;
+        ran += 1;
+      }
+      // fully caught up → interpolate by the true sub-step fraction; still behind
+      // (a capped catch-up) → show the latest step fully so motion races forward.
+      frac = run >= target ? exact - target : 1;
+      return ran;
+    },
+    alpha() { return frac; },
+    wasCapped() { return capped; },
+    stepsRun() { return run; },
+  };
+}
+
 type Pt = { x: number; y: number };
 const lerpPt = (a: Pt, b: Pt, t: number): Pt => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
 
