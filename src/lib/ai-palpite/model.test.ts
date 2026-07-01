@@ -90,6 +90,24 @@ describe("buildAiPalpites", () => {
     expect(model.champion?.code).toBe("ARG"); // 90, ahead of ESP 90 by alpha? ARG<ESP
   });
 
+  it("eliminates the side that lost a knockout tie on penalties", () => {
+    const matches = [
+      // GER 1–1 PAR, Paraguay through on penalties (3–4). GER is out.
+      m("ko", "GER", "PAR", "post", "2026-06-29T20:30Z", {
+        stage: "round-of-32",
+        homeScore: 1,
+        awayScore: 1,
+      }),
+      m("g1", "ESP", "MAR", "pre", "2026-06-24T16:00Z"),
+    ];
+    matches[0].homeShootout = 3;
+    matches[0].awayShootout = 4;
+    const model = buildAiPalpites(matches);
+    const codes = model.ranking.map((r) => r.code);
+    expect(codes).not.toContain("GER");
+    expect(codes).toContain("PAR");
+  });
+
   it("projects decided knockout ties and leaves seeded slots open", () => {
     const matches = [
       m("ko1", "BRA", "JAM", "pre", "2026-07-01T16:00Z", { stage: "round-of-32" }),

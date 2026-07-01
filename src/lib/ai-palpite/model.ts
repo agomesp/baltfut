@@ -1,6 +1,7 @@
 import {
   buildKnockout,
   isPlaceholderTeam,
+  matchShootout,
   type Group,
   type KnockoutColumn,
   type Match,
@@ -108,8 +109,12 @@ function eliminatedCodes(matches: Match[]): Set<string> {
     const as = m.awayScore ?? 0;
     if (hs > as) out.add(m.away.abbreviation);
     else if (as > hs) out.add(m.home.abbreviation);
-    // Level after 90' is decided on penalties ESPN doesn't expose here; leave
-    // both alive rather than guess the wrong side out.
+    else {
+      // Level after 90'/AET → the penalty shootout decides who's out. ESPN now
+      // exposes the tally; only when it's absent do we leave both alive.
+      const so = matchShootout(m);
+      if (so) out.add(so.winner === "home" ? m.away.abbreviation : m.home.abbreviation);
+    }
   }
   return out;
 }

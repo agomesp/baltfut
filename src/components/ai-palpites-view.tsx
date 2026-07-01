@@ -18,6 +18,7 @@ import {
   SAIRA,
   LIME,
   GOLD,
+  GOLD_DEEP,
   DIM,
   DIM_2,
   FlagIcon,
@@ -67,32 +68,61 @@ function ScorePill({ score }: { score: ScorePalpite }) {
 
 const colHead = { fontFamily: JB, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" as const, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 6 };
 
-/** One side of a simulated tie: flag + code + name + goals. The team I back is
- *  lime with a ▸; predicted (not-yet-decided) sides render in italic. */
-function SimSlot({ team, goals, advances, penalties }: { team: SimTeam; goals: number; advances: boolean; penalties: boolean }) {
+/** One side of a simulated tie: flag + code + name + goals. The advancing side is
+ *  tinted `accent` (lime for a live pick, muted grey when the real result refuted
+ *  my pick) with a ▸; predicted (not-yet-decided) sides render in italic. `pens`
+ *  is the real shootout tally; `penMark` shows my projected-on-penalties call. */
+function SimSlot({ team, goals, advances, accent, pens, penMark }: { team: SimTeam; goals: number; advances: boolean; accent: string; pens: number | null; penMark: boolean }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", opacity: advances ? 1 : 0.6 }}>
       <FlagIcon code={team.code} size={12} />
-      <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13, color: advances ? LIME : "#f1f7f0", fontStyle: team.projected ? "italic" : "normal" }}>{team.code}</span>
+      <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13, color: advances ? accent : "#f1f7f0", fontStyle: team.projected ? "italic" : "normal" }}>{team.code}</span>
       <span style={{ fontFamily: BRIC, fontSize: 11, color: DIM, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontStyle: team.projected ? "italic" : "normal" }}>{teamNamePt(team.code, team.name)}</span>
       <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, flex: "none" }}>
-        {advances ? <span style={{ fontFamily: JB, fontSize: 9, color: LIME }}>▸</span> : null}
+        {advances ? <span style={{ fontFamily: JB, fontSize: 9, color: accent }}>▸</span> : null}
         <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 14, color: advances ? "#fff" : "#7d9a86" }}>
-          {goals}{advances && penalties ? <span style={{ fontFamily: JB, fontSize: 8, color: LIME, verticalAlign: "super" }}> p</span> : null}
+          {goals}
+          {pens != null ? <span style={{ fontFamily: JB, fontSize: 9, color: GOLD_DEEP, marginLeft: 2 }}>({pens})</span> : null}
+          {penMark && advances ? <span style={{ fontFamily: JB, fontSize: 8, color: accent, verticalAlign: "super" }}> p</span> : null}
         </span>
       </span>
     </div>
   );
 }
 
-/** A simulated tie card (two stacked slots). */
-function TieCard({ tie }: { tie: SimTie }) {
+/** Footer tag under a finished tie: a lime "acertei" when I called it right, or a
+ *  grey "errei" (with the side I wrongly backed) when the pitch refuted me. */
+function TieVerdict({ tie }: { tie: SimTie }) {
+  const predictedCode = tie.predictedWinner === "home" ? tie.home.code : tie.away.code;
   return (
-    <div style={card}>
+    <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px 6px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      {tie.miss ? (
+        <>
+          <span style={{ fontFamily: JB, fontSize: 8.5, letterSpacing: "0.06em", color: GOLD }}>✕ IA ERROU</span>
+          <span style={{ fontFamily: JB, fontSize: 8.5, letterSpacing: "0.04em", color: "#6f8a78" }}>· previu {predictedCode}</span>
+        </>
+      ) : (
+        <span style={{ fontFamily: JB, fontSize: 8.5, letterSpacing: "0.06em", color: LIME }}>✓ IA ACERTOU</span>
+      )}
+    </div>
+  );
+}
+
+/** A simulated tie card (two stacked slots). A finished tie shows its real result;
+ *  one the model got wrong is dimmed to grey so the error reads at a glance. */
+function TieCard({ tie }: { tie: SimTie }) {
+  const miss = tie.decided && tie.miss;
+  const hit = tie.decided && !tie.miss;
+  // Real winner on a miss is shown muted (I didn't back it), lime otherwise.
+  const accent = miss ? "#c5d0c8" : LIME;
+  const penMark = !tie.decided && tie.penalties; // projected-on-pens marker
+  return (
+    <div style={{ ...card, opacity: miss ? 0.6 : 1, borderColor: miss ? "rgba(255,255,255,0.05)" : hit ? "rgba(200,255,45,0.2)" : "rgba(255,255,255,0.08)" }}>
       <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <SimSlot team={tie.home} goals={tie.homeGoals} advances={tie.winner === "home"} penalties={tie.penalties} />
+        <SimSlot team={tie.home} goals={tie.homeGoals} advances={tie.winner === "home"} accent={accent} pens={tie.homePens} penMark={penMark} />
       </div>
-      <SimSlot team={tie.away} goals={tie.awayGoals} advances={tie.winner === "away"} penalties={tie.penalties} />
+      <SimSlot team={tie.away} goals={tie.awayGoals} advances={tie.winner === "away"} accent={accent} pens={tie.awayPens} penMark={penMark} />
+      {tie.decided ? <TieVerdict tie={tie} /> : null}
     </div>
   );
 }
@@ -124,7 +154,7 @@ export function AiPalpitesView({ matches, groups, groupByTeam }: AiPalpitesViewP
       {/* Projected knockout — full simulation (lead element of the screen) */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", margin: "4px 4px 8px" }}>
         <span style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.1em", color: "#9bb6a6" }}>MATA-MATA PROJETADO</span>
-        <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: DIM_2 }}>▸ avança · times em itálico = previsão de classificação · ᵖ = pênaltis</span>
+        <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: DIM_2 }}>▸ avança · itálico = previsão · ᵖ = pênaltis · <span style={{ color: "#c5d0c8" }}>cinza = IA errou (resultado real)</span></span>
       </div>
       {bracket.columns.length === 0 ? (
         <div style={{ ...card, padding: "28px 24px", textAlign: "center", fontFamily: BRIC, color: DIM, marginBottom: 26 }}>

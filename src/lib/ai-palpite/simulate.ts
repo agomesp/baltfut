@@ -1,5 +1,6 @@
 import {
   isPlaceholderTeam,
+  matchShootout,
   type Group,
   type Match,
   type StandingRow,
@@ -34,8 +35,20 @@ export interface SimTie {
   homeGoals: number;
   awayGoals: number;
   winner: "home" | "away";
-  /** Predicted level after 90' → I resolve it on penalties (stronger side). */
+  /** Decided on penalties — the real shootout for a finished tie, or my "level
+   *  after 90' → stronger side" call for a projected one. */
   penalties: boolean;
+  /** True when this is a real, finished result overlaid on the projection (vs. a
+   *  pure prediction). */
+  decided: boolean;
+  /** The side I backed (strength model). Equals `winner` unless the real result
+   *  went the other way — i.e. a decided tie I called wrong. */
+  predictedWinner: "home" | "away";
+  /** `decided` AND my pick lost — the projection was refuted on the pitch. */
+  miss: boolean;
+  /** Real penalty-shootout tallies for a finished shootout, else null. */
+  homePens: number | null;
+  awayPens: number | null;
 }
 
 export interface SimColumn {
@@ -70,11 +83,24 @@ const STAGE_LABEL: Record<string, string> = {
   final: "Final",
 };
 
+/** Every real knockout stage slug ESPN uses — the set whose fixtures can overlay
+ *  a projected tie with its actual result (incl. the 3rd-place match). */
+const KNOCKOUT_STAGES = new Set([
+  "round-of-32",
+  "round-of-16",
+  "quarterfinals",
+  "semifinals",
+  "3rd-place-match",
+  "final",
+]);
+
 // R16 home/away by round-of-32 winner number (1–16); QF by R16 winner number
 // (1–8); SF by QF winner number (1–4); final/3rd by SF number (1–2). Read off
-// ESPN's slot placeholders — see module header.
+// ESPN's real slot placeholders ("Round of 32 4 Winner", …) in the live 2026
+// bracket — the first-quadrant pairs interleave (1–4, 3–6, 2–5), they are not
+// consecutive.
 const R16_FROM_R32: [number, number][] = [
-  [1, 3], [2, 5], [4, 6], [7, 8], [11, 12], [9, 10], [14, 16], [13, 15],
+  [1, 4], [3, 6], [2, 5], [7, 8], [11, 12], [9, 10], [14, 16], [13, 15],
 ];
 const QF_FROM_R16: [number, number][] = [[1, 2], [5, 6], [3, 4], [7, 8]];
 const SF_FROM_QF: [number, number][] = [[1, 2], [3, 4]];
@@ -183,17 +209,54 @@ function teamFromStanding(s: Standing): SimTeam {
   return { code: s.code, name: s.name, projected: true };
 }
 
-function playTie(id: string, home: SimTeam, away: SimTeam): SimTie {
+/**
+ * Resolve a tie. When a real, finished fixture is supplied I overlay its actual
+ * scoreline, advancer and shootout — flagging it a `miss` if my pick lost. Any
+ * pending/absent fixture stays a pure projection from the strength model.
+ */
+function playTie(
+  id: string,
+  home: SimTeam,
+  away: SimTeam,
+  real?: Match | null,
+): SimTie {
   const s = predictScore(teamPower(home.code), teamPower(away.code));
-  let winner: "home" | "away";
-  let penalties = false;
-  if (s.winner === "draw") {
-    penalties = true;
-    winner = strongerCode(home.code, away.code) === home.code ? "home" : "away";
-  } else {
-    winner = s.winner;
+  // My call: the favored side, breaking a predicted draw by strength (a mata-mata
+  // can't end level).
+  const predictedWinner: "home" | "away" =
+    s.winner !== "draw"
+      ? s.winner
+      : strongerCode(home.code, away.code) === home.code ? "home" : "away";
+
+  if (real && real.state === "post") {
+    // ESPN's home/away may be flipped vs. my resolved orientation — key off codes.
+    const realHomeIsHome = real.home.abbreviation === home.code;
+    const homeGoals = (realHomeIsHome ? real.homeScore : real.awayScore) ?? 0;
+    const awayGoals = (realHomeIsHome ? real.awayScore : real.homeScore) ?? 0;
+    const so = matchShootout(real);
+    let winner: "home" | "away";
+    let homePens: number | null = null;
+    let awayPens: number | null = null;
+    if (so) {
+      const soWinnerCode = so.winner === "home" ? real.home.abbreviation : real.away.abbreviation;
+      winner = soWinnerCode === home.code ? "home" : "away";
+      homePens = realHomeIsHome ? so.home : so.away;
+      awayPens = realHomeIsHome ? so.away : so.home;
+    } else {
+      winner = homeGoals >= awayGoals ? "home" : "away";
+    }
+    return {
+      id, home, away, homeGoals, awayGoals, winner,
+      penalties: so != null, decided: true, predictedWinner,
+      miss: winner !== predictedWinner, homePens, awayPens,
+    };
   }
-  return { id, home, away, homeGoals: s.home, awayGoals: s.away, winner, penalties };
+
+  return {
+    id, home, away, homeGoals: s.home, awayGoals: s.away, winner: predictedWinner,
+    penalties: s.winner === "draw", decided: false, predictedWinner,
+    miss: false, homePens: null, awayPens: null,
+  };
 }
 
 const winnerOf = (t: SimTie): SimTeam => (t.winner === "home" ? t.home : t.away);
@@ -281,16 +344,39 @@ export function simulateBracket(matches: Match[], groups: Group[]): BracketSim {
     return { code: team.abbreviation, name: team.name, projected: true };
   }
 
-  // Round of 32, numbered 1–16 by kickoff order.
-  const r32Ties = r32.map((m, i) => playTie(`r32-${i + 1}`, resolve(m, "home"), resolve(m, "away")));
-  const pick = (ties: SimTie[], pairs: [number, number][], slug: string) =>
-    pairs.map(([h, a], i) => playTie(`${slug}-${i + 1}`, winnerOf(ties[h - 1]), winnerOf(ties[a - 1])));
+  // Real knockout fixtures by stage, so a resolved tie can pick up its actual
+  // result once both sides are concrete and the match is finished.
+  const realByStage = new Map<string, Match[]>();
+  for (const mt of matches) {
+    if (!mt.stage || !KNOCKOUT_STAGES.has(mt.stage)) continue;
+    const arr = realByStage.get(mt.stage) ?? [];
+    arr.push(mt);
+    realByStage.set(mt.stage, arr);
+  }
+  const realFor = (stage: string, a: string, b: string): Match | null =>
+    (realByStage.get(stage) ?? []).find((mt) => {
+      const h = mt.home.abbreviation;
+      const w = mt.away.abbreviation;
+      return (h === a && w === b) || (h === b && w === a);
+    }) ?? null;
 
-  const r16Ties = pick(r32Ties, R16_FROM_R32, "r16");
-  const qfTies = pick(r16Ties, QF_FROM_R16, "qf");
-  const sfTies = pick(qfTies, SF_FROM_QF, "sf");
-  const finalTie = playTie("final", winnerOf(sfTies[0]), winnerOf(sfTies[1]));
-  const thirdPlace = playTie("third", loserOf(sfTies[0]), loserOf(sfTies[1]));
+  // Round of 32, numbered 1–16 by kickoff order — each carries its real fixture.
+  const r32Ties = r32.map((mt, i) =>
+    playTie(`r32-${i + 1}`, resolve(mt, "home"), resolve(mt, "away"), mt));
+  const pick = (ties: SimTie[], pairs: [number, number][], slug: string, stage: string) =>
+    pairs.map(([h, a], i) => {
+      const home = winnerOf(ties[h - 1]);
+      const away = winnerOf(ties[a - 1]);
+      return playTie(`${slug}-${i + 1}`, home, away, realFor(stage, home.code, away.code));
+    });
+
+  const r16Ties = pick(r32Ties, R16_FROM_R32, "r16", "round-of-16");
+  const qfTies = pick(r16Ties, QF_FROM_R16, "qf", "quarterfinals");
+  const sfTies = pick(qfTies, SF_FROM_QF, "sf", "semifinals");
+  const fH = winnerOf(sfTies[0]), fA = winnerOf(sfTies[1]);
+  const finalTie = playTie("final", fH, fA, realFor("final", fH.code, fA.code));
+  const tH = loserOf(sfTies[0]), tA = loserOf(sfTies[1]);
+  const thirdPlace = playTie("third", tH, tA, realFor("3rd-place-match", tH.code, tA.code));
 
   const columns: SimColumn[] = [
     { slug: "round-of-32", label: STAGE_LABEL["round-of-32"], ties: r32Ties },

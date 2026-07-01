@@ -160,3 +160,97 @@ describe("simulateBracket", () => {
     expect(thirdSeedGroups.has(fromGroup ?? "")).toBe(true);
   });
 });
+
+/** A finished/pending round-of-32 fixture with a real scoreline and optional
+ *  shootout — mirrors the live 2026 bracket to test the reality overlay. */
+function realMatch(
+  id: string,
+  homeCode: string,
+  awayCode: string,
+  startsAt: string,
+  opts: {
+    state?: MatchState;
+    hs?: number | null;
+    as?: number | null;
+    hp?: number | null;
+    ap?: number | null;
+  } = {},
+): Match {
+  const base = m(id, homeCode, awayCode, "round-of-32", startsAt, opts.state ?? "post");
+  return {
+    ...base,
+    homeScore: opts.hs ?? null,
+    awayScore: opts.as ?? null,
+    homeShootout: opts.hp ?? null,
+    awayShootout: opts.ap ?? null,
+  };
+}
+
+/** The live round of 32 (kickoff order 1–16): ties 1–7 finished, 8–16 pending.
+ *  Ties 3 (GER→PAR) and 4 (NED→MAR) were upsets the strength model got wrong. */
+function liveR32(): Match[] {
+  const t = (n: number) => `2026-07-0${Math.min(9, 1 + Math.floor(n / 4))}T0${n % 8}:00Z`;
+  const defs: [string, string, Parameters<typeof realMatch>[4]][] = [
+    ["RSA", "CAN", { hs: 0, as: 1 }],
+    ["BRA", "JPN", { hs: 2, as: 1 }],
+    ["GER", "PAR", { hs: 1, as: 1, hp: 3, ap: 4 }],
+    ["NED", "MAR", { hs: 1, as: 1, hp: 2, ap: 3 }],
+    ["CIV", "NOR", { hs: 1, as: 2 }],
+    ["FRA", "SWE", { hs: 3, as: 0 }],
+    ["MEX", "ECU", { hs: 2, as: 0 }],
+    ["ENG", "COD", { state: "pre" }],
+    ["BEL", "SEN", { state: "pre" }],
+    ["USA", "BIH", { state: "pre" }],
+    ["ESP", "AUT", { state: "pre" }],
+    ["POR", "CRO", { state: "pre" }],
+    ["SUI", "ALG", { state: "pre" }],
+    ["AUS", "EGY", { state: "pre" }],
+    ["ARG", "CPV", { state: "pre" }],
+    ["COL", "GHA", { state: "pre" }],
+  ];
+  return defs.map(([h, a, o], i) => realMatch(`r${i + 1}`, h, a, t(i), o));
+}
+
+describe("simulateBracket — reality overlay", () => {
+  const groups = makeGroups();
+  const r32 = liveR32();
+
+  it("keeps the real scoreline and advancer for a finished tie the model called right", () => {
+    const tie = simulateBracket(r32, groups).columns[0].ties[1]; // BRA 2–1 JPN
+    expect(tie.decided).toBe(true);
+    expect([tie.homeGoals, tie.awayGoals]).toEqual([2, 1]);
+    expect(tie.winner).toBe("home");
+    expect(tie.miss).toBe(false);
+  });
+
+  it("flags an upset as a miss, keeping the real result and pen tally", () => {
+    const [, , ger, ned] = simulateBracket(r32, groups).columns[0].ties;
+    // Tie 3: GER 1–1 PAR (pens 3–4) — model backed GER, Paraguay went through.
+    expect(ger.decided).toBe(true);
+    expect(ger.miss).toBe(true);
+    expect(ger.winner).toBe("away"); // PAR
+    expect(ger.predictedWinner).toBe("home"); // GER
+    expect(ger.penalties).toBe(true);
+    expect([ger.homePens, ger.awayPens]).toEqual([3, 4]);
+    // Tie 4: NED 1–1 MAR (pens 2–3) — model backed NED, Morocco went through.
+    expect(ned.miss).toBe(true);
+    expect(ned.winner).toBe("away"); // MAR
+    expect([ned.homePens, ned.awayPens]).toEqual([2, 3]);
+  });
+
+  it("leaves a pending tie as a projection", () => {
+    const eng = simulateBracket(r32, groups).columns[0].ties[7]; // ENG vs COD
+    expect(eng.decided).toBe(false);
+    expect(eng.miss).toBe(false);
+  });
+
+  it("advances the real winners into the true round-of-16 pairings", () => {
+    const r16 = simulateBracket(r32, groups).columns[1].ties;
+    const pair = (t: (typeof r16)[number]) => [t.home.code, t.away.code].sort();
+    // Real wiring: [1,4] CAN–MAR, [3,6] PAR–FRA, [2,5] BRA–NOR, [7,8] MEX–winner8.
+    expect(pair(r16[0])).toEqual(["CAN", "MAR"]);
+    expect(pair(r16[1])).toEqual(["FRA", "PAR"]);
+    expect(pair(r16[2])).toEqual(["BRA", "NOR"]);
+    expect(pair(r16[3])).toEqual(["ENG", "MEX"]); // MEX real, ENG projected past COD
+  });
+});
