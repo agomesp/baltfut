@@ -13,6 +13,7 @@ import PitchView from "@/components/subs-draft2/pitch-view";
 import LineupEditor from "@/components/subs-draft/lineup-editor";
 import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
 import { randInt32 } from "@/lib/subs-draft/prng";
+import type { BroadcastState } from "@/lib/subs-draft/watch-sync";
 import type { Team } from "@/lib/subs-draft/engine";
 import {
   autoLineup,
@@ -61,7 +62,7 @@ type ClockAnchor = { atMs: number; baseMin: number; speed: number };
 const minuteFrom = (a: ClockAnchor, nowMs: number): number =>
   Math.max(0, Math.min(FULL_TIME, a.baseMin + (nowMs - a.atMs) * MIN_PER_MS * a.speed));
 
-export default function GroupsView({ teams, onAdvance }: { teams: Team[]; onAdvance: (qualified: string[]) => void }) {
+export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: Team[]; onAdvance: (qualified: string[]) => void; onBroadcast?: (s: BroadcastState) => void }) {
   const byId = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const ids = useMemo(() => teams.map((t) => t.id), [teams]);
 
@@ -209,6 +210,20 @@ export default function GroupsView({ teams, onAdvance }: { teams: Team[]; onAdva
   }, [speed, playing]);
 
   useEffect(() => () => stop(), [stop]);
+
+  // Watch-together: broadcast a tiny snapshot on every transition (the viewer
+  // re-derives the whole match from seed + the shared clock). kickoffEpochMs
+  // converts the A0 local performance.now() anchor to a shared Date.now() epoch.
+  useEffect(() => {
+    if (!onBroadcast) return;
+    const a = anchorRef.current;
+    onBroadcast({
+      v: 1, phase: "groups", seed: stage.seed, stageIdx: mdIdx,
+      kickoffEpochMs: a ? Date.now() - (performance.now() - a.atMs) : Date.now(),
+      baseMin: a && playing ? a.baseMin : clockRef.current,
+      speed, playing, spotlight, done, teamIds: null,
+    });
+  }, [onBroadcast, stage.seed, mdIdx, playing, speed, spotlight, done]);
 
   const begin = () => (mdRef.current < 0 ? startMatchday(0, stageRef.current) : setPlaying((p) => !p));
 

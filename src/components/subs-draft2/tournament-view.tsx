@@ -16,6 +16,8 @@ import { FlagIcon } from "@/components/live/bf-ui";
 import PitchView from "@/components/subs-draft2/pitch-view";
 import LineupEditor from "@/components/subs-draft/lineup-editor";
 import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
+import { randInt32 } from "@/lib/subs-draft/prng";
+import type { BroadcastState } from "@/lib/subs-draft/watch-sync";
 import type { Team } from "@/lib/subs-draft/engine";
 import {
   autoLineup,
@@ -28,6 +30,7 @@ import {
 import {
   advanceStatus,
   applyMatchEvents,
+  bracketMatchSeed,
   buildBracket,
   championId,
   finishRound,
@@ -50,6 +53,7 @@ const MONO = "var(--font-jb, ui-monospace)";
 const TICK_MS = 100;
 const SECS_PER_MATCH = 60; // a match runs 0'→90' over this many wall seconds at 1×
 const MIN_PER_MS = FULL_TIME / (SECS_PER_MATCH * 1000);
+const DEFAULT_BRACKET_SEED = 2026; // fixed → reproducible (replay + watch-together); Reiniciar reseeds
 
 /** A0.2: the displayed match minute, derived from a WALL-CLOCK anchor rather than
  * accumulated ticks — so a hidden/throttled tab doesn't fall behind and the clock
@@ -59,11 +63,12 @@ type ClockAnchor = { atMs: number; baseMin: number; speed: number };
 const minuteFrom = (a: ClockAnchor, nowMs: number): number =>
   Math.max(0, Math.min(FULL_TIME, a.baseMin + (nowMs - a.atMs) * MIN_PER_MS * a.speed));
 
-export default function TournamentView({ teams }: { teams: Team[] }) {
+export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; onBroadcast?: (s: BroadcastState) => void }) {
   const byId = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const ids = useMemo(() => teams.map((t) => t.id), [teams]);
 
-  const [bracket, setBracketState] = useState<Bracket>(() => buildBracket(ids));
+  const [bracketSeed, setBracketSeedState] = useState(DEFAULT_BRACKET_SEED);
+  const [bracket, setBracketState] = useState<Bracket>(() => buildBracket(ids, DEFAULT_BRACKET_SEED));
   const [roundIdx, setRoundIdx] = useState(-1);
   const [clock, setClock] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -79,6 +84,7 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
   const [awaitingNext, setAwaitingNext] = useState(false);
 
   const bracketRef = useRef<Bracket>(bracket);
+  const bracketSeedRef = useRef(DEFAULT_BRACKET_SEED);
   const lineupsRef = useRef<Record<string, Lineup>>({});
   const statusRef = useRef<StatusMap>({});
   const roundRef = useRef(-1);
@@ -90,6 +96,7 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
   useEffect(() => { speedRef.current = speed; }, [speed]);
 
   const setBracket = useCallback((b: Bracket) => { bracketRef.current = b; setBracketState(b); }, []);
+  const setBracketSeed = useCallback((s: number) => { bracketSeedRef.current = s; setBracketSeedState(s); }, []);
   const setLineups = useCallback((l: Record<string, Lineup>) => { lineupsRef.current = l; setLineupsState(l); }, []);
   const setStatus = useCallback((s: StatusMap) => { statusRef.current = s; setStatusState(s); }, []);
 
@@ -98,12 +105,12 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
 
   // Resolve a match's two starting XIs and simulate it.
   const simById = useCallback(
-    (homeId: string, awayId: string): MatchResult => {
+    (homeId: string, awayId: string, round: number, slot: number): MatchResult => {
       const home = byId.get(homeId)!;
       const away = byId.get(awayId)!;
       const hl = lineupsRef.current[homeId] ?? autoLineup(home, DEFAULT_FORMATION, statusRef.current);
       const al = lineupsRef.current[awayId] ?? autoLineup(away, DEFAULT_FORMATION, statusRef.current);
-      return simulateMatch(home, away, startingPlayers(home, hl), startingPlayers(away, al));
+      return simulateMatch(home, away, startingPlayers(home, hl), startingPlayers(away, al), bracketMatchSeed(bracketSeedRef.current, round, slot));
     },
     [byId],
   );
@@ -227,6 +234,19 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
 
   useEffect(() => () => stop(), [stop]);
 
+  // Watch-together: broadcast a snapshot on every transition; the viewer re-derives
+  // the whole knockout from bracketSeed + the shared clock.
+  useEffect(() => {
+    if (!onBroadcast) return;
+    const a = anchorRef.current;
+    onBroadcast({
+      v: 1, phase: "bracket", seed: bracketSeed, stageIdx: roundIdx,
+      kickoffEpochMs: a ? Date.now() - (performance.now() - a.atMs) : Date.now(),
+      baseMin: a && playing ? a.baseMin : clockRef.current,
+      speed, playing, spotlight, done: champion != null, teamIds: ids,
+    });
+  }, [onBroadcast, ids, bracketSeed, roundIdx, playing, speed, spotlight, champion]);
+
   const begin = () => (roundRef.current < 0 ? startRound(0, bracketRef.current) : setPlaying((p) => !p));
 
   function simulateAll() {
@@ -263,7 +283,9 @@ export default function TournamentView({ teams }: { teams: Team[] }) {
 
   function restart() {
     stop();
-    const fresh = buildBracket(ids);
+    const seed = randInt32(); // reseed → a fresh reproducible bracket
+    setBracketSeed(seed);
+    const fresh = buildBracket(ids, seed);
     roundRef.current = -1;
     clockRef.current = 0;
     anchorRef.current = null;

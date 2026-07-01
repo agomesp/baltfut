@@ -4,7 +4,7 @@
 // country, then a snake-ish category draft fills every squad. Matches + bracket are
 // mocked later. See src/lib/subs-draft/*.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   CATS,
   CAT_ABBR,
@@ -31,8 +31,10 @@ import {
   type Team,
 } from "@/lib/subs-draft/engine";
 import { fillTo48, goToGroups, mockTournament } from "@/lib/subs-draft/tournament";
+import { useWatchHost } from "@/lib/subs-draft/use-watch-host";
 import TournamentView from "@/components/subs-draft2/tournament-view";
 import GroupsView from "@/components/subs-draft2/groups-view";
+import WatchView from "@/components/subs-draft2/watch-view";
 import { FlagIcon } from "@/components/live/bf-ui";
 import { teamNamePt } from "@/lib/team-names";
 
@@ -47,6 +49,20 @@ const MONO = "var(--font-jb, ui-monospace)";
 
 export default function SubtestsPage() {
   const [state, setState] = useState<DraftState>(initialState);
+  const [hostId, setHostId] = useState<string | null>(null); // set → this tab is HOSTING
+  const hosting = hostId != null;
+  const { viewers, broadcast } = useWatchHost(hosting, hostId ?? "");
+
+  // ?watch=<id> → this tab is a VIEWER. useSyncExternalStore reads window SSR-safely
+  // (server snapshot = null → no hydration mismatch, no setState-in-effect).
+  const watchId = useSyncExternalStore(
+    useCallback(() => () => {}, []),
+    () => new URLSearchParams(window.location.search).get("watch"),
+    () => null,
+  );
+
+  const onBroadcast = hosting ? broadcast : undefined;
+  const watchable = state.phase === "groups" || state.phase === "bracket";
 
   return (
     <main
@@ -59,19 +75,55 @@ export default function SubtestsPage() {
       }}
     >
       <div style={{ maxWidth: 1080, margin: "0 auto" }}>
-        <Masthead phase={state.phase} teams={state.teams.length} />
-        {state.phase === "lobby" && <Lobby state={state} setState={setState} />}
-        {state.phase === "draft" && <Draft state={state} setState={setState} />}
-        {state.phase === "done" && <Done state={state} setState={setState} />}
-        {state.phase === "groups" && (
-          <GroupsView
-            teams={state.field}
-            onAdvance={(q32) => setState({ ...state, phase: "bracket", field: state.field.filter((t) => q32.includes(t.id)) })}
-          />
+        {watchId ? (
+          <WatchView id={watchId} />
+        ) : (
+          <>
+            <Masthead phase={state.phase} teams={state.teams.length} />
+            {watchable && <HostBar hosting={hosting} viewers={viewers} hostId={hostId} onStart={() => setHostId(Math.random().toString(36).slice(2, 8))} onStop={() => setHostId(null)} />}
+            {state.phase === "lobby" && <Lobby state={state} setState={setState} />}
+            {state.phase === "draft" && <Draft state={state} setState={setState} />}
+            {state.phase === "done" && <Done state={state} setState={setState} />}
+            {state.phase === "groups" && (
+              <GroupsView
+                teams={state.field}
+                onBroadcast={onBroadcast}
+                onAdvance={(q32) => setState({ ...state, phase: "bracket", field: state.field.filter((t) => q32.includes(t.id)) })}
+              />
+            )}
+            {state.phase === "bracket" && <TournamentView teams={state.field} onBroadcast={onBroadcast} />}
+          </>
         )}
-        {state.phase === "bracket" && <TournamentView teams={state.field} />}
       </div>
     </main>
+  );
+}
+
+/** Host controls for watch-together — start a room, share the ?watch link, see the
+ * viewer count. The channel persists across the groups→bracket transition (it lives
+ * here, in the page). */
+function HostBar({ hosting, viewers, hostId, onStart, onStop }: { hosting: boolean; viewers: number; hostId: string | null; onStart: () => void; onStop: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const link = hostId && typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?watch=${hostId}` : "";
+  return (
+    <section style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 14px", borderRadius: 12, border: `1px solid ${hosting ? LIME : LINE}`, background: hosting ? "rgba(200,255,45,0.06)" : "transparent", marginBottom: 16 }}>
+      {!hosting ? (
+        <>
+          <button onClick={onStart} style={{ ...primaryBtn, width: "auto", padding: "9px 16px" }}>📡 Transmitir ao vivo</button>
+          <span style={{ fontSize: 12, color: DIM }}>Assista junto: cada pessoa vê a MESMA partida, sincronizada pelo relógio.</span>
+        </>
+      ) : (
+        <>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: DISP, fontWeight: 800, color: LIME }}>
+            <span style={{ width: 9, height: 9, borderRadius: 999, background: "#ff4d4d", boxShadow: "0 0 8px #ff4d4d" }} /> Transmitindo
+          </span>
+          <span style={{ fontFamily: MONO, fontSize: 12, color: INK }}>👥 {viewers} assistindo</span>
+          <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} style={{ flex: 1, minWidth: 180, padding: "7px 10px", borderRadius: 8, border: `1px solid ${LINE}`, background: "rgba(0,0,0,0.25)", color: INK, fontFamily: MONO, fontSize: 12 }} />
+          <button onClick={() => { if (link) { void navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); } }} style={{ ...smallBtn, width: "auto" }}>{copied ? "✓ Copiado" : "Copiar link"}</button>
+          <button onClick={onStop} style={{ ...smallBtn, width: "auto" }}>⏹ Parar</button>
+        </>
+      )}
+    </section>
   );
 }
 

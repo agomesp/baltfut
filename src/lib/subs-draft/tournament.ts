@@ -259,6 +259,12 @@ export function buildBracket(teamIds: string[], seed: number = randInt32()): Bra
   return rounds;
 }
 
+/** A stable per-match seed for the knockout (mirrors groupMatchSeed) so a bracket
+ * is a pure function of one stage seed — needed for replay + watch-together. */
+export function bracketMatchSeed(stageSeed: number, round: number, slot: number): number {
+  return (mulberry32((stageSeed + round * 100003 + slot * 1009) >>> 0)() * 4294967296) >>> 0;
+}
+
 /** Place a finished match's winner into its parent slot in the next round. */
 export function advanceWinner(bracket: Bracket, match: BracketMatch): void {
   const next = bracket[match.round + 1];
@@ -281,13 +287,13 @@ function cloneBracket(bracket: Bracket): Bracket {
 export function playRound(
   bracket: Bracket,
   idx: number,
-  simulate: (homeId: string, awayId: string) => MatchResult,
+  simulate: (homeId: string, awayId: string, round: number, slot: number) => MatchResult,
 ): Bracket {
   return bracket.map((round, r) =>
     r !== idx
       ? round
       : round.map((m) =>
-          m.homeId && m.awayId && !m.result ? { ...m, result: simulate(m.homeId, m.awayId), status: "live" as const } : m,
+          m.homeId && m.awayId && !m.result ? { ...m, result: simulate(m.homeId, m.awayId, r, m.slot), status: "live" as const } : m,
         ),
   );
 }
