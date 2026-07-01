@@ -7,6 +7,7 @@ import {
 } from "@/lib/espn";
 import { teamPower } from "@/lib/ai-palpite/power";
 import { predictScore, strongerCode } from "@/lib/ai-palpite/predict";
+import { R16_FROM_R32, QF_FROM_R16, SF_FROM_QF } from "@/lib/bracket-shape";
 
 /**
  * Full mata-mata simulation. From the live group tables + the remaining group
@@ -93,17 +94,6 @@ const KNOCKOUT_STAGES = new Set([
   "3rd-place-match",
   "final",
 ]);
-
-// R16 home/away by round-of-32 winner number (1–16); QF by R16 winner number
-// (1–8); SF by QF winner number (1–4); final/3rd by SF number (1–2). Read off
-// ESPN's real slot placeholders ("Round of 32 4 Winner", …) in the live 2026
-// bracket — the first-quadrant pairs interleave (1–4, 3–6, 2–5), they are not
-// consecutive.
-const R16_FROM_R32: [number, number][] = [
-  [1, 4], [3, 6], [2, 5], [7, 8], [11, 12], [9, 10], [14, 16], [13, 15],
-];
-const QF_FROM_R16: [number, number][] = [[1, 2], [5, 6], [3, 4], [7, 8]];
-const SF_FROM_QF: [number, number][] = [[1, 2], [3, 4]];
 
 function parseGd(gd: string): number {
   const n = Number(gd);
@@ -363,7 +353,12 @@ export function simulateBracket(matches: Match[], groups: Group[]): BracketSim {
   // Round of 32, numbered 1–16 by kickoff order — each carries its real fixture.
   const r32Ties = r32.map((mt, i) =>
     playTie(`r32-${i + 1}`, resolve(mt, "home"), resolve(mt, "away"), mt));
-  const pick = (ties: SimTie[], pairs: [number, number][], slug: string, stage: string) =>
+  const pick = (
+    ties: SimTie[],
+    pairs: readonly (readonly [number, number])[],
+    slug: string,
+    stage: string,
+  ) =>
     pairs.map(([h, a], i) => {
       const home = winnerOf(ties[h - 1]);
       const away = winnerOf(ties[a - 1]);

@@ -12,6 +12,7 @@ import { fmtTime, groupByDay } from "@/lib/format";
 import { teamNamePt } from "@/lib/team-names";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { groupLabelFor } from "@/components/match-meta";
+import { ConnectedBracket } from "@/components/connected-bracket";
 import {
   BRIC,
   JB,
@@ -162,45 +163,43 @@ export function AiPalpitesView({ matches, groups, groupByTeam }: AiPalpitesViewP
         </div>
       ) : (
         <div style={{ overflowX: "auto", paddingBottom: 12, marginBottom: 26 }}>
-          <div style={{ display: "flex", gap: 16, minWidth: "max-content" }}>
-            {bracket.columns.map((col) => (
-              <div key={col.slug} style={{ flex: "0 0 248px", display: "flex", flexDirection: "column" }}>
-                <div style={{ ...colHead, color: col.slug === "final" ? LIME : "#9bb6a6" }}>{col.label}</div>
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-                  {col.ties.map((tie) => (
-                    <TieCard key={tie.id} tie={tie} />
-                  ))}
-                  {/* 3rd-place match rides under the final column. */}
-                  {col.slug === "final" && bracket.thirdPlace ? (
-                    <>
-                      <div style={{ ...colHead, color: "#9bb6a6", marginTop: 10 }}>3º lugar</div>
+          <ConnectedBracket
+            rounds={bracket.columns.map((col) => ({
+              key: col.slug,
+              label: <div style={{ ...colHead, color: col.slug === "final" ? LIME : "#9bb6a6" }}>{col.label}</div>,
+              items: col.ties.map((tie) => <TieCard key={tie.id} tie={tie} />),
+            }))}
+            colWidth={248}
+            unitHeight={108}
+            gap={24}
+            trailing={{
+              width: 190,
+              label: <div style={{ ...colHead, color: LIME }}>Campeão</div>,
+              content: (
+                <>
+                  <div style={{ borderRadius: 14, border: "1px solid rgba(200,255,45,0.45)", background: "linear-gradient(180deg, rgba(200,255,45,0.06), transparent)", boxShadow: "0 0 30px -10px rgba(200,255,45,0.5)", padding: "22px 16px", textAlign: "center" }}>
+                    {champion ? (
+                      <>
+                        <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+                          <FlagCrest code={champion.code} accent={teamAccent(champion.code)} size={56} />
+                        </div>
+                        <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 30, lineHeight: 1, color: LIME }}>{champion.code}</div>
+                        <div style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "#9bb6a6", marginTop: 8 }}>palpite da IA</div>
+                      </>
+                    ) : (
+                      <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 44, lineHeight: 1, color: LIME }}>?</div>
+                    )}
+                  </div>
+                  {bracket.thirdPlace ? (
+                    <div style={{ marginTop: 16 }}>
+                      <div style={{ ...colHead, color: "#9bb6a6" }}>3º lugar</div>
                       <TieCard tie={bracket.thirdPlace} />
-                    </>
+                    </div>
                   ) : null}
-                </div>
-              </div>
-            ))}
-
-            {/* Champion column */}
-            <div style={{ flex: "0 0 190px", display: "flex", flexDirection: "column" }}>
-              <div style={{ ...colHead, color: LIME }}>Campeão</div>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ borderRadius: 14, border: "1px solid rgba(200,255,45,0.45)", background: "linear-gradient(180deg, rgba(200,255,45,0.06), transparent)", boxShadow: "0 0 30px -10px rgba(200,255,45,0.5)", padding: "22px 16px", textAlign: "center" }}>
-                  {champion ? (
-                    <>
-                      <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
-                        <FlagCrest code={champion.code} accent={teamAccent(champion.code)} size={56} />
-                      </div>
-                      <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 30, lineHeight: 1, color: LIME }}>{champion.code}</div>
-                      <div style={{ fontFamily: JB, fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "#9bb6a6", marginTop: 8 }}>palpite da IA</div>
-                    </>
-                  ) : (
-                    <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 44, lineHeight: 1, color: LIME }}>?</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+                </>
+              ),
+            }}
+          />
         </div>
       )}
 
