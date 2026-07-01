@@ -100,6 +100,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
   let ballState: "dribble" | "pass" | "loose" | "shot" | "attempt" = "loose";
   let passTo: P | null = null;
   let decideT = 0;
+  let settleT = 0; // just-gained-possession grace: no tackle for a beat (kills ball ping-pong)
   let scoreSide: Side | null = null;
   let attemptSide: Side | null = null;
   let attemptOnTarget = false;
@@ -151,6 +152,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     ball.vx *= 0.15;
     ball.vy *= 0.15;
     decideT = rnd(0.4, 0.9);
+    settleT = 0.35; // protect the new carrier from an instant re-tackle
   }
 
   /** Is `rec` in an offside position for a forward pass, judged now? */
@@ -325,6 +327,15 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
       if (dg < 26 && Math.abs(carrier.x - 50) < 16 && R() < 0.5) { shoot(carrier); return; } // direct free kick
     }
 
+    // THROUGH ON GOAL: if only the keeper is between the carrier and the net (no
+    // outfield defender goalside in the lane), FINISH — never pass backward. Kills
+    // the "clean through 1-v-1 but passes back / to an opponent" artifact.
+    const goalsideDefs = defenders.filter(
+      (d) => d.role !== "Goleiro" && (dir > 0 ? d.y > carrier!.y + 1 : d.y < carrier!.y - 1) && Math.abs(d.x - carrier!.x) < 12,
+    );
+    const clearOnGoal = dg < 36 && goalsideDefs.length === 0;
+    if (clearOnGoal) { shoot(carrier); return; }
+
     if (dg < 24) {
       const shootP = clamp(0.16 + (carrier.rating - 70) / 130, 0.08, 0.5) * (dg < 13 ? 1.7 : 1);
       if (R() < shootP) { shoot(carrier); return; }
@@ -332,8 +343,10 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     if ((carrier.x < 24 || carrier.x > 76) && dg < 34 && R() < 0.45) { doCross(carrier); return; }
 
     if (dg < 26) {
-      const d = nearest(defenders, ball.x, ball.y);
-      if (R() < clamp(0.35 * (d.rating / carrier.rating), 0.1, 0.55)) { giveBallTo(d); return; }
+      // lose it only to a defender actually CHALLENGING (a tackle), not a deliberate
+      // giveaway to a distant opponent
+      const d = nearest(defenders, carrier.x, carrier.y);
+      if (dist(d.x, d.y, carrier.x, carrier.y) < 4 && R() < clamp(0.3 * (d.rating / carrier.rating), 0.08, 0.45)) { giveBallTo(d); return; }
     }
 
     const mates = outfield(side).filter((p) => p !== carrier);
@@ -363,7 +376,10 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
       .map((m) => {
         const ahead = side === "home" ? m.y - carrier!.y : carrier!.y - m.y;
         const nd = nearest(defenders, m.x, m.y);
-        return { m, s: ahead * 1.1 + dist(nd.x, nd.y, m.x, m.y) - dist(carrier!.x, carrier!.y, m.x, m.y) * 0.25 + rnd(0, 6) };
+        // forward options strongly preferred; a backward option only wins when nothing
+        // ahead is on (recycling under pressure), not on random noise.
+        const prog = ahead >= 0 ? ahead * 1.3 : ahead * 2.6;
+        return { m, s: prog + dist(nd.x, nd.y, m.x, m.y) - dist(carrier!.x, carrier!.y, m.x, m.y) * 0.25 + rnd(0, 3) };
       })
       .sort((a, b) => b.s - a.s);
 
@@ -441,13 +457,17 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     }
 
     if (presser) return { tx: ball.x + ball.vx * 0.1 + rnd(-2, 2), ty: ball.y + (up ? -2 : 2) };
+    // Off the ball, HOLD FORMATION SHAPE — anchor to the home slot and only SHIFT
+    // toward the ball, instead of everyone collapsing onto it (the "swarm").
     if (p.role === "Defensor") {
       const lo = up ? 10 : 55;
       const hi = up ? 45 : 90;
-      return { tx: clamp(p.ax + (ball.x - 50) * 0.15, 12, 88), ty: clamp(ball.y - dir * 22, lo, hi) };
+      // flat back line that slides with the ball but keeps its lateral slot
+      return { tx: clamp(p.ax * 0.7 + ball.x * 0.3, 12, 88), ty: clamp(ball.y - dir * 22, lo, hi) };
     }
     const g = OWN[p.side];
-    return { tx: clamp(p.ax * 0.5 + ball.x * 0.5, 8, 92), ty: clamp(ball.y * 0.55 + g.y * 0.45 + (p.ay - 50) * 0.15, 6, 94) };
+    // midfielders keep a compact band: mostly their slot, shifted toward the ball
+    return { tx: clamp(p.ax * 0.6 + ball.x * 0.4, 8, 92), ty: clamp(p.ay * 0.4 + ball.y * 0.4 + g.y * 0.2, 6, 94) };
   }
 
   function steer(p: P, sprint: boolean, dt: number) {
@@ -520,6 +540,7 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     dt = Math.min(dt, 0.05);
     matchProgress = clamp(progress, 0, 1);
     if (captionT > 0) captionT -= dt;
+    if (settleT > 0) settleT -= dt;
     if (ballState === "dribble" || ballState === "pass") possFrames[poss] += 1;
     updateWall();
 
@@ -593,10 +614,14 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
       ball.vy = carrier.vy;
       decideT -= dt;
       const presser = nearest(opp(carrier.side).filter((p) => p.role !== "Goleiro"), carrier.x, carrier.y);
-      const near = dist(presser.x, presser.y, carrier.x, carrier.y) < 3.6;
-      const foulRate = clamp(0.5 * (carrier.rating / presser.rating), 0.3, 1.1);
+      const near = dist(presser.x, presser.y, carrier.x, carrier.y) < 4.0;
+      // fouls now come from LEGIT challenges (the scramble ping-pong that used to
+      // manufacture them is fixed), so the per-challenge rate is higher to keep a
+      // realistic ~2-4 bookings/match.
+      const foulRate = clamp(1.1 * (carrier.rating / presser.rating), 0.6, 1.9);
       const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6);
-      if (near && R() < foulRate * dt) foul(carrier, presser);
+      if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
+      else if (near && R() < foulRate * dt) foul(carrier, presser);
       else if (near && R() < tackleRate * dt) giveBallTo(presser);
       else if (decideT <= 0) decide();
     } else {
@@ -611,14 +636,27 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
         }
         if (best && dist(best.x, best.y, ball.x, ball.y) < CONTROL) {
           const g = ATTACK[best.side];
-          if (best.role !== "Goleiro" && dist(best.x, best.y, g.x, g.y) < 16 && R() < 0.6) { lastTouch = best.side; shoot(best); }
+          const own = OWN[best.side];
+          if (best.role === "Goleiro" && ballSpeed() < 24 && dist(ball.x, ball.y, own.x, own.y) < 12) {
+            // keeper smothers a slow loose ball in its own box → dead ball, ends the
+            // keeper/attacker scramble instead of ping-ponging possession
+            giveBallTo(best);
+            settleT = 0.9; // the keeper has it safe for a beat before distributing
+            caption("Defesa do goleiro!");
+            ticker("Defesa");
+          } else if (best.role !== "Goleiro" && dist(best.x, best.y, g.x, g.y) < 16 && R() < 0.6) { lastTouch = best.side; shoot(best); }
           else giveBallTo(best);
         }
       }
     }
 
     const defenders = opp(poss).filter((p) => p.role !== "Goleiro");
-    const pressers = [...defenders].sort((a, b) => dist(a.x, a.y, ball.x, ball.y) - dist(b.x, b.y, ball.x, ball.y)).slice(0, 2);
+    const byBall = [...defenders].sort((a, b) => dist(a.x, a.y, ball.x, ball.y) - dist(b.x, b.y, ball.x, ball.y));
+    // Press with the nearest defender always, and a SECOND to double up — the
+    // rating-driven tackle pressure this creates is what makes a stronger XI win the
+    // ball back and dominate. (Anti-swarm comes from the OFF-BALL players now holding
+    // formation shape in target(), not from removing pressers.)
+    const pressers = byBall.slice(0, 2);
     let chaseA: P | null = null;
     let chaseB: P | null = null;
     if (ballState === "pass" && passTo) { chaseA = passTo; chaseB = nearest(opp(passTo.side).filter(canContest), ball.x, ball.y); }
@@ -643,16 +681,28 @@ export function createMatchSim(homeSlots: FieldSlot[], awaySlots: FieldSlot[], s
     scoreSide = side;
     ballState = "shot";
     attemptSide = null;
-    const shooter = nearest(outfield(side), ATTACK[side].x, ATTACK[side].y);
+    const g = ATTACK[side];
+    const shooter = nearest(outfield(side), g.x, g.y);
+    // The authoritative goal is positionless, but it must LOOK like a real finish:
+    // reveal it from a plausible box position (bring a deep finisher up), never from
+    // midfield. Kills the "goal launched from the centre circle" artifact.
+    const fy = side === "home"
+      ? (shooter.y < 78 ? rnd(80, 91) : Math.min(shooter.y, 95))
+      : (shooter.y > 22 ? rnd(9, 20) : Math.max(shooter.y, 5));
+    const fx = clamp(shooter.x, 32, 68);
+    shooter.x = fx; shooter.y = fy; // the finisher is on the ball
     poss = side;
     carrier = null;
-    ball.x = shooter.x;
-    ball.y = shooter.y;
-    const g = ATTACK[side];
+    ball.x = fx;
+    ball.y = fy;
     const cx = clamp(50 + (R() < 0.5 ? -1 : 1) * rnd(9, 15), 33, 67); // into a corner, past the keeper
-    const d = Math.max(1, dist(ball.x, ball.y, cx, g.y));
+    // Aim at the goal-LINE crossing point (where the shot is caught), so the ball is
+    // in the corner AT the line — from a short box distance it wouldn't drift there
+    // if aimed at y=g.y (it gets caught mid-drift, looking central).
+    const catchY = side === "home" ? 97 : 3;
+    const d = Math.max(1, dist(ball.x, ball.y, cx, catchY));
     ball.vx = ((cx - ball.x) / d) * 122;
-    ball.vy = ((g.y - ball.y) / d) * 122;
+    ball.vy = ((catchY - ball.y) / d) * 122;
     ticker("⚽ GOL");
   }
 

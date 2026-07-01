@@ -9,11 +9,11 @@ const BAND: Record<Cat, number> = { Goleiro: 8, Defensor: 26, "Meio-campo": 48, 
 function xi(rating: number, side: "home" | "away"): FieldSlot[] {
   return ROLES.map((role, i) => ({ id: `${side}${i}`, name: "p", role, x: 18 + (i % 5) * 16, y: side === "home" ? BAND[role] : 100 - BAND[role], rating }));
 }
-function shotCounts(homeSlots: FieldSlot[], awaySlots: FieldSlot[], sims: number): { home: number; away: number } {
+function shotCounts(homeSlots: FieldSlot[], awaySlots: FieldSlot[], sims: number, seedBase = 0): { home: number; away: number } {
   let home = 0;
   let away = 0;
   for (let k = 0; k < sims; k++) {
-    const sim = createMatchSim(homeSlots, awaySlots);
+    const sim = createMatchSim(homeSlots, awaySlots, seedBase + k);
     for (let i = 0; i < 3000; i++) sim.step(0.016);
     const s = sim.snapshot().shots;
     home += s.home;
@@ -87,8 +87,10 @@ describe("match-sim produces real, flowing movement (not lined up)", () => {
   });
 
   it("a much stronger XI creates more chances (ratings wired into passing/tackling)", () => {
-    const s = shotCounts(xi(93, "home"), xi(66, "away"), 3); // 93-rated home vs 66-rated away
-    expect(s.home).toBeGreaterThan(s.away);
+    // A0.1-seeded → deterministic. The signal is overwhelming (a 93 XI out-shoots a
+    // 66 XI ~50:1), so this is a stable, non-flaky check.
+    const s = shotCounts(xi(93, "home"), xi(66, "away"), 4, 100);
+    expect(s.home).toBeGreaterThan(s.away * 3);
   });
 
   it("produces open-play shots, saves and restarts (on-pitch captions fire)", () => {
@@ -123,8 +125,10 @@ describe("match-sim produces real, flowing movement (not lined up)", () => {
     let totalSentOff = 0;
     let minPerSide = 11;
     for (let k = 0; k < 40; k++) {
-      const sim = createMatchSim(xi(80, "home"), xi(80, "away"));
-      for (let i = 0; i < 2500; i++) sim.step(0.016);
+      // A0.1 seeds → deterministic: seeds 0-39 over a full match include reds
+      // (send-offs are ~1-in-10 seeds), so the assertion never flakes on RNG.
+      const sim = createMatchSim(xi(80, "home"), xi(80, "away"), k);
+      for (let i = 0; i < 3600; i++) sim.step(0.016); // a full match (~60s)
       const s = sim.snapshot();
       totalSentOff += s.sentOff.length;
       const offHome = s.sentOff.filter((id) => id.startsWith("home")).length;
@@ -168,6 +172,19 @@ describe("match-sim produces real, flowing movement (not lined up)", () => {
       if (b.y > 90 && b.y < 97) atLine = b.x;
     }
     expect(Math.abs(atLine - 50)).toBeGreaterThan(5); // not straight down the middle at the keeper
+  });
+
+  it("reveals scripted goals from a box position, never from midfield", () => {
+    for (const seed of [1, 7, 42, 99, 2026]) {
+      const home = createMatchSim(xi(80, "home"), xi(80, "away"), seed);
+      for (let i = 0; i < 40; i++) home.step(0.016);
+      home.scoreFor("home"); // home attacks y=100 → the finish must be in the far third
+      expect(home.snapshot().ball.y).toBeGreaterThan(76);
+      const away = createMatchSim(xi(80, "home"), xi(80, "away"), seed);
+      for (let i = 0; i < 40; i++) away.step(0.016);
+      away.scoreFor("away"); // away attacks y=0 → the finish must be in the near third
+      expect(away.snapshot().ball.y).toBeLessThan(24);
+    }
   });
 
   it("players tire over the match (fatigue slows them late)", () => {
