@@ -256,6 +256,9 @@ export function createMatchSim(
     const ramp = clamp((matchProgress - 0.55) / 0.35, 0, 1);
     // LEVEL late is risk-on for BOTH teams (everyone wants the winner) — draws are
     // ~27% of matches and without this they'd contribute no late surge at all.
+    // NB on the cosmetic v1 route goals stay 0-0, so its pitch always plays the mild
+    // level-late profile — the most neutral assumption for a sim that can't see the
+    // real scoreline (intended; the strong chase/protect modes stay scoring-only).
     // NB the cosmetic path stays 0-0 with matchProgress from the caller, so the mild
     // draw-urgency also animates v1's late play — behavior, not scoreline (inert there).
     if (diff === 0) return 0.45 * ramp;
@@ -329,7 +332,7 @@ export function createMatchSim(
     ball.x = x; ball.y = y; ball.vx = 0; ball.vy = 0;
     const defSide: Side = poss === "home" ? "away" : "home";
     giveBallTo(nearest(team(defSide), ball.x, ball.y));
-    decideT = rnd(0.8, 1.2);
+    decideT = rnd(0.5, 0.9);
     caption("Impedimento!");
     breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
     ticker("Impedimento");
@@ -369,7 +372,7 @@ export function createMatchSim(
     giveBallTo(nearest(outfield(attSide), ball.x, ball.y));
     forceCross = true;
     cornerDelivery = true;
-    decideT = rnd(1.0, 1.5); // players crowd the box
+    decideT = rnd(0.6, 1.0); // players crowd the box (window compressed like the clock)
     caption("Escanteio!");
     breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
     ticker("Escanteio");
@@ -454,13 +457,15 @@ export function createMatchSim(
 
   function foul(victim: P, fouler: P) {
     foulsBy[fouler.side] += 1;
-    // a foul INSIDE the box the victim attacks = PENALTY, not a walled free kick
-    const inBox = Math.abs(victim.x - 50) < 22 && (victim.side === "home" ? victim.y > 84 : victim.y < 16);
+    // a foul INSIDE the box the victim attacks = PENALTY, not a walled free kick.
+    // Scoring path only: with scoring off a pen could never convert (goals don't exist
+    // there), so the cosmetic v1 route keeps its plain free kick.
+    const inBox = scoring && Math.abs(victim.x - 50) < 22 && (victim.side === "home" ? victim.y > 84 : victim.y < 16);
     if (inBox) { penalty(victim.side, fouler); return; }
     ball.x = victim.x; ball.y = victim.y; ball.vx = 0; ball.vy = 0;
     giveBallTo(nearest(team(victim.side), ball.x, ball.y));
     freeKick = true;
-    decideT = rnd(1.0, 1.5); // dead ball — the wall forms
+    decideT = rnd(0.4, 0.7); // dead ball — the wall forms (compressed like the clock)
     caption("Falta!");
     breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
     ticker("Falta");
@@ -481,6 +486,7 @@ export function createMatchSim(
     const taker = outfield(attSide).reduce((b, m) => (m.rating > b.rating ? m : b), outfield(attSide)[0]);
     giveBallTo(taker);
     penaltyFor = attSide;
+    breakT = 0; breakSide = null; // a spot kick is a dead ball — any break is over
     freeKick = false; // no wall on a penalty
     decideT = rnd(1.5, 1.9); // the ceremony — spot placed, keeper set, crowd holds its breath
     settleT = 2.0; // nobody may challenge the taker
@@ -494,7 +500,7 @@ export function createMatchSim(
     forceCross = false;
     cornerDelivery = false;
     const home2 = p.side === "home";
-    const boxY = home2 ? 86 : 14;
+    const boxY = isCorner ? (home2 ? 91 : 9) : home2 ? 86 : 14; // corners whip into the goalmouth
     const mates = outfield(p.side).filter((m) => m !== p);
     if (!mates.length) { decideT = rnd(0.4, 0.8); return; }
     let bx: number;
@@ -620,7 +626,7 @@ export function createMatchSim(
     // it from 28 yards, his teammate never does
     const roleF = carrier.role === "Atacante" ? 1.15 : carrier.role === "Defensor" ? 0.55 : 1;
     const spec = (dg < 30 ? 0.14 : 0) * (0.55 + 0.9 * carrier.flair);
-    opts.push({ kind: "shoot", score: (xg * 2.6 * roleF + spec) * settled() * (1 + 0.5 * Math.max(0, u)) });
+    opts.push({ kind: "shoot", score: (xg * 3.0 * roleF + spec) * settled() * (1 + 0.5 * Math.max(0, u)) });
 
     // CROSS from wide + advanced — a REAL team's most frequent delivery (15-20/match):
     // the duel decides the header, defenders clear most, corners + second balls fall out
@@ -785,6 +791,12 @@ export function createMatchSim(
       return { tx: gx, ty: gy };
     }
 
+    // DEAD BALL: the taker WALKS TO the placed ball (spot/flag/free kick) — he does
+    // not dribble off with it (the ball is pinned in step() until the restart fires)
+    if (p === carrier && decideT > 0 && (penaltyFor !== null || freeKick || cornerDelivery)) {
+      return { tx: ball.x, ty: ball.y };
+    }
+
     // penalty ceremony: everyone except the taker and the keepers HOLDS at the edge of
     // the box (the referee's arc) until the kick is away (keepers returned above)
     if (penaltyFor && p !== carrier) {
@@ -792,11 +804,16 @@ export function createMatchSim(
       return { tx: clamp(26 + (p.ax / 100) * 48, 26, 74), ty: edgeY + rnd(-2, 2) };
     }
 
-    // corner: attackers crowd the box near/far post, defenders drop in to guard
+    // corner: attackers crowd the SIX-YARD BOX among the defenders (real corner crowds
+    // mix at the goalmouth — an edge-of-box crowd loses every drop to the goal-side
+    // defenders), defenders hold the goal area
     if (cornerDelivery) {
-      const attackY = up ? 84 : 16;
+      const attackY = up ? 90 : 10;
       if (p.side === poss && p.role !== "Defensor") return { tx: clamp(30 + (p.ax) * 0.4 + rnd(-4, 4), 30, 70), ty: attackY + rnd(-3, 3) };
-      if (p.side !== poss) return { tx: clamp(34 + p.ax * 0.3, 30, 70), ty: (up ? 92 : 8) + rnd(-4, 4) };
+      // defenders drop to their OWN goal end (up = home = defends y=0). This ternary
+      // was inverted for ~2 days and sent the whole defence to the WRONG END of the
+      // pitch on every corner — caught by the adversarial review's empirical probe.
+      if (p.side !== poss) return { tx: clamp(34 + p.ax * 0.3, 30, 70), ty: (up ? 8 : 92) + rnd(-4, 4) };
     }
 
     if (p.side === poss) {
@@ -1013,7 +1030,13 @@ export function createMatchSim(
               // frame far more, so the ON-TARGET population skews close/central = high
               // xG — the raw xG needs no extra gain to hit real conversion (~2.5 goals).
               const gk = attemptKeeper;
-              const save = gk ? clamp(0.5 + (gk.rating - 70) / 90, 0.42, 0.82) : 0.5;
+              // a keeper caught off his line (a sweep gone wrong, a scramble) guards an
+              // open net — his save chance collapses with distance from goal
+              // free radius 17 covers NORMAL lateral shading (gx clamps to 34-66 → up to
+              // ~16.5 from goal-centre); only a genuinely stranded keeper (a sweep gone
+              // wrong, 20+) loses his save
+              const gkOut = gk ? clamp(1 - Math.max(0, dist(gk.x, gk.y, OWN[gk.side].x, OWN[gk.side].y) - 17) / 10, 0.12, 1) : 1;
+              const save = (gk ? clamp(0.5 + (gk.rating - 70) / 90, 0.42, 0.82) : 0.5) * gkOut;
               // conversion drifts up late: tired defenders close down slower, so the same
               // position yields a cleaner strike (the resolve-side half of the fatigue fade)
               const pGoal = clamp(attemptXG * (1 + 0.12 * matchProgress) * ((1 - save) / (1 - 0.62)), 0.02, 0.95);
@@ -1129,6 +1152,22 @@ export function createMatchSim(
         }
       }
     } else if (ballState === "dribble" && carrier) {
+      // DEAD BALL (free kick / penalty / corner being placed): the ball stays PUT and
+      // nobody may challenge — the taker is walking to it; the restart fires when the
+      // ceremony window (decideT) expires. Without this the ball glided to wherever
+      // the taker stood and opponents tackled him over a dead ball.
+      const deadBall = decideT > 0 && (freeKick || penaltyFor !== null || cornerDelivery);
+      if (deadBall) {
+        // the ball stays PUT; the taker (carrier) walks to it via the movement loop
+        // below — do NOT return here or nobody moves and the restart deadlocks
+        ball.vx = 0;
+        ball.vy = 0;
+        decideT -= dt;
+        // the referee waits for the taker: the window can't expire until he's over
+        // the ball (he sprints to it as the carrier — bounded wait)
+        if (dist(carrier.x, carrier.y, ball.x, ball.y) > 6) decideT = Math.max(decideT, 0.05);
+        if (decideT <= 0) decide();
+      } else {
       const sp = Math.hypot(carrier.vx, carrier.vy);
       const dir = carrier.side === "home" ? 1 : -1;
       const dx = sp > 1 ? carrier.vx / sp : 0;
@@ -1149,12 +1188,13 @@ export function createMatchSim(
       // defenders challenge with real care — without the 0.18 damping the pen rate
       // came out ~1.7/match (real ~0.3).
       const inPenBox = Math.abs(carrier.x - 50) < 22 && (carrier.side === "home" ? carrier.y > 84 : carrier.y < 16);
-      const foulRate = clamp(4.4 * (carrier.rating / presser.rating), 2.4, 6.6) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.18 : 1);
+      const foulRate = clamp(5.6 * (carrier.rating / presser.rating), 3.1, 8.4) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.18 : 1);
       const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.28 * matchProgress);
       if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
       else if (near && R() < foulRate * dt) foul(carrier, presser);
       else if (near && R() < tackleRate * dt) giveBallTo(presser);
       else if (decideT <= 0) decide();
+      }
     } else {
       integrateBall(dt, BALL_FRICTION);
       if (!checkOut()) {
@@ -1239,6 +1279,17 @@ export function createMatchSim(
   }
 
   function scoreFor(side: Side) {
+    // the cosmetic route's authoritative override: entering it VOIDS any pending
+    // ceremony/moment (penalty, post-goal reset, break) — the review found scoreFor
+    // during a reset was swallowed by the pending kickoff and left scoreSide stale
+    resetT = 0;
+    kickoffPending = null;
+    penaltyFor = null;
+    penaltyShot = false;
+    freeKick = false;
+    cornerDelivery = false;
+    breakT = 0;
+    breakSide = null;
     scoreSide = side;
     ballState = "shot";
     attemptSide = null;

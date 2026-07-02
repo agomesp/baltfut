@@ -333,7 +333,7 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
   useEffect(() => () => prepAbortRef.current?.abort(), []); // drop an in-flight precompute on unmount
 
   const openEditor = (id: string) => {
-    if (onBroadcast || preparing) return; // transmitting → auto lineups; preparing → freeze the XI mid-precompute
+    if (onBroadcast || preparing || playing) return; // transmitting → auto lineups; preparing/LIVE → the XI is frozen (an edit would rebuild the spotlight sim with a different lineup than the precomputed result)
     if (!lineupsRef.current[id]) {
       const t = byId.get(id);
       if (t) setLineups({ ...lineupsRef.current, [id]: autoLineup(t, DEFAULT_FORMATION, statusRef.current) });
@@ -388,7 +388,7 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
           ))}
         </div>
         <button onClick={simulateAll} disabled={champion != null} style={{ ...smallBtn, opacity: champion ? 0.4 : 1 }}>⏩ Simular tudo</button>
-        <button onClick={() => setShowSquads((v) => !v)} disabled={!!onBroadcast || preparing} title={onBroadcast ? "Escalações automáticas durante a transmissão" : undefined} style={{ ...smallBtn, borderColor: showSquads && !onBroadcast ? LIME : LINE, opacity: onBroadcast || preparing ? 0.4 : 1, cursor: onBroadcast || preparing ? "not-allowed" : "pointer" }}>⚙ Escalações</button>
+        <button onClick={() => setShowSquads((v) => !v)} disabled={!!onBroadcast || preparing || playing} title={onBroadcast ? "Escalações automáticas durante a transmissão" : undefined} style={{ ...smallBtn, borderColor: showSquads && !onBroadcast ? LIME : LINE, opacity: onBroadcast || preparing ? 0.4 : 1, cursor: onBroadcast || preparing ? "not-allowed" : "pointer" }}>⚙ Escalações</button>
         <button onClick={() => setPauseBetween((v) => !v)} title="Pausar entre as fases pra ajustar escalações" style={{ ...smallBtn, borderColor: pauseBetween ? LIME : LINE, color: pauseBetween ? LIME : INK }}>
           {pauseBetween ? "⏸ Escalar entre fases" : "▷ Auto-avançar"}
         </button>
