@@ -45,7 +45,7 @@ export function mapEntryRow(row: EntryRow): VoteEntry {
 export async function fetchVoteEntries(
   client: SupabaseClient,
   matchId: string,
-  limit = 100,
+  limit = 500,
 ): Promise<VoteEntry[]> {
   const { data, error } = await client
     .from("vote_entries")
@@ -58,24 +58,41 @@ export async function fetchVoteEntries(
 }
 
 /**
- * Fetch all predictions (for the ranking), newest first, capped to keep the
- * payload bounded. The explicit ORDER BY (with a `match_id` tiebreaker) makes the
- * `.limit()` cut DETERMINISTIC: without it, which rows survive past the cap is
- * undefined, which would silently skew rankSubs/worstPalpiteiro once the table
- * grows beyond the limit (audit B1).
+ * Fetch ALL predictions (for the all-time Ranking dos Subs). PostgREST caps a
+ * single response at a server-side max-rows (~1000) REGARDLESS of `.limit()`, so a
+ * one-shot fetch silently drops the oldest palpites once the table passes the cap
+ * — and any exact-score wins on those early matches vanish from the ranking. We
+ * therefore PAGE through with `.range()` until a short page. `(match_id, username)`
+ * is unique per palpite, so we de-dupe: a concurrent insert during the live game
+ * can shift a row across a page boundary. Newest-first with a `match_id` tiebreak
+ * keeps the ordering deterministic (audit B1).
  */
 export async function fetchAllEntries(
   client: SupabaseClient,
-  limit = 2000,
+  pageSize = 1000,
 ): Promise<VoteEntry[]> {
-  const { data, error } = await client
-    .from("vote_entries")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .order("match_id")
-    .limit(limit);
-  if (error) throw new Error(error.message);
-  return (data as EntryRow[] | null)?.map(mapEntryRow) ?? [];
+  const seen = new Set<string>();
+  const out: VoteEntry[] = [];
+  const MAX_PAGES = 50; // runaway guard (~50k rows — far past any real season)
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const from = page * pageSize;
+    const { data, error } = await client
+      .from("vote_entries")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .order("match_id")
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const rows = (data as EntryRow[] | null) ?? [];
+    for (const r of rows) {
+      const key = `${r.match_id} ${r.username}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(mapEntryRow(r));
+    }
+    if (rows.length < pageSize) break; // last page
+  }
+  return out;
 }
 
 /** Fetch prediction counts per match (which matches have palpites). */
