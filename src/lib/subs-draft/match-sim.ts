@@ -89,6 +89,11 @@ interface P {
   tx: number; ty: number;
   rt: number;
   pace: number;
+  /** COMMITTED RUN (>0 = running): the player holds one line toward (runX, runY)
+   * instead of re-rolling a random drift every retarget — so runs exist to be found. */
+  runT: number;
+  runX: number;
+  runY: number;
 }
 
 const ATTACK = { home: { x: 50, y: 100 }, away: { x: 50, y: 0 } };
@@ -148,7 +153,7 @@ export function createMatchSim(
   const rnd = (a: number, b: number) => a + R() * (b - a);
   const mk = (s: FieldSlot, side: Side): P => ({
     id: s.id, name: s.name, side, role: s.role, rating: s.rating ?? 78, ax: s.x, ay: s.y, x: s.x, y: s.y, vx: 0, vy: 0, tx: s.x, ty: s.y, rt: 0,
-    pace: 0.85 + ((s.rating ?? 78) - 70) / 60,
+    pace: 0.85 + ((s.rating ?? 78) - 70) / 60, runT: 0, runX: 0, runY: 0,
   });
   const home = homeSlots.map((s) => mk(s, "home"));
   const away = awaySlots.map((s) => mk(s, "away"));
@@ -209,6 +214,10 @@ export function createMatchSim(
   // ramping in over the final third. Reads only PRODUCED state — goals stay 0-0 on the
   // cosmetic path, so urgency is inert there. This is what makes 1-0 at 80' feel like
   // 1-0 at 80': the trailing side pushes up and shoots; the leader sits deep and slows.
+  // real matches OPEN CAGEY — the 1-15' goal bucket is the lowest of the match. Risk
+  // appetite ramps from ~0.6 at kickoff to 1.0 by half-time.
+  const settled = () => 0.62 + 0.38 * Math.min(1, matchProgress / 0.5);
+
   const urgency = (s: Side) => {
     const diff = s === "home" ? goals.away - goals.home : goals.home - goals.away;
     const ramp = clamp((matchProgress - 0.55) / 0.35, 0, 1);
@@ -249,7 +258,7 @@ export function createMatchSim(
     // plays faster + more vertical while the conceding side is momentarily out of shape.
     // Real turnovers → fast breaks is the single most-missed transition in football.
     const liveSteal = (ballState === "dribble" || ballState === "pass") && !freeKick && p.side !== poss;
-    if (liveSteal) { breakT = 3.5; breakSide = p.side; }
+    if (liveSteal) { breakT = 3.5 * settled(); breakSide = p.side; } // early breaks are less committed (compact, cautious)
     else if (breakSide !== null && p.side !== breakSide) { breakT = 0; breakSide = null; } // changed hands — break over
     carrier = p;
     poss = p.side;
@@ -557,7 +566,7 @@ export function createMatchSim(
     // ecosystem (goal kicks, corners) without inflating goals. A side CHASING the
     // scoreline late shoots more (urgency) — the real late-goal surge.
     const u = urgency(side);
-    opts.push({ kind: "shoot", score: (xg * 2.6 + (dg < 30 ? 0.14 : 0)) * (1 + 0.5 * Math.max(0, u)) });
+    opts.push({ kind: "shoot", score: (xg * 2.6 + (dg < 30 ? 0.14 : 0)) * settled() * (1 + 0.5 * Math.max(0, u)) });
 
     // CROSS from wide + advanced
     if ((carrier.x < 26 || carrier.x > 74) && dg < 36) {
@@ -578,7 +587,9 @@ export function createMatchSim(
       // a leader protecting the scoreline keeps it SHORT and safe (recenter ~15)
       const rangeF = clamp(1 - Math.abs(range - (u < -0.3 ? 15 : 20)) / 46, 0.25, 1);
       const progF = clamp(0.5 + ahead / 38, 0.05, 1.25) * (breaking && ahead > 0 ? 1.35 : 1);
-      opts.push({ kind: "pass", target: m, score: progF * (0.4 + 0.6 * openness) * (0.3 + 0.7 * lane) * rangeF });
+      // a mate ON A RUN is the ball a real carrier looks for first
+      const runBoost = m.runT > 0 && ahead > 4 ? 1.35 : 1;
+      opts.push({ kind: "pass", target: m, score: progF * (0.4 + 0.6 * openness) * (0.3 + 0.7 * lane) * rangeF * runBoost });
     }
 
     // DRIBBLE — hold the ball, drive into space (worse under pressure)
@@ -605,8 +616,10 @@ export function createMatchSim(
     const strayChance = clamp(0.24 - (carrier.rating - 70) / 120, 0.03, 0.3) * (1 + 0.75 * matchProgress);
     const acc = clamp((carrier.rating - 55) / 45, 0.3, 1);
     const stray = R() < strayChance;
-    let lx = tg.x + tg.vx * 0.16;
-    let ly = tg.y + tg.vy * 0.16 + (through ? dir * rnd(8, 20) : 0);
+    // aim where a committed runner is GOING (his run spot), not where he is
+    const toRun = tg.runT > 0.4;
+    let lx = toRun ? tg.runX + rnd(-2, 2) : tg.x + tg.vx * 0.16;
+    let ly = toRun ? tg.runY + dir * rnd(0, 5) : tg.y + tg.vy * 0.16 + (through ? dir * rnd(8, 20) : 0);
     const d0 = Math.max(1, dist(ball.x, ball.y, lx, ly));
     const ux = (lx - ball.x) / d0;
     const uy = (ly - ball.y) / d0;
@@ -685,8 +698,25 @@ export function createMatchSim(
         const g = ATTACK[p.side];
         return { tx: clamp(ball.x + (g.x - ball.x) * 0.08 + rnd(-4, 4), 8, 92), ty: clamp(ball.y + dir * rnd(5, 10), 6, 94) };
       }
+      // an ACTIVE COMMITTED RUN overrides everything: hold the line to the spot
+      if (p.runT > 0) return { tx: p.runX, ty: p.runY };
       // deeper gambles on the break (defence out of shape) AND when chasing late (risk-on)
       const pushOn = (breakT > 0 && breakSide === p.side) || urgency(p.side) > 0.3;
+      // START a run: an attacker (or an advanced mid) darts for the space BEHIND the
+      // second-to-last defender — one committed line for ~2s that a through-ball can
+      // actually find (better players make more runs). This is what "movement" is.
+      const runner = p.role === "Atacante" || (p.role === "Meio-campo" && (dir > 0 ? p.y > 45 : p.y < 55));
+      if (runner && R() < ((p.role === "Atacante" ? 0.3 : 0.16) + (p.rating - 70) / 150) * settled() * (1 + 0.8 * Math.max(0, urgency(p.side)))) {
+        const ys = opp(p.side).map((o) => o.y).sort((a, b) => (dir > 0 ? b - a : a - b));
+        const defLine = ys[1] ?? ys[0] ?? (dir > 0 ? 92 : 8); // second-to-last defender
+        const gap = dir > 0 ? defLine - p.y : p.y - defLine;
+        if (gap > 2 && gap < 45) {
+          p.runT = rnd(1.4, 2.4);
+          p.runX = clamp(p.x + rnd(-8, 8), 10, 90);
+          p.runY = clamp(defLine + dir * rnd(2, 7), 6, 94); // onto (just past) the shoulder
+          return { tx: p.runX, ty: p.runY };
+        }
+      }
       let sy: number;
       if (p.role === "Atacante") sy = ball.y + dir * (pushOn ? rnd(14, 40) : rnd(8, 30));
       else if (p.role === "Meio-campo") sy = ball.y + dir * (pushOn ? rnd(2, 18) : rnd(-4, 12));
@@ -712,7 +742,9 @@ export function createMatchSim(
     // stepping up). GAME STATE bends it too: a trailing side defends HIGHER (all-in),
     // a leading side drops off and protects the box.
     const uDef = urgency(p.side);
-    const depth = (breakT > 0 && breakSide === poss ? 27 : 20) + 6 * Math.max(0, -uDef) - 5 * Math.max(0, uDef);
+    // tired legs can't hold a high line — the whole block SAGS as the match ages
+    // (real late-game lines sink), gifting closer shooting positions late
+    const depth = (breakT > 0 && breakSide === poss ? 27 : 20) + 7 * matchProgress + 6 * Math.max(0, -uDef) - 5 * Math.max(0, uDef);
     const line = clamp(ball.y - dir * depth, lo, hi); // the shared defensive line
     if (p.role === "Defensor") {
       const m = marks.length ? nearest(marks, p.x, p.y) : null;
@@ -729,7 +761,11 @@ export function createMatchSim(
     const dx = p.tx - p.x;
     const dy = p.ty - p.y;
     const d = Math.hypot(dx, dy);
-    const stam = 1 - matchProgress * clamp(0.3 - (p.rating - 70) / 220, 0.14, 0.32);
+    // a COMMITTED RUN digs deep: strikers save their legs for the darts, so an active
+    // run only pays 45% of the fatigue penalty — the tracking defenders pay it in full,
+    // or the late game loses exactly the runs its urgency asks for
+    const fat = matchProgress * clamp(0.3 - (p.rating - 70) / 220, 0.14, 0.32);
+    const stam = 1 - (p.runT > 0 ? 0.45 * fat : fat);
     const maxS = (sprint ? SPRINT : JOG) * p.pace * stam;
     let desx = 0;
     let desy = 0;
@@ -808,6 +844,7 @@ export function createMatchSim(
     if (captionT > 0) captionT -= dt;
     if (settleT > 0) settleT -= dt;
     if (breakT > 0) { breakT -= dt; if (breakT <= 0) breakSide = null; }
+    for (const p of all) if (p.runT > 0) { p.runT -= dt; if (p.side !== poss) p.runT = 0; } // runs die on turnover
     if (resetT > 0) {
       // post-goal moment: no play — everyone jogs back toward their formation anchor
       resetT -= dt;
@@ -991,9 +1028,10 @@ export function createMatchSim(
         p.tx = t.tx; p.ty = t.ty;
         p.rt = p === carrier || chasing ? 0.1 : rnd(0.35, 0.8);
       }
-      // a keeper whose target is far off his line is SWEEPING — that's a sprint
+      // a keeper whose target is far off his line is SWEEPING — that's a sprint;
+      // a COMMITTED RUN is a dart, not a jog
       const sprint = p === carrier || chasing || pressers.includes(p) || ballState === "attempt"
-        || (p.role === "Goleiro" && dist(p.x, p.y, p.tx, p.ty) > 7);
+        || p.runT > 0 || (p.role === "Goleiro" && dist(p.x, p.y, p.tx, p.ty) > 7);
       steer(p, sprint, dt);
     }
     separate(dt);
