@@ -61,12 +61,12 @@ describe("calibration — the sim's match stats live in real-football bands", ()
     expect(mean(agg.goals)).toBeLessThanOrEqual(3.2);
   }, SLOW);
 
-  it("shots per team ≈ real (~12): mean in [7.5, 14.5]", () => {
+  it("shots per team ≈ real (~12): mean in [8.3, 14.5]", () => {
     // Volume is SUPPLY-limited, not appetite-limited: extra shots need extra final-third
-    // entries, which the counter-attack window (tier 1) and committed runs (tier 2)
-    // provide. TIGHTEN the lower edge to 8.5 when those land — do not crank the shoot
-    // appetite instead (it makes players shoot from silly spots to please the band).
-    expect(mean(agg.shotsPerTeam)).toBeGreaterThanOrEqual(7.5);
+    // entries. The counter-attack window lifted the mean 7.9 → 8.8 (its predicted
+    // mechanism); committed runs (tier 2) add more — tighten toward 9.5+ then. Do not
+    // crank the shoot appetite instead (players shooting from silly spots to please a band).
+    expect(mean(agg.shotsPerTeam)).toBeGreaterThanOrEqual(8.3);
     expect(mean(agg.shotsPerTeam)).toBeLessThanOrEqual(14.5);
   }, SLOW);
 

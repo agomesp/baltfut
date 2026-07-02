@@ -169,6 +169,8 @@ export function createMatchSim(
   let passTo: P | null = null;
   let decideT = 0;
   let settleT = 0; // just-gained-possession grace: no tackle for a beat (kills ball ping-pong)
+  let breakT = 0; // counter-attack window after a live turnover (see giveBallTo)
+  let breakSide: Side | null = null;
   let scoreSide: Side | null = null;
   let attemptSide: Side | null = null;
   let attemptOnTarget = false;
@@ -221,6 +223,13 @@ export function createMatchSim(
   }
 
   function giveBallTo(p: P) {
+    // COUNTER-ATTACK window: winning the ball in LIVE play (a tackle/interception — the
+    // restart fns clear this right after) opens a short break where the regaining side
+    // plays faster + more vertical while the conceding side is momentarily out of shape.
+    // Real turnovers → fast breaks is the single most-missed transition in football.
+    const liveSteal = (ballState === "dribble" || ballState === "pass") && !freeKick && p.side !== poss;
+    if (liveSteal) { breakT = 3.5; breakSide = p.side; }
+    else if (breakSide !== null && p.side !== breakSide) { breakT = 0; breakSide = null; } // changed hands — break over
     carrier = p;
     poss = p.side;
     lastTouch = p.side;
@@ -235,7 +244,7 @@ export function createMatchSim(
     ball.vx *= 0.15;
     ball.vy *= 0.15;
     ball.z = 0; ball.vz = 0; // controlled → at the player's feet
-    decideT = rnd(0.4, 0.9);
+    decideT = liveSteal ? rnd(0.15, 0.4) : rnd(0.4, 0.9); // a stolen ball launches at once
     settleT = 0.35; // protect the new carrier from an instant re-tackle
   }
 
@@ -256,10 +265,12 @@ export function createMatchSim(
     giveBallTo(nearest(team(defSide), ball.x, ball.y));
     decideT = rnd(0.8, 1.2);
     caption("Impedimento!");
+    breakT = 0; breakSide = null; // dead ball — any break is over
     ticker("Impedimento");
   }
 
   function kickoff(toSide: Side) {
+    breakT = 0; breakSide = null; // dead ball — any break is over
     ball.x = 50; ball.y = 50; ball.vx = 0; ball.vy = 0;
     giveBallTo(nearest(team(toSide), 50, 50));
   }
@@ -271,6 +282,7 @@ export function createMatchSim(
     ballState = "loose";
     restartFor = side;
     caption("Lateral");
+    breakT = 0; breakSide = null; // dead ball — any break is over
   }
 
   function goalKick(side: Side, cap: string) {
@@ -280,6 +292,7 @@ export function createMatchSim(
     ball.vx = 0; ball.vy = 0;
     giveBallTo(keeper(side));
     caption(cap);
+    breakT = 0; breakSide = null; // dead ball — any break is over
   }
 
   function corner(attSide: Side) {
@@ -292,6 +305,7 @@ export function createMatchSim(
     cornerDelivery = true;
     decideT = rnd(1.0, 1.5); // players crowd the box
     caption("Escanteio!");
+    breakT = 0; breakSide = null; // dead ball — any break is over
     ticker("Escanteio");
   }
 
@@ -372,6 +386,7 @@ export function createMatchSim(
     freeKick = true;
     decideT = rnd(1.0, 1.5); // dead ball — the wall forms
     caption("Falta!");
+    breakT = 0; breakSide = null; // dead ball — any break is over
     ticker("Falta");
     // ~22% of fouls booked (3.5% straight red) → real ~3.5 yellows + ~0.2 reds. Fouls
     // concentrate on the pressers, so an ALREADY-BOOKED fouler is carded again at a
@@ -489,7 +504,10 @@ export function createMatchSim(
       opts.push({ kind: "cross", score: 0.32 + boxMates * 0.16 });
     }
 
-    // PASS to each mate — progress × openness × lane-safety × sensible range
+    // PASS to each mate — progress × openness × lane-safety × sensible range.
+    // On the BREAK, forward progress is worth more (vertical, direct play while the
+    // opponent is out of shape) — the counter-attack's decision signature.
+    const breaking = breakT > 0 && breakSide === side;
     for (const m of mates) {
       const ahead = dir > 0 ? m.y - carrier.y : carrier.y - m.y;
       const nd = nearest(opps, m.x, m.y);
@@ -497,7 +515,7 @@ export function createMatchSim(
       const lane = clamp(laneClearance(ball.x, ball.y, m.x, m.y, oppOut) / 5, 0, 1);
       const range = dist(carrier.x, carrier.y, m.x, m.y);
       const rangeF = clamp(1 - Math.abs(range - 20) / 46, 0.25, 1);
-      const progF = clamp(0.5 + ahead / 38, 0.05, 1.25);
+      const progF = clamp(0.5 + ahead / 38, 0.05, 1.25) * (breaking && ahead > 0 ? 1.35 : 1);
       opts.push({ kind: "pass", target: m, score: progF * (0.4 + 0.6 * openness) * (0.3 + 0.7 * lane) * rangeF });
     }
 
@@ -518,7 +536,7 @@ export function createMatchSim(
     // PASS — accuracy + stray + through-ball lead + offside
     const tg = chosen.target;
     const aheadTg = dir > 0 ? tg.y - carrier.y : carrier.y - tg.y;
-    const through = aheadTg > 8 && R() < 0.5; // slipped into space ahead of a run
+    const through = aheadTg > 8 && R() < (breaking ? 0.7 : 0.5); // slipped ahead of a run — likelier on the break
     const strayChance = clamp(0.24 - (carrier.rating - 70) / 120, 0.03, 0.3);
     const acc = clamp((carrier.rating - 55) / 45, 0.3, 1);
     const stray = R() < strayChance;
@@ -577,9 +595,11 @@ export function createMatchSim(
         const g = ATTACK[p.side];
         return { tx: clamp(ball.x + (g.x - ball.x) * 0.08 + rnd(-4, 4), 8, 92), ty: clamp(ball.y + dir * rnd(5, 10), 6, 94) };
       }
+      const onBreak = breakT > 0 && breakSide === p.side;
       let sy: number;
-      if (p.role === "Atacante") sy = ball.y + dir * rnd(8, 30); // strikers gamble on runs in behind
-      else if (p.role === "Meio-campo") sy = ball.y + dir * rnd(-4, 12);
+      // strikers gamble on runs in behind — DEEPER on the break (the defence is out of shape)
+      if (p.role === "Atacante") sy = ball.y + dir * (onBreak ? rnd(14, 40) : rnd(8, 30));
+      else if (p.role === "Meio-campo") sy = ball.y + dir * (onBreak ? rnd(2, 18) : rnd(-4, 12));
       else sy = ball.y + dir * rnd(-14, -6); // fullbacks push up to overlap (not as high as mids)
       // WIDTH: wide players hug their channel to STRETCH the pitch instead of drifting
       // onto the ball; central players shift with it. A coached team keeps its width.
@@ -598,7 +618,10 @@ export function createMatchSim(
     const marks = outfield(poss).filter((a) => a !== carrier); // attackers to pick up
     const lo = up ? 8 : 50;
     const hi = up ? 50 : 92;
-    const line = clamp(ball.y - dir * 20, lo, hi); // the shared defensive line
+    // conceding a BREAK → the line RECOVERS deeper (sprinting back toward goal, not
+    // stepping up) — the shape a real broken defence takes
+    const depth = breakT > 0 && breakSide === poss ? 27 : 20;
+    const line = clamp(ball.y - dir * depth, lo, hi); // the shared defensive line
     if (p.role === "Defensor") {
       const m = marks.length ? nearest(marks, p.x, p.y) : null;
       const markX = m ? clamp(m.x, 8, 92) : ball.x;
@@ -692,6 +715,7 @@ export function createMatchSim(
     matchProgress = scoring ? clamp(stepIndex / TOTAL_STEPS, 0, 1) : clamp(progress, 0, 1);
     if (captionT > 0) captionT -= dt;
     if (settleT > 0) settleT -= dt;
+    if (breakT > 0) { breakT -= dt; if (breakT <= 0) breakSide = null; }
     // ball height: gravity pulls it down, then it settles on the pitch (with a small bounce)
     ball.z += ball.vz * dt;
     ball.vz -= GRAVITY * dt;
