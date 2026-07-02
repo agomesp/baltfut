@@ -43,7 +43,9 @@ const FAR_S = 0.5;
 
 type Style = "ik" | "pixel";
 interface Pt { x: number; y: number }
-interface Skel {
+/** a player position + the sim's quantized 8-way facing (sector8: 0=+x/right, 2=away, 4=left, 6=toward camera) */
+interface FPt extends Pt { f: number }
+export interface Skel {
   feet: [Pt, Pt];
   swing: number; swingT: number; target: Pt;
   vx: number; vy: number; ax: number; ay: number;
@@ -334,7 +336,8 @@ export default function PitchView({
 
 /* ─────────────── gait: foot-planting + kick + ragdoll ─────────────── */
 
-function stepGait(s: Skel, p: Pt, dt: number) {
+// exported for the headless gait-integrity test (feet must never stream away from bodies)
+export function stepGait(s: Skel, p: Pt, dt: number) {
   if (s.fall > 0) { s.fall -= dt; return; } // on the ground — freeze the gait
   const speed = Math.hypot(s.vx, s.vy);
   let dx = s.vx, dy = s.vy;
@@ -369,9 +372,16 @@ function stepGait(s: Skel, p: Pt, dt: number) {
     const stride = clamp(speed * 0.14, 1.3, 3.0);
     const behind = (f: Pt) => (p.x - f.x) * dx + (p.y - f.y) * dy;
     const b0 = behind(s.feet[0]), b1 = behind(s.feet[1]);
-    const worst = b0 > b1 ? 0 : 1;
-    // start a step when a foot has fallen behind, or FORCE one if it's dragging far
-    if (s.swing < 0 && (Math.max(b0, b1) > stride * 0.7 || Math.max(b0, b1) > 3.2)) {
+    // RADIAL drag: arcing runners (turn-clamp kinematics) leave feet LATERALLY —
+    // invisible to the along-track projection — so measure straight distance too
+    const r0 = Math.hypot(p.x - s.feet[0].x, p.y - s.feet[0].y);
+    const r1 = Math.hypot(p.x - s.feet[1].x, p.y - s.feet[1].y);
+    if (r0 > 6) { s.feet[0] = { x: homeL.x, y: homeL.y }; if (s.swing === 0) s.swing = -1; } // hard safety — no shin streaks
+    if (r1 > 6) { s.feet[1] = { x: homeR.x, y: homeR.y }; if (s.swing === 1) s.swing = -1; }
+    const radial = Math.max(r0, r1) > 3.4;
+    const worst = radial ? (r0 > r1 ? 0 : 1) : b0 > b1 ? 0 : 1;
+    // start a step when a foot has fallen behind or drifted wide, or FORCE one if far
+    if (s.swing < 0 && (Math.max(b0, b1) > stride * 0.7 || Math.max(b0, b1) > 3.2 || radial)) {
       s.swing = worst; s.swingT = 0;
     }
     if (s.swing >= 0) {
@@ -395,7 +405,7 @@ function stepGait(s: Skel, p: Pt, dt: number) {
 
 interface DrawArgs {
   homeXI: FieldSlot[]; awayXI: FieldSlot[];
-  homePos: Pt[]; awayPos: Pt[]; ball: Pt & { z?: number };
+  homePos: FPt[]; awayPos: FPt[]; ball: Pt & { z?: number };
   homeSkel: Skel[]; awaySkel: Skel[];
   bookings: Record<string, "yellow" | "red">; sentOff: Set<string>; trail: Pt[]; style: Style;
 }
@@ -403,7 +413,7 @@ interface DrawArgs {
 function draw(ctx: CanvasRenderingContext2D, a: DrawArgs) {
   drawField(ctx);
   const bodies: { fy: number; render: () => void }[] = [];
-  const push = (xi: FieldSlot[], pos: Pt[], sk: Skel[], base: string) => xi.forEach((slot, i) => {
+  const push = (xi: FieldSlot[], pos: FPt[], sk: Skel[], base: string) => xi.forEach((slot, i) => {
     if (a.sentOff.has(slot.id)) return;
     const p = pos[i], s = sk[i];
     if (!p || !s) return;
@@ -467,8 +477,15 @@ function footScreen(s: Skel, i: number, legLen: number) {
   return { x: f.sx, y: f.sy - lift };
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, p: Pt, s: Skel, col: string, card: "yellow" | "red" | undefined, style: Style) {
+function drawPlayer(ctx: CanvasRenderingContext2D, p: FPt, s: Skel, col: string, card: "yellow" | "red" | undefined, style: Style) {
   const { sx, sy, s: sc } = proj(p.x, p.y);
+  // 8-WAY FACING from the sim's authoritative heading: field angle → screen space
+  // (field +y is AWAY = up-screen, so the vertical flips and squashes with the camera)
+  const fAng = (p.f ?? 6) * (Math.PI / 4);
+  const fx = Math.cos(fAng);
+  const fy = Math.sin(fAng);
+  const sfx = Math.abs(fx) < 1e-9 ? 0 : fx;
+  const sfy = -fy * 0.62;
   // shadow
   ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(sx, sy, 8 * sc, 3.1 * sc, 0, 0, Math.PI * 2); ctx.fill();
 
@@ -482,11 +499,22 @@ function drawPlayer(ctx: CanvasRenderingContext2D, p: Pt, s: Skel, col: string, 
   const sho = { x: hip.x + s.lean * sc * 0.7, y: hip.y - torso };
   const head = { x: sho.x + s.lean * sc * 0.3, y: sho.y - headR - 1 };
   const dark = col === AWAY ? "#0a2740" : "#132a10";
-  const f0 = footScreen(s, 0, legLen), f1 = footScreen(s, 1, legLen);
+  // DRAW-TIME leg clamp: whatever state the gait is in (ragdoll recovery, catch-up
+  // bursts, arc drift), a drawn foot never exceeds anatomical reach — a clamped leg
+  // reads as a full stride; an unclamped one reads as a shin streak across the pitch.
+  const maxLeg = (thigh + shin) * 1.12;
+  const capFoot = (f: { x: number; y: number }) => {
+    const dx = f.x - hip.x, dy = f.y - hip.y;
+    const d = Math.hypot(dx, dy);
+    return d > maxLeg ? { x: hip.x + (dx / d) * maxLeg, y: hip.y + (dy / d) * maxLeg } : f;
+  };
+  const f0 = capFoot(footScreen(s, 0, legLen)), f1 = capFoot(footScreen(s, 1, legLen));
   const legOrder: [{ x: number; y: number }, number][] = f0.y <= f1.y ? [[f0, 0], [f1, 1]] : [[f1, 1], [f0, 0]];
 
   if (style === "pixel") {
-    // chunky RETRO body — jersey block, shorts, socks/boots, blocky limbs, head + hair
+    // chunky RETRO body — jersey block, shorts, socks/boots, blocky limbs, head + hair.
+    // The head is FACING-AWARE: back-of-head hair when facing away, fringe + two eyes
+    // toward camera, full profile (single eye + side hair) east/west, 3/4 diagonals.
     const short = col === AWAY ? "#0e3a63" : "#20361a";
     const sock = "#101512";
     for (const [f] of legOrder) { ikLeg(ctx, hip.x, hip.y, f.x, f.y, thigh, shin, lw, sock); ctx.fillStyle = "#0b0d0a"; ctx.fillRect(Math.round(f.x - 2.4 * sc), Math.round(f.y - 1.6 * sc), 4.8 * sc, 2.6 * sc); }
@@ -495,20 +523,46 @@ function drawPlayer(ctx: CanvasRenderingContext2D, p: Pt, s: Skel, col: string, 
     // arms
     const swing = Math.sin(s.gait) * (0.5 + Math.min(speed, 12) * 0.05);
     for (const sgn of [1, -1]) { const hx = sho.x + sgn * headR * 0.7; const hand = { x: hx + Math.sin(s.gait + (sgn > 0 ? 0 : Math.PI)) * arm * 0.6 + s.lean * sc * 0.3, y: sho.y + arm * (0.7 + 0.3 * Math.cos(swing)) }; seg(ctx, hx, sho.y + 1, hand.x, hand.y, lw * 0.9, col); ctx.fillStyle = SKIN; ctx.fillRect(Math.round(hand.x - 1.4 * sc), Math.round(hand.y - 1.4 * sc), 2.8 * sc, 2.8 * sc); }
-    // jersey block
-    ctx.fillStyle = col; ctx.fillRect(Math.round(hip.x - 4.6 * sc + s.lean * sc * 0.4), Math.round(sho.y - 1 * sc), 9.2 * sc, torso + 2 * sc);
-    ctx.fillStyle = dark; ctx.fillRect(Math.round(hip.x - 4.6 * sc + s.lean * sc * 0.4), Math.round(sho.y - 1 * sc), 9.2 * sc, 1.4 * sc); // collar shade
-    // head + hair
+    // jersey block (nudged a pixel toward the facing — reads as the chest turning)
+    const lean2 = s.lean * sc * 0.4 + sfx * sc * 0.8;
+    ctx.fillStyle = col; ctx.fillRect(Math.round(hip.x - 4.6 * sc + lean2), Math.round(sho.y - 1 * sc), 9.2 * sc, torso + 2 * sc);
+    ctx.fillStyle = dark; ctx.fillRect(Math.round(hip.x - 4.6 * sc + lean2), Math.round(sho.y - 1 * sc), 9.2 * sc, 1.4 * sc); // collar shade
+    // head base
     ctx.fillStyle = SKIN; ctx.fillRect(Math.round(head.x - headR), Math.round(head.y - headR), headR * 2, headR * 2);
-    ctx.fillStyle = "#3a2a1c"; ctx.fillRect(Math.round(head.x - headR), Math.round(head.y - headR), headR * 2, headR * 0.9);
+    ctx.fillStyle = "#3a2a1c";
+    if (fy > 0.35) {
+      // facing AWAY (N/NE/NW): the camera sees the back of the head — hair fills it
+      ctx.fillRect(Math.round(head.x - headR), Math.round(head.y - headR), headR * 2, headR * 1.5);
+    } else {
+      ctx.fillRect(Math.round(head.x - headR), Math.round(head.y - headR), headR * 2, headR * 0.9); // fringe
+      if (Math.abs(fx) > 0.9) {
+        // full profile (E/W): side hair + a single eye toward the facing
+        ctx.fillRect(Math.round(fx > 0 ? head.x - headR : head.x + headR * 0.5), Math.round(head.y - headR), headR * 0.5, headR * 1.7);
+        ctx.fillStyle = "#141a14";
+        ctx.fillRect(Math.round(head.x + (fx > 0 ? headR * 0.3 : -headR * 0.7)), Math.round(head.y - headR * 0.05), headR * 0.4, headR * 0.4);
+      } else {
+        // toward camera (S) or 3/4 (SE/SW): two eyes, offset toward the facing
+        const eo = sfx * headR * 0.45;
+        ctx.fillStyle = "#141a14";
+        ctx.fillRect(Math.round(head.x - headR * 0.55 + eo), Math.round(head.y - headR * 0.02), headR * 0.42, headR * 0.42);
+        ctx.fillRect(Math.round(head.x + headR * 0.15 + eo), Math.round(head.y - headR * 0.02), headR * 0.42, headR * 0.42);
+      }
+    }
   } else {
-    // IK stick skeleton
+    // IK stick skeleton — facing shows as a SHOULDER BAR square to the heading and a
+    // nose dot on the head rim (hidden when the player faces away from the camera)
     for (const [f] of legOrder) ikLeg(ctx, hip.x, hip.y, f.x, f.y, thigh, shin, lw, dark);
     const swing = Math.sin(s.gait) * (0.5 + Math.min(speed, 12) * 0.05);
     for (const sgn of [1, -1]) { const hx = sho.x + sgn * headR * 0.7; const hand = { x: hx + Math.sin(s.gait + (sgn > 0 ? 0 : Math.PI)) * arm * 0.7 + s.lean * sc * 0.3, y: sho.y + arm * (0.7 + 0.3 * Math.cos(swing)) }; seg(ctx, hx, sho.y + 1, hand.x, hand.y, lw * 0.8, dark); ctx.fillStyle = SKIN; ctx.beginPath(); ctx.arc(hand.x, hand.y, 1.5 * sc, 0, Math.PI * 2); ctx.fill(); }
     seg(ctx, hip.x, hip.y, sho.x, sho.y, lw * 1.9, col);
+    const spx = -sfy, spy = sfx; // screen-perp of the facing = the shoulder line
+    seg(ctx, sho.x - spx * headR * 1.15, sho.y - spy * headR * 0.55, sho.x + spx * headR * 1.15, sho.y + spy * headR * 0.55, lw * 1.05, col);
     ctx.fillStyle = SKIN; ctx.beginPath(); ctx.arc(head.x, head.y, headR, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = dark; ctx.lineWidth = sc; ctx.stroke();
+    if (fy < 0.75) {
+      ctx.fillStyle = "#c49b74"; // the nose — which way is he looking?
+      ctx.beginPath(); ctx.arc(head.x + sfx * headR * 0.72, head.y + sfy * headR * 0.55, 1.25 * sc, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   if (card) { ctx.fillStyle = card === "red" ? "#e0322f" : "#f2c531"; ctx.fillRect(head.x + headR * 0.7, head.y - headR * 1.6, 3 * sc, 4.2 * sc); }

@@ -23,6 +23,7 @@ import { mulberry32, randInt32 } from "./prng";
 import { TOTAL_STEPS } from "./sim-timing";
 import { laneClearance, onwardValue, pickOverloadFlank, coachAdjust, COACH_ZERO, type CoachAdjust } from "./brain";
 import { magnusAccel, spinDecay, curlSign } from "./ball-physics";
+import { deriveAttrs, applyTurn, sector8, hash01, type KinAttrs } from "./kinematics";
 import type { Cat } from "./data";
 import type { FieldSlot } from "./squad";
 
@@ -57,8 +58,9 @@ export interface PitchResult {
 export type Side = "home" | "away";
 export type Card = "yellow" | "red";
 export interface Snapshot {
-  home: { x: number; y: number }[];
-  away: { x: number; y: number }[];
+  /** per player: position + quantized 8-way facing (sector8 of the heading) */
+  home: { x: number; y: number; f: number }[];
+  away: { x: number; y: number; f: number }[];
   ball: { x: number; y: number; z: number };
   poss: Side;
   controlled: boolean;
@@ -102,6 +104,13 @@ interface P {
   /** Deterministic per-player tendency (0..1, hashed from the id — NOT the match
    * stream): a flair-9 midfielder loves the long shot; a flair-1 one recycles. */
   flair: number;
+  /** id-hash kinematic profile: topSpeed/accel/agility/reaction/strength (A2.5) */
+  kin: KinAttrs;
+  /** facing, radians (atan2) — follows velocity above walking pace, persists at rest */
+  heading: number;
+  /** reaction lag: remaining seconds of flat-footedness after a change of play */
+  lagT: number;
+  seenSeq: number;
 }
 
 const ATTACK = { home: { x: 50, y: 100 }, away: { x: 50, y: 0 } };
@@ -118,13 +127,8 @@ const TACKLE_RATE = 3.0;
 const BLOCK_R = 2.3;
 const GRAVITY = 44; // ball-height (z) fall rate — 52 was the 60s-era hang compression; at the 3-min clock deliveries afford real float (+~18% hang, powers trimmed so drops still land in the box)
 
-/** FNV-1a over a string → 0..1. Identity that is a pure function of the id, NOT the
- * match seed/stream — so a player/team behaves like THEMSELVES in every match. */
-function hash01(str: string): number {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return (h >>> 0) / 4294967295;
-}
+// hash01 (FNV-1a id → 0..1) now lives in kinematics.ts — one identity primitive
+// shared by flair, team style, and the kinematic attribute split.
 
 const dist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax - bx, ay - by);
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -148,7 +152,8 @@ export function createMatchSim(
   const rnd = (a: number, b: number) => a + R() * (b - a);
   const mk = (s: FieldSlot, side: Side): P => ({
     id: s.id, name: s.name, side, role: s.role, rating: s.rating ?? 78, ax: s.x, ay: s.y, x: s.x, y: s.y, vx: 0, vy: 0, tx: s.x, ty: s.y, rt: 0,
-    pace: 0.85 + ((s.rating ?? 78) - 70) / 60, runT: 0, runX: 0, runY: 0, flair: hash01(s.id),
+    pace: (0.85 + ((s.rating ?? 78) - 70) / 60), runT: 0, runX: 0, runY: 0, flair: hash01(s.id),
+    kin: deriveAttrs(s.id, s.rating ?? 78), heading: side === "home" ? Math.PI / 2 : -Math.PI / 2, lagT: 0, seenSeq: 0,
   });
   const home = homeSlots.map((s) => mk(s, "home"));
   const away = awaySlots.map((s) => mk(s, "away"));
@@ -221,6 +226,8 @@ export function createMatchSim(
   let freeKick = false;
   let matchProgress = 0;
   let stepIndex = 0; // fixed-step counter — the authoritative clock when scoring
+  let phaseSeq = 0; // increments on every change of play — reaction lag keys off it
+  let lastPhaseKey = "";
   let captionText = "";
   let captionT = 0;
   let eventSeq = 0;
@@ -955,7 +962,7 @@ export function createMatchSim(
     // or the late game loses exactly the runs its urgency asks for
     const fat = matchProgress * clamp(0.3 - (p.rating - 70) / 220, 0.14, 0.32);
     const stam = 1 - (p.runT > 0 ? 0.45 * fat : fat);
-    const maxS = (sprint ? SPRINT : JOG) * p.pace * stam;
+    const maxS = (sprint ? SPRINT : JOG) * p.pace * p.kin.topSpeedF * stam;
     let desx = 0;
     let desy = 0;
     if (d > 0.001) {
@@ -966,10 +973,15 @@ export function createMatchSim(
     let ax = desx - p.vx;
     let ay = desy - p.vy;
     const am = Math.hypot(ax, ay);
-    const amax = ACCEL * dt;
+    const amax = ACCEL * p.kin.accelF * dt;
     if (am > amax) { ax = (ax / am) * amax; ay = (ay / am) * amax; }
-    p.vx += ax;
-    p.vy += ay;
+    // A2.5 KINEMATICS: the accel-clamped update passes through TURN physics — at
+    // speed the heading arcs at the player's agility instead of snapping (fast =
+    // wide arcs; a reversal plants and cuts). Ends the hockey-air-bot feel.
+    const t = applyTurn(p.vx, p.vy, p.vx + ax, p.vy + ay, p.kin.agility, dt);
+    p.vx = t.vx;
+    p.vy = t.vy;
+    if (p.vx * p.vx + p.vy * p.vy > 4) p.heading = Math.atan2(p.vy, p.vx); // face the travel above walking pace
     p.x = clamp(p.x + p.vx * dt, 2, 98);
     p.y = clamp(p.y + p.vy * dt, 2, 98);
   }
@@ -1339,11 +1351,23 @@ export function createMatchSim(
     if (ballState === "pass" && passTo) { chaseA = passTo; chaseB = nearest(opp(passTo.side).filter(canContest), ball.x, ball.y); }
     else if (ballState === "loose") { chaseA = nearest((restartFor ? team(restartFor) : all).filter(canContest), ball.x, ball.y); }
 
+    // REACTION LAG (A2.5): a change of play (pass away, turnover, shot, restart)
+    // leaves everyone except the man on the ball and the intended receiver flat-
+    // footed for their personal reaction time — through-balls beat defenders who
+    // genuinely haven't reacted yet, not defenders who forgot to retarget.
+    const phaseKey = ballState + "|" + (carrier ? carrier.id : "") + "|" + poss;
+    if (phaseKey !== lastPhaseKey) { lastPhaseKey = phaseKey; phaseSeq++; }
     for (const p of all) {
       if (sentOff.has(p.id)) continue; // sent off — off the pitch
       p.rt -= dt;
+      if (p.seenSeq !== phaseSeq) {
+        p.seenSeq = phaseSeq;
+        if (p !== carrier && p !== passTo) p.lagT = p.kin.reaction;
+      }
+      if (p.lagT > 0) p.lagT -= dt;
       const chasing = p === chaseA || p === chaseB;
-      if (p === carrier || chasing || p.rt <= 0 || wallPos.has(p) || cornerDelivery) {
+      const lagged = p.lagT > 0 && p !== carrier && p !== passTo && !wallPos.has(p);
+      if (!lagged && (p === carrier || chasing || p.rt <= 0 || wallPos.has(p) || cornerDelivery)) {
         const t = target(p, pressers.includes(p), chasing);
         p.tx = t.tx; p.ty = t.ty;
         p.rt = p === carrier || chasing ? 0.1 : rnd(0.35, 0.8);
@@ -1401,8 +1425,8 @@ export function createMatchSim(
   function snapshot(): Snapshot {
     const totalP = possFrames.home + possFrames.away;
     return {
-      home: home.map((p) => ({ x: p.x, y: p.y })),
-      away: away.map((p) => ({ x: p.x, y: p.y })),
+      home: home.map((p) => ({ x: p.x, y: p.y, f: sector8(p.heading) })),
+      away: away.map((p) => ({ x: p.x, y: p.y, f: sector8(p.heading) })),
       ball: { x: ball.x, y: ball.y, z: ball.z },
       poss,
       controlled: ballState === "dribble" || ballState === "pass",

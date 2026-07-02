@@ -145,8 +145,9 @@ export function lerpSnapshot(prev: Snapshot, curr: Snapshot, a: number): Snapsho
   const t = clamp01(a);
   return {
     ...curr,
-    home: curr.home.map((p, i) => lerpPt(prev.home[i] ?? p, p, t)),
-    away: curr.away.map((p, i) => lerpPt(prev.away[i] ?? p, p, t)),
+    // facing (f) is quantized — carry the CURRENT sector, never lerp it
+    home: curr.home.map((p, i) => ({ ...lerpPt(prev.home[i] ?? p, p, t), f: p.f })),
+    away: curr.away.map((p, i) => ({ ...lerpPt(prev.away[i] ?? p, p, t), f: p.f })),
     ball: { ...lerpPt(prev.ball ?? curr.ball, curr.ball, t), z: lerp((prev.ball ?? curr.ball).z, curr.ball.z, t) },
   };
 }
