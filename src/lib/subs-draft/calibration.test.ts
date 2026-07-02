@@ -17,6 +17,7 @@ const N = 60;
 
 interface Agg {
   goals: number[];
+  goalMinutes: number[];
   shotsPerTeam: number[];
   onTargetFrac: number[];
   corners: number[];
@@ -30,7 +31,7 @@ function playN(n: number, seedBase: number): Agg {
   const field = mockField();
   const home = fieldLayout(field[0], autoLineup(field[0], "4-4-2", {}), "home");
   const away = fieldLayout(field[1], autoLineup(field[1], "4-3-3", {}), "away");
-  const agg: Agg = { goals: [], shotsPerTeam: [], onTargetFrac: [], corners: [], fouls: [], yellows: [], reds: [], zeroZero: 0 };
+  const agg: Agg = { goals: [], goalMinutes: [], shotsPerTeam: [], onTargetFrac: [], corners: [], fouls: [], yellows: [], reds: [], zeroZero: 0 };
   for (let k = 0; k < n; k++) {
     const sim = createMatchSim(home, away, seedBase + k, { scoring: true });
     for (let i = 0; i < TOTAL_STEPS; i++) sim.step(FIXED_DT);
@@ -46,6 +47,7 @@ function playN(n: number, seedBase: number): Agg {
     agg.fouls.push(r.stats.fouls.home + r.stats.fouls.away);
     agg.yellows.push(r.events.filter((e) => e.type === "yellow").length);
     agg.reds.push(r.events.filter((e) => e.type === "red").length);
+    for (const e of r.events) if (e.type === "goal") agg.goalMinutes.push(e.minute);
   }
   return agg;
 }
@@ -96,5 +98,16 @@ describe("calibration — the sim's match stats live in real-football bands", ()
 
   it("0-0 stays uncommon (real ~8%): at most 20% of matches", () => {
     expect(agg.zeroZero / N).toBeLessThanOrEqual(0.2);
+  }, SLOW);
+
+  it("goals cluster LATE like real football (last third ≥ 34% and > first third)", () => {
+    // the audit found goals DIPPING in 76-90' (13.4% vs real ~24%) — without game-state
+    // urgency the dying-minutes drama structurally couldn't happen
+    const total = agg.goalMinutes.length;
+    const late = agg.goalMinutes.filter((m) => m >= 61).length;
+    const first = agg.goalMinutes.filter((m) => m <= 30).length;
+    expect(total).toBeGreaterThan(60); // enough sample to judge the shape
+    expect(late / total).toBeGreaterThanOrEqual(0.34);
+    expect(late).toBeGreaterThan(first);
   }, SLOW);
 });

@@ -199,6 +199,15 @@ export function createMatchSim(
     recorded.push({ minute: nowMin(), side, type, player: p.name, playerId: p.id });
   };
 
+  // GAME STATE: how hard a side is chasing (+1) or protecting (-1) the scoreline,
+  // ramping in over the final third. Reads only PRODUCED state — goals stay 0-0 on the
+  // cosmetic path, so urgency is inert there. This is what makes 1-0 at 80' feel like
+  // 1-0 at 80': the trailing side pushes up and shoots; the leader sits deep and slows.
+  const urgency = (s: Side) => {
+    const diff = s === "home" ? goals.away - goals.home : goals.home - goals.away;
+    return clamp(diff, -1, 1) * clamp((matchProgress - 0.6) / 0.3, 0, 1);
+  };
+
   const team = (s: Side) => (s === "home" ? home : away).filter((p) => !sentOff.has(p.id));
   const opp = (s: Side) => (s === "home" ? away : home).filter((p) => !sentOff.has(p.id));
   const outfield = (s: Side) => team(s).filter((p) => p.role !== "Goleiro");
@@ -429,7 +438,7 @@ export function createMatchSim(
     const dir = gk.side === "home" ? 1 : -1;
     const mates = outfield(gk.side);
     if (!mates.length) { decideT = rnd(0.4, 0.8); return; }
-    const long = R() < 0.4;
+    const long = R() < (urgency(gk.side) > 0.3 ? 0.65 : 0.4); // chasing late → hurry it long
     const tgt = long
       ? mates.reduce((b, m) => ((dir > 0 ? m.y > b.y : m.y < b.y) ? m : b), mates[0])
       : mates.reduce((b, m) => (dist(gk.x, gk.y, m.x, m.y) < dist(gk.x, gk.y, b.x, b.y) ? m : b), mates[0]);
@@ -495,8 +504,10 @@ export function createMatchSim(
     // the flat 0.14 term is the SPECULATIVE appetite: in range but with weak pass
     // options, real players let fly from distance — those low-xG efforts mostly miss
     // (the aim spray) or get blocked, supplying the real ~12 shots/team + the byline
-    // ecosystem (goal kicks, corners) without inflating goals.
-    opts.push({ kind: "shoot", score: xg * 2.6 + (dg < 30 ? 0.14 : 0) });
+    // ecosystem (goal kicks, corners) without inflating goals. A side CHASING the
+    // scoreline late shoots more (urgency) — the real late-goal surge.
+    const u = urgency(side);
+    opts.push({ kind: "shoot", score: (xg * 2.6 + (dg < 30 ? 0.14 : 0)) * (1 + 0.35 * Math.max(0, u)) });
 
     // CROSS from wide + advanced
     if ((carrier.x < 26 || carrier.x > 74) && dg < 36) {
@@ -514,7 +525,8 @@ export function createMatchSim(
       const openness = clamp(dist(nd.x, nd.y, m.x, m.y) / 12, 0.05, 1);
       const lane = clamp(laneClearance(ball.x, ball.y, m.x, m.y, oppOut) / 5, 0, 1);
       const range = dist(carrier.x, carrier.y, m.x, m.y);
-      const rangeF = clamp(1 - Math.abs(range - 20) / 46, 0.25, 1);
+      // a leader protecting the scoreline keeps it SHORT and safe (recenter ~15)
+      const rangeF = clamp(1 - Math.abs(range - (u < -0.3 ? 15 : 20)) / 46, 0.25, 1);
       const progF = clamp(0.5 + ahead / 38, 0.05, 1.25) * (breaking && ahead > 0 ? 1.35 : 1);
       opts.push({ kind: "pass", target: m, score: progF * (0.4 + 0.6 * openness) * (0.3 + 0.7 * lane) * rangeF });
     }
@@ -531,7 +543,8 @@ export function createMatchSim(
 
     if (chosen.kind === "shoot") { shoot(carrier); return; }
     if (chosen.kind === "cross") { doCross(carrier); return; }
-    if (chosen.kind === "dribble" || !chosen.target) { decideT = rnd(0.35, 0.75); return; }
+    // a leader on the ball late slows the game down (time management on the dribble)
+    if (chosen.kind === "dribble" || !chosen.target) { decideT = rnd(0.35, 0.75) * (u < -0.3 ? 1.35 : 1); return; }
 
     // PASS — accuracy + stray + through-ball lead + offside
     const tg = chosen.target;
@@ -595,11 +608,11 @@ export function createMatchSim(
         const g = ATTACK[p.side];
         return { tx: clamp(ball.x + (g.x - ball.x) * 0.08 + rnd(-4, 4), 8, 92), ty: clamp(ball.y + dir * rnd(5, 10), 6, 94) };
       }
-      const onBreak = breakT > 0 && breakSide === p.side;
+      // deeper gambles on the break (defence out of shape) AND when chasing late (risk-on)
+      const pushOn = (breakT > 0 && breakSide === p.side) || urgency(p.side) > 0.3;
       let sy: number;
-      // strikers gamble on runs in behind — DEEPER on the break (the defence is out of shape)
-      if (p.role === "Atacante") sy = ball.y + dir * (onBreak ? rnd(14, 40) : rnd(8, 30));
-      else if (p.role === "Meio-campo") sy = ball.y + dir * (onBreak ? rnd(2, 18) : rnd(-4, 12));
+      if (p.role === "Atacante") sy = ball.y + dir * (pushOn ? rnd(14, 40) : rnd(8, 30));
+      else if (p.role === "Meio-campo") sy = ball.y + dir * (pushOn ? rnd(2, 18) : rnd(-4, 12));
       else sy = ball.y + dir * rnd(-14, -6); // fullbacks push up to overlap (not as high as mids)
       // WIDTH: wide players hug their channel to STRETCH the pitch instead of drifting
       // onto the ball; central players shift with it. A coached team keeps its width.
@@ -619,8 +632,10 @@ export function createMatchSim(
     const lo = up ? 8 : 50;
     const hi = up ? 50 : 92;
     // conceding a BREAK → the line RECOVERS deeper (sprinting back toward goal, not
-    // stepping up) — the shape a real broken defence takes
-    const depth = breakT > 0 && breakSide === poss ? 27 : 20;
+    // stepping up). GAME STATE bends it too: a trailing side defends HIGHER (all-in),
+    // a leading side drops off and protects the box.
+    const uDef = urgency(p.side);
+    const depth = (breakT > 0 && breakSide === poss ? 27 : 20) + 6 * Math.max(0, -uDef) - 5 * Math.max(0, uDef);
     const line = clamp(ball.y - dir * depth, lo, hi); // the shared defensive line
     if (p.role === "Defensor") {
       const m = marks.length ? nearest(marks, p.x, p.y) : null;
