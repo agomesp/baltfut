@@ -175,6 +175,8 @@ export function createMatchSim(
   let breakSide: Side | null = null;
   let penaltyFor: Side | null = null; // a spot kick is being taken (ceremony → strike)
   let penaltyShot = false; // the in-flight attempt is the penalty (no body blocks)
+  let resetT = 0; // post-goal moment: the ball is dead, both teams walk back to shape
+  let kickoffPending: Side | null = null; // who restarts once the moment passes
   let scoreSide: Side | null = null;
   let attemptSide: Side | null = null;
   let attemptOnTarget = false;
@@ -209,7 +211,13 @@ export function createMatchSim(
   // 1-0 at 80': the trailing side pushes up and shoots; the leader sits deep and slows.
   const urgency = (s: Side) => {
     const diff = s === "home" ? goals.away - goals.home : goals.home - goals.away;
-    return clamp(diff, -1, 1) * clamp((matchProgress - 0.6) / 0.3, 0, 1);
+    const ramp = clamp((matchProgress - 0.55) / 0.35, 0, 1);
+    // LEVEL late is risk-on for BOTH teams (everyone wants the winner) — draws are
+    // ~27% of matches and without this they'd contribute no late surge at all.
+    // NB the cosmetic path stays 0-0 with matchProgress from the caller, so the mild
+    // draw-urgency also animates v1's late play — behavior, not scoreline (inert there).
+    if (diff === 0) return 0.45 * ramp;
+    return clamp(diff, -1, 1) * ramp;
   };
 
   const team = (s: Side) => (s === "home" ? home : away).filter((p) => !sentOff.has(p.id));
@@ -389,7 +397,14 @@ export function createMatchSim(
     record("goal", side, shooter);
     caption("GOL!");
     ticker("⚽️ GOL");
-    kickoff(side === "home" ? "away" : "home"); // the team that conceded restarts
+    // the MOMENT: ball dead in the net, both teams walk back to shape, THEN the
+    // conceding side restarts — kickoff no longer fires mid-goalmouth-stampede
+    ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0;
+    carrier = null;
+    passTo = null;
+    ballState = "loose";
+    resetT = 1.1;
+    kickoffPending = side === "home" ? "away" : "home";
   }
 
   function foul(victim: P, fouler: P) {
@@ -584,8 +599,10 @@ export function createMatchSim(
     // PASS — accuracy + stray + through-ball lead + offside
     const tg = chosen.target;
     const aheadTg = dir > 0 ? tg.y - carrier.y : carrier.y - tg.y;
-    const through = aheadTg > 8 && R() < (breaking ? 0.7 : 0.5); // slipped ahead of a run — likelier on the break
-    const strayChance = clamp(0.24 - (carrier.rating - 70) / 120, 0.03, 0.3);
+    const through = aheadTg > 8 && R() < (breaking ? 0.7 : u > 0.3 ? 0.65 : 0.5); // slipped ahead of a run — likelier on the break / when chasing
+    // fatigue hits the MIND too: stray passes rise late — live turnovers that launch
+    // counter-attacks, the engine of the real late-goal surge
+    const strayChance = clamp(0.24 - (carrier.rating - 70) / 120, 0.03, 0.3) * (1 + 0.75 * matchProgress);
     const acc = clamp((carrier.rating - 55) / 45, 0.3, 1);
     const stray = R() < strayChance;
     let lx = tg.x + tg.vx * 0.16;
@@ -673,7 +690,7 @@ export function createMatchSim(
       let sy: number;
       if (p.role === "Atacante") sy = ball.y + dir * (pushOn ? rnd(14, 40) : rnd(8, 30));
       else if (p.role === "Meio-campo") sy = ball.y + dir * (pushOn ? rnd(2, 18) : rnd(-4, 12));
-      else sy = ball.y + dir * rnd(-14, -6); // fullbacks push up to overlap (not as high as mids)
+      else sy = ball.y + dir * (urgency(p.side) > 0.3 ? rnd(-6, 6) : rnd(-14, -6)); // fullbacks overlap; thrown FORWARD when chasing
       // WIDTH: wide players hug their channel to STRETCH the pitch instead of drifting
       // onto the ball; central players shift with it. A coached team keeps its width.
       let tx: number;
@@ -791,6 +808,18 @@ export function createMatchSim(
     if (captionT > 0) captionT -= dt;
     if (settleT > 0) settleT -= dt;
     if (breakT > 0) { breakT -= dt; if (breakT <= 0) breakSide = null; }
+    if (resetT > 0) {
+      // post-goal moment: no play — everyone jogs back toward their formation anchor
+      resetT -= dt;
+      for (const p of all) {
+        if (sentOff.has(p.id)) continue;
+        p.tx = p.ax;
+        p.ty = p.ay;
+        steer(p, false, dt);
+      }
+      if (resetT <= 0 && kickoffPending) { const to = kickoffPending; kickoffPending = null; kickoff(to); }
+      return;
+    }
     // ball height: gravity pulls it down, then it settles on the pitch (with a small bounce)
     ball.z += ball.vz * dt;
     ball.vz -= GRAVITY * dt;
@@ -803,7 +832,10 @@ export function createMatchSim(
       if (scoreSide === "home" ? ball.y >= 97 : ball.y <= 3) {
         const conceding: Side = scoreSide === "home" ? "away" : "home";
         scoreSide = null;
-        kickoff(conceding);
+        ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0;
+        ballState = "loose";
+        resetT = 1.1;
+        kickoffPending = conceding; // same post-goal moment as a produced goal
       }
     } else if (ballState === "attempt" && attemptSide) {
       integrateBall(dt, SHOT_FRICTION);
@@ -839,7 +871,9 @@ export function createMatchSim(
               // xG — the raw xG needs no extra gain to hit real conversion (~2.5 goals).
               const gk = attemptKeeper;
               const save = gk ? clamp(0.5 + (gk.rating - 70) / 90, 0.42, 0.82) : 0.5;
-              const pGoal = clamp(attemptXG * ((1 - save) / (1 - 0.62)), 0.02, 0.95);
+              // conversion drifts up late: tired defenders close down slower, so the same
+              // position yields a cleaner strike (the resolve-side half of the fatigue fade)
+              const pGoal = clamp(attemptXG * (1 + 0.12 * matchProgress) * ((1 - save) / (1 - 0.62)), 0.02, 0.95);
               if (R() < pGoal) { const sc = attemptShooter; attemptSide = null; goal(attSide, sc); scored = true; }
             }
             if (scored) {
@@ -876,7 +910,7 @@ export function createMatchSim(
         const rec = passTo;
         const int = nearest(opp(rec.side).filter(canContest), ball.x, ball.y);
         // tired legs read passes worse late (the real late-game defensive fade)
-        const intReach = CONTROL * (0.85 + (int.rating - 70) / 110) * (1 - 0.22 * matchProgress);
+        const intReach = CONTROL * (0.85 + (int.rating - 70) / 110) * (1 - 0.18 * matchProgress);
         if (dist(ball.x, ball.y, rec.x, rec.y) < CONTROL) {
           if (pendingCross && rec.role !== "Goleiro") { pendingCross = false; lastTouch = rec.side; shoot(rec, true); }
           else giveBallTo(rec);
@@ -905,7 +939,7 @@ export function createMatchSim(
       // came out ~1.7/match (real ~0.3).
       const inPenBox = Math.abs(carrier.x - 50) < 22 && (carrier.side === "home" ? carrier.y > 84 : carrier.y < 16);
       const foulRate = clamp(2.9 * (carrier.rating / presser.rating), 1.6, 5.0) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.18 : 1);
-      const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.34 * matchProgress);
+      const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.28 * matchProgress);
       if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
       else if (near && R() < foulRate * dt) foul(carrier, presser);
       else if (near && R() < tackleRate * dt) giveBallTo(presser);
