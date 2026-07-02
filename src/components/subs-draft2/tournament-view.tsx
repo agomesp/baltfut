@@ -18,6 +18,7 @@ import LineupEditor from "@/components/subs-draft/lineup-editor";
 import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
 import { randInt32 } from "@/lib/subs-draft/prng";
 import { SECS_PER_MATCH } from "@/lib/subs-draft/sim-timing";
+import { computeChunked, isAbort } from "@/lib/subs-draft/async-sim";
 import type { BroadcastState } from "@/lib/subs-draft/watch-sync";
 import type { Team } from "@/lib/subs-draft/engine";
 import {
@@ -81,6 +82,7 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
   const [showSquads, setShowSquads] = useState(false);
   const [pauseBetween, setPauseBetween] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
+  const [preparing, setPreparing] = useState(false); // computing a round's results (time-sliced)
 
   const bracketRef = useRef<Bracket>(bracket);
   const bracketSeedRef = useRef(DEFAULT_BRACKET_SEED);
@@ -92,6 +94,7 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
   const anchorRef = useRef<ClockAnchor | null>(null); // A0.2 wall-clock anchor for the match minute
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const nextRoundTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // inter-round auto-advance
+  const prepAbortRef = useRef<AbortController | null>(null); // cancels an in-flight round precompute
   useEffect(() => { speedRef.current = speed; }, [speed]);
 
   const setBracket = useCallback((b: Bracket) => { bracketRef.current = b; setBracketState(b); }, []);
@@ -140,14 +143,34 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
     timer.current = null;
     if (nextRoundTimer.current) clearTimeout(nextRoundTimer.current); // cancel a pending auto-advance
     nextRoundTimer.current = null;
+    prepAbortRef.current?.abort(); // cancel any in-flight round precompute
+    prepAbortRef.current = null;
   }, []);
 
   const roundTeamIds = (b: Bracket, idx: number) => b[idx].flatMap((m) => [m.homeId, m.awayId]).filter((x): x is string => x != null);
 
+  // Compute the round's results OFF the blocking path (computeChunked yields between each
+  // ~22ms match) so starting a round no longer freezes the tab. playRound stays pure — it
+  // just does lookups. Aborts if superseded / the bracket is reset.
   const startRound = useCallback(
-    (idx: number, from: Bracket) => {
+    async (idx: number, from: Bracket) => {
       ensureLineups(roundTeamIds(from, idx));
-      const withResults = playRound(from, idx, simById);
+      prepAbortRef.current?.abort();
+      const controller = new AbortController();
+      prepAbortRef.current = controller;
+      setPreparing(true);
+      const live = from[idx].filter((m) => m.homeId && m.awayId && !m.result);
+      let results;
+      try {
+        results = await computeChunked(live, (m) => simById(m.homeId!, m.awayId!, idx, m.slot), { signal: controller.signal });
+      } catch (e) {
+        if (isAbort(e)) return; // superseded or reset
+        throw e;
+      }
+      if (controller.signal.aborted) return;
+      const by = new Map(live.map((m, i) => [m.slot, results[i]]));
+      const withResults = playRound(from, idx, (_h, _a, _r, slot) => by.get(slot)!);
+      setPreparing(false);
       roundRef.current = idx;
       clockRef.current = 0;
       anchorRef.current = null; // drop the previous round's anchor so a still-live tick bails until re-anchored
@@ -302,9 +325,11 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
     setClock(0);
     setPlaying(false);
     setAwaitingNext(false);
+    setPreparing(false);
     setChampion(null);
     setFeed(["Mata-mata reembaralhado — 32 times. Aperte ▶."]);
   }
+  useEffect(() => () => prepAbortRef.current?.abort(), []); // drop an in-flight precompute on unmount
 
   const openEditor = (id: string) => {
     if (onBroadcast) return; // transmitting → automatic lineups only (viewers rebuild them)
@@ -348,8 +373,8 @@ export default function TournamentView({ teams, onBroadcast }: { teams: Team[]; 
     <div style={{ display: "grid", gap: 14 }}>
       {/* control bar */}
       <section style={{ ...panel, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button onClick={begin} disabled={champion != null || awaitingNext} style={{ ...primaryBtn, opacity: champion || awaitingNext ? 0.4 : 1, cursor: champion || awaitingNext ? "not-allowed" : "pointer" }}>
-          {roundIdx < 0 ? "▶ Iniciar torneio" : playing ? "⏸ Pausar" : "▶ Continuar"}
+        <button onClick={begin} disabled={champion != null || awaitingNext || preparing} style={{ ...primaryBtn, opacity: champion || awaitingNext || preparing ? 0.4 : 1, cursor: champion || awaitingNext || preparing ? "not-allowed" : "pointer" }}>
+          {preparing ? "⏳ Preparando…" : roundIdx < 0 ? "▶ Iniciar torneio" : playing ? "⏸ Pausar" : "▶ Continuar"}
         </button>
         {awaitingNext && (
           <button onClick={() => startRound(roundRef.current + 1, bracketRef.current)} style={{ ...primaryBtn, background: "#fff" }}>

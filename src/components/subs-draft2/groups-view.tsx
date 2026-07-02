@@ -14,6 +14,7 @@ import LineupEditor from "@/components/subs-draft/lineup-editor";
 import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
 import { randInt32 } from "@/lib/subs-draft/prng";
 import { SECS_PER_MATCH } from "@/lib/subs-draft/sim-timing";
+import { computeChunked, isAbort } from "@/lib/subs-draft/async-sim";
 import type { BroadcastState } from "@/lib/subs-draft/watch-sync";
 import type { Team } from "@/lib/subs-draft/engine";
 import {
@@ -79,6 +80,7 @@ export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: T
   const [showSquads, setShowSquads] = useState(false);
   const [pauseBetween, setPauseBetween] = useState(false);
   const [awaitingNext, setAwaitingNext] = useState(false);
+  const [preparing, setPreparing] = useState(false); // computing a matchday's 24 results (time-sliced)
 
   const stageRef = useRef<GroupStage>(stage);
   const lineupsRef = useRef<Record<string, Lineup>>({});
@@ -89,6 +91,7 @@ export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: T
   const anchorRef = useRef<ClockAnchor | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const nextMdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prepAbortRef = useRef<AbortController | null>(null); // cancels an in-flight matchday precompute
   useEffect(() => { speedRef.current = speed; }, [speed]);
 
   const setStage = useCallback((s: GroupStage) => { stageRef.current = s; setStageState(s); }, []);
@@ -131,12 +134,32 @@ export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: T
     timer.current = null;
     if (nextMdTimer.current) clearTimeout(nextMdTimer.current);
     nextMdTimer.current = null;
+    prepAbortRef.current?.abort(); // cancel any in-flight matchday precompute
+    prepAbortRef.current = null;
   }, []);
 
+  // Compute the matchday's 24 results OFF the blocking path (computeChunked yields between
+  // each ~22ms match) so kicking off a round no longer freezes the tab ~0.5s. playMatchday
+  // stays pure — it just does result lookups. Aborts if superseded / the stage is reset.
   const startMatchday = useCallback(
-    (idx: number, from: GroupStage) => {
+    async (idx: number, from: GroupStage) => {
       ensureLineups();
-      const played = playMatchday(from, idx, simMatch);
+      prepAbortRef.current?.abort();
+      const controller = new AbortController();
+      prepAbortRef.current = controller;
+      setPreparing(true);
+      const matches = from.groups.flatMap((g) => g.matchdays[idx] ?? []).filter((m) => m.status === "pending");
+      let results;
+      try {
+        results = await computeChunked(matches, simMatch, { signal: controller.signal });
+      } catch (e) {
+        if (isAbort(e)) return; // superseded or reset — a fresh flow owns the UI
+        throw e;
+      }
+      if (controller.signal.aborted) return;
+      const by = new Map(matches.map((m, i) => [m.id, results[i]]));
+      const played = playMatchday(from, idx, (m) => by.get(m.id)!);
+      setPreparing(false);
       mdRef.current = idx;
       clockRef.current = 0;
       anchorRef.current = null;
@@ -276,6 +299,7 @@ export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: T
       setClock(0);
       setPlaying(false);
       setAwaitingNext(false);
+      setPreparing(false);
       setDone(false);
       setSpotlight(null);
       setFeed([msg]);
@@ -284,6 +308,7 @@ export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: T
   );
   const restart = () => reseed(stageRef.current.seed, "Fase de grupos reiniciada. Aperte ▶.");
   const newCup = () => reseed(randInt32(), "🎲 Nova Copa sorteada — 12 grupos reembaralhados. Aperte ▶.");
+  useEffect(() => () => prepAbortRef.current?.abort(), []); // drop an in-flight precompute on unmount
 
   const openEditor = (id: string) => {
     if (onBroadcast) return; // transmitting → automatic lineups only (viewers rebuild them)
@@ -327,8 +352,8 @@ export default function GroupsView({ teams, onAdvance, onBroadcast }: { teams: T
     <div style={{ display: "grid", gap: 14 }}>
       {/* control bar */}
       <section style={{ ...panel, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button onClick={begin} disabled={done || awaitingNext} style={{ ...primaryBtn, opacity: done || awaitingNext ? 0.4 : 1, cursor: done || awaitingNext ? "not-allowed" : "pointer" }}>
-          {mdIdx < 0 ? "▶ Iniciar fase de grupos" : playing ? "⏸ Pausar" : "▶ Continuar"}
+        <button onClick={begin} disabled={done || awaitingNext || preparing} style={{ ...primaryBtn, opacity: done || awaitingNext || preparing ? 0.4 : 1, cursor: done || awaitingNext || preparing ? "not-allowed" : "pointer" }}>
+          {preparing ? "⏳ Preparando a rodada…" : mdIdx < 0 ? "▶ Iniciar fase de grupos" : playing ? "⏸ Pausar" : "▶ Continuar"}
         </button>
         {awaitingNext && (
           <button onClick={() => startMatchday(mdRef.current + 1, stageRef.current)} style={{ ...primaryBtn, background: "#fff" }}>
