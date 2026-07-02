@@ -155,16 +155,16 @@ describe("replay fidelity: viewer == host, EXACTLY", () => {
   const bracketField = ids.filter((id) => q32.includes(id)); // fillTo48 order, filtered to q32
   const SLOW = 30_000;
 
-  it("groups: every matchday LIVE state is byte-identical to the host", () => {
+  it("groups: every matchday LIVE state is byte-identical to the host", async () => {
     for (const liveIdx of [0, 1, 2]) {
       const host = hostGroupsLive(byId, ids, 2026, liveIdx);
-      const viewer = replayGroups(byId, ids, 2026, liveIdx, false);
+      const viewer = await replayGroups(byId, ids, 2026, liveIdx, false);
       expect(scorelines(viewer)).toEqual(scorelines(host.stage));
     }
   }, SLOW);
 
-  it("groups: the DONE stage is byte-identical + same qualified32", () => {
-    const viewer = replayGroups(byId, ids, 2026, 2, true);
+  it("groups: the DONE stage is byte-identical + same qualified32", async () => {
+    const viewer = await replayGroups(byId, ids, 2026, 2, true);
     expect(scorelines(viewer)).toEqual(scorelines(doneGroups2026));
     expect(qualified32(viewer)).toEqual(q32);
     for (const g of viewer.groups) {
@@ -172,18 +172,18 @@ describe("replay fidelity: viewer == host, EXACTLY", () => {
     }
   }, SLOW);
 
-  it("bracket: every round LIVE state is byte-identical to the host (real q32 field)", () => {
+  it("bracket: every round LIVE state is byte-identical to the host (real q32 field)", async () => {
     for (const liveIdx of [0, 1, 2, 3, 4]) {
       const host = hostBracketLive(byId, bracketField, 2026, liveIdx);
-      const viewer = replayBracket(byId, bracketField, 2026, liveIdx, false);
+      const viewer = await replayBracket(byId, bracketField, 2026, liveIdx, false);
       expect(bracketScorelines(viewer)).toEqual(bracketScorelines(host.bracket));
     }
   }, SLOW);
 
-  it("bracket: full replay crowns the SAME champion as the host", () => {
+  it("bracket: full replay crowns the SAME champion as the host", async () => {
     const host = hostBracketLive(byId, bracketField, 2026, 4); // final live
     const hostDone = finishRound(host.bracket, 4);
-    const viewer = replayBracket(byId, bracketField, 2026, 4, true);
+    const viewer = await replayBracket(byId, bracketField, 2026, 4, true);
     expect(championId(viewer)).toBe(championId(hostDone));
   }, SLOW);
 

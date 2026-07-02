@@ -4,8 +4,14 @@
 // the SAME seeded sim the host ran. Crucially it threads cards/injuries the same
 // way (suspensions/injuries repair later lineups), so a match that turns on a
 // missing player stays bit-identical to the host — pure seed sync only holds if
-// the status carryover is replayed too. Mock field only (fillTo48([]) is identical
-// on both ends); a drafted roster would need broadcasting the squads.
+// the status carryover is replayed too. Teams come from the broadcast field (real
+// drafted rosters) or fillTo48([]) for an all-mock room.
+//
+// The replay is ASYNC + time-sliced (computeChunked): re-running up to ~72 full
+// 3600-step sims would freeze the main thread ~1.6s, so each stage's matches are
+// computed in yielded chunks. Determinism is untouched — status still threads
+// sequentially BETWEEN stages; only the (independent) matches WITHIN a stage are
+// sliced, and results come back in order.
 import {
   advanceStatus,
   applyMatchEvents,
@@ -26,8 +32,12 @@ import {
   type GroupStage,
 } from "./groups";
 import { autoLineup, DEFAULT_FORMATION, repairLineup, type Lineup, type StatusMap } from "./squad";
+import { computeChunked } from "./async-sim";
 import type { Team } from "./engine";
 import type { BroadcastState } from "./watch-sync";
+
+/** Yield after each ~22ms match while replaying so the viewer stays responsive. */
+const SIM_BATCH = 1;
 
 export interface ReplayWorld {
   phase: "groups" | "bracket";
@@ -50,7 +60,7 @@ export function replayField(): { teams: Team[]; byId: Map<string, Team> } {
 
 /** Replay the group stage to `stageIdx` (that matchday LIVE unless `done`), threading
  * lineups + status exactly like the host so scorelines match. */
-export function replayGroups(byId: Map<string, Team>, ids: string[], seed: number, stageIdx: number, done: boolean, outLineups?: Record<string, Lineup>): GroupStage {
+export async function replayGroups(byId: Map<string, Team>, ids: string[], seed: number, stageIdx: number, done: boolean, outLineups?: Record<string, Lineup>, signal?: AbortSignal): Promise<GroupStage> {
   let stage = drawGroups(ids, seed);
   let status: StatusMap = {};
   // populate the caller's map (if given) so the viewer can feed the SAME lineup into
@@ -73,22 +83,31 @@ export function replayGroups(byId: Map<string, Team>, ids: string[], seed: numbe
       { allowDraw: true },
     );
   };
+  // time-sliced: compute a matchday's pending fixtures in yielded chunks, then feed the
+  // results into the pure playMatchday via a lookup (status is frozen for the whole
+  // matchday, so slicing the independent matches is bit-identical to the sync version).
+  const playMd = async (md: number) => {
+    const matches = stage.groups.flatMap((g) => g.matchdays[md] ?? []).filter((m) => m.status === "pending");
+    const results = await computeChunked(matches, sim, { signal, batch: SIM_BATCH });
+    const by = new Map(matches.map((m, i) => [m.id, results[i]]));
+    return playMatchday(stage, md, (m) => by.get(m.id)!);
+  };
   const finishedUpto = done ? 3 : stageIdx;
   for (let md = 0; md < finishedUpto; md++) {
     ensure();
-    stage = finishMatchday(playMatchday(stage, md, sim), md);
+    stage = finishMatchday(await playMd(md), md);
     const ev = stage.groups.flatMap((g) => g.matchdays[md].flatMap((m) => m.result?.events ?? []));
     status = applyMatchEvents(advanceStatus(status), ev);
   }
   if (!done && stageIdx >= 0 && stageIdx < 3) {
     ensure();
-    stage = playMatchday(stage, stageIdx, sim);
+    stage = await playMd(stageIdx);
   }
   return stage;
 }
 
 /** Replay the knockout to `stageIdx` (that round LIVE unless `done`). */
-export function replayBracket(byId: Map<string, Team>, ids: string[], seed: number, stageIdx: number, done: boolean, outLineups?: Record<string, Lineup>): Bracket {
+export async function replayBracket(byId: Map<string, Team>, ids: string[], seed: number, stageIdx: number, done: boolean, outLineups?: Record<string, Lineup>, signal?: AbortSignal): Promise<Bracket> {
   let bracket = buildBracket(ids, seed);
   let status: StatusMap = {};
   const lineups: Record<string, Lineup> = outLineups ?? {};
@@ -109,15 +128,23 @@ export function replayBracket(byId: Map<string, Team>, ids: string[], seed: numb
       bracketMatchSeed(seed, round, slot),
     );
   };
+  // time-sliced: precompute a round's live matches (both teams, no result — exactly what
+  // playRound sims) in yielded chunks, keyed by slot, then feed them into pure playRound.
+  const playR = async (r: number) => {
+    const live = bracket[r].filter((m) => m.homeId && m.awayId && !m.result);
+    const results = await computeChunked(live, (m) => sim(m.homeId!, m.awayId!, r, m.slot), { signal, batch: SIM_BATCH });
+    const by = new Map(live.map((m, i) => [m.slot, results[i]]));
+    return playRound(bracket, r, (_h, _a, _round, slot) => by.get(slot)!);
+  };
   const finishedUpto = done ? bracket.length : stageIdx;
   for (let r = 0; r < finishedUpto; r++) {
     ensure(bracket, r);
-    bracket = finishRound(playRound(bracket, r, sim), r);
+    bracket = finishRound(await playR(r), r);
     status = applyMatchEvents(advanceStatus(status), bracket[r].flatMap((m) => m.result?.events ?? []));
   }
   if (!done && stageIdx >= 0 && stageIdx < bracket.length) {
     ensure(bracket, stageIdx);
-    bracket = playRound(bracket, stageIdx, sim);
+    bracket = await playR(stageIdx);
   }
   return bracket;
 }
@@ -132,16 +159,18 @@ export function replayBracket(byId: Map<string, Team>, ids: string[], seed: numb
  * the exact broadcast order (never a byId key order). The bracket takes its order from
  * state.teamIds (already order-preserving) and only looks teams up in byId.
  */
-export function replayWorld(state: BroadcastState, providedTeams?: Team[]): ReplayWorld {
+export async function replayWorld(state: BroadcastState, providedTeams?: Team[], signal?: AbortSignal): Promise<ReplayWorld> {
   const teams = providedTeams ?? replayField().teams;
   const byId = new Map(teams.map((t) => [t.id, t]));
   const lineups: Record<string, Lineup> = {};
   if (state.phase === "groups") {
     const ids = teams.map((t) => t.id);
-    return { phase: "groups", byId, stage: replayGroups(byId, ids, state.seed, state.stageIdx, state.done, lineups), bracket: null, lineups };
+    const stage = await replayGroups(byId, ids, state.seed, state.stageIdx, state.done, lineups, signal);
+    return { phase: "groups", byId, stage, bracket: null, lineups };
   }
   // state.teamIds ⊆ providedTeams ids (same team objects across groups→bracket), so byId
   // resolves every teamId; order comes from teamIds, not the (possibly-48-superset) field.
   const ids = state.teamIds ?? teams.slice(0, 32).map((t) => t.id);
-  return { phase: "bracket", byId, stage: null, bracket: replayBracket(byId, ids, state.seed, state.stageIdx, state.done, lineups), lineups };
+  const bracket = await replayBracket(byId, ids, state.seed, state.stageIdx, state.done, lineups, signal);
+  return { phase: "bracket", byId, stage: null, bracket, lineups };
 }

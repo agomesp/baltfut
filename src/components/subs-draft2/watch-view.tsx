@@ -11,7 +11,8 @@ import PitchView from "@/components/subs-draft2/pitch-view";
 import { createWatchChannel } from "@/lib/subs-draft/watch-channel";
 import { subscribeMetronome } from "@/lib/subs-draft/sim-metronome";
 import { validateBroadcastState, validateField, viewerMinute, type BroadcastState } from "@/lib/subs-draft/watch-sync";
-import { replayWorld } from "@/lib/subs-draft/watch-replay";
+import { replayWorld, type ReplayWorld } from "@/lib/subs-draft/watch-replay";
+import { isAbort } from "@/lib/subs-draft/async-sim";
 import { standings, MATCHDAY_NAMES, groupMatchSeed, type GroupMatch } from "@/lib/subs-draft/groups";
 import { ROUND_NAMES, bracketMatchSeed, type BracketMatch } from "@/lib/subs-draft/tournament";
 import { autoLineup, DEFAULT_FORMATION } from "@/lib/subs-draft/squad";
@@ -65,16 +66,29 @@ export default function WatchView({ id }: { id: string }) {
 
   // reconstruct the world only when the STAGE changes (not on spotlight/minute)
   const teamIdsKey = (state?.teamIds ?? []).join(",");
-  // Gate on the FIELD: rebuild the world only once we have the room's teams. A drafted
-  // room's state can land before its ~35KB field, and replaying against the wrong/absent
-  // roster would silently show a different tournament (or crash drawGroups on a non-48
-  // field). `field` identity changes only when its content changes, so the world (a full
-  // replay) rebuilds when the field first arrives / shrinks 48→32, not on every re-send.
-  const world = useMemo(
-    () => (state && field && (state.phase !== "groups" || field.length === 48) ? replayWorld(state, field) : null),
+  // Rebuild the world ASYNChronously: replayWorld re-runs up to ~72 full sims, which would
+  // freeze the tab ~1.6s if done synchronously — it now time-slices (computeChunked) so the
+  // viewer stays responsive, and we abort the in-flight replay when the stage/field changes
+  // (or on unmount) so a stale reconstruction never lands. We also GATE on the field: a
+  // drafted room's state can arrive before its ~35KB roster, and replaying against the
+  // wrong/absent teams would silently show a different tournament (or crash drawGroups on a
+  // non-48 field). `field` identity changes only on content change, so this reruns when the
+  // field first arrives / shrinks 48→32, not on every re-send.
+  const [world, setWorld] = useState<ReplayWorld | null>(null);
+  useEffect(() => {
+    // gate: only replay once we have a state + a matching field (world starts null → the
+    // "Conectando…" screen shows until the first replay lands). We never clear world here
+    // (that would be a synchronous set-state-in-effect); a stage change just starts a fresh
+    // replay whose result replaces it.
+    const canReplay = state && field && (state.phase !== "groups" || field.length === 48);
+    if (!canReplay) return;
+    const controller = new AbortController();
+    replayWorld(state, field, controller.signal)
+      .then((w) => { if (!controller.signal.aborted) setWorld(w); })
+      .catch((e) => { if (!isAbort(e)) console.error("[watch] replay failed", e); });
+    return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state?.phase, state?.seed, state?.stageIdx, state?.done, teamIdsKey, field],
-  );
+  }, [state?.phase, state?.seed, state?.stageIdx, state?.done, teamIdsKey, field]);
 
   const spotMatch = useMemo(() => {
     if (!state || !world) return null;

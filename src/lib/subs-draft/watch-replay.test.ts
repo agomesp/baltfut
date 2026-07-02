@@ -19,12 +19,12 @@ const gState = (over: Partial<BroadcastState> = {}): BroadcastState => ({
 const SLOW = 30_000;
 
 describe("watch-replay", () => {
-  it("is deterministic — two viewers reconstruct the identical world", () => {
-    expect(replayWorld(gState())).toEqual(replayWorld(gState()));
+  it("is deterministic — two viewers reconstruct the identical world", async () => {
+    expect(await replayWorld(gState())).toEqual(await replayWorld(gState()));
   }, SLOW);
 
-  it("a finished group stage yields exactly 32 unique qualifiers", () => {
-    const w = replayWorld(gState());
+  it("a finished group stage yields exactly 32 unique qualifiers", async () => {
+    const w = await replayWorld(gState());
     expect(w.stage).not.toBeNull();
     const q = qualified32(w.stage!);
     expect(q).toHaveLength(32);
@@ -32,10 +32,10 @@ describe("watch-replay", () => {
     for (const g of w.stage!.groups) for (const r of standings(g, w.stage!.seed)) expect(r.P).toBe(3);
   }, SLOW);
 
-  it("mid-tournament: finished matchdays counted, current matchday LIVE", () => {
+  it("mid-tournament: finished matchdays counted, current matchday LIVE", async () => {
     const { byId, teams } = { ...replayField(), teams: replayField().teams };
     const ids = teams.map((t) => t.id);
-    const stage = replayGroups(byId, ids, 2026, 1, false); // matchday 1 is live
+    const stage = await replayGroups(byId, ids, 2026, 1, false); // matchday 1 is live
     for (const g of stage.groups) {
       expect(g.matchdays[0].every((m) => m.status === "done")).toBe(true); // md0 finished
       expect(g.matchdays[1].every((m) => m.status === "live" && m.result)).toBe(true); // md1 live
@@ -44,28 +44,28 @@ describe("watch-replay", () => {
     }
   }, SLOW);
 
-  it("bracket phase: a full replay crowns a champion", () => {
+  it("bracket phase: a full replay crowns a champion", async () => {
     const teams = replayField().teams;
     const ids = teams.slice(0, 32).map((t) => t.id);
-    const w = replayWorld(gState({ phase: "bracket", seed: 7, stageIdx: 4, done: true, teamIds: ids }));
+    const w = await replayWorld(gState({ phase: "bracket", seed: 7, stageIdx: 4, done: true, teamIds: ids }));
     expect(w.bracket).not.toBeNull();
     expect(championId(w.bracket!)).not.toBeNull();
   }, SLOW);
 
-  it("a different seed reconstructs a different group stage", () => {
-    expect(replayWorld(gState({ seed: 1 }))).not.toEqual(replayWorld(gState({ seed: 2 })));
+  it("a different seed reconstructs a different group stage", async () => {
+    expect(await replayWorld(gState({ seed: 1 }))).not.toEqual(await replayWorld(gState({ seed: 2 })));
   }, SLOW);
 
   // xG-unification INV-1 on the VIEWER: the spotlight pitch must run the SAME lineup the
   // headless scoreline used, or (same seed, different XI) its on-pitch score diverges from
   // the bracket it renders. replayWorld exposes those exact lineups; the viewer feeds them in.
-  it("exposes the exact lineups the replay used → viewer's spotlight sim reproduces the bracket (INV-1)", () => {
+  it("exposes the exact lineups the replay used → viewer's spotlight sim reproduces the bracket (INV-1)", async () => {
     const ids = replayField().teams.slice(0, 32).map((t) => t.id);
     let checked = 0;
     let naiveDiffered = 0;
     for (const seed of [7, 2026, 3]) {
       const stageIdx = 1; // a live round late enough that suspensions have altered some XIs
-      const w = replayWorld(gState({ phase: "bracket", seed, stageIdx, done: false, teamIds: ids }));
+      const w = await replayWorld(gState({ phase: "bracket", seed, stageIdx, done: false, teamIds: ids }));
       for (const m of w.bracket![stageIdx]) {
         if (!m.homeId || !m.awayId || !m.result) continue;
         const home = w.byId.get(m.homeId)!;
@@ -87,21 +87,21 @@ describe("watch-replay", () => {
 
   // Drafted-roster broadcast: the viewer rebuilds the world from the PROVIDED field (the
   // real rosters), not the mock 48 — so people watch THEIR drafted teams.
-  it("rebuilds the world from the broadcast drafted field, not the mock fallback", () => {
+  it("rebuilds the world from the broadcast drafted field, not the mock fallback", async () => {
     const drafted = replayField().teams.map((t, i) => ({ ...t, id: `d${i}`, owner: `Sub ${i}` }));
-    const w = replayWorld(gState(), drafted);
+    const w = await replayWorld(gState(), drafted);
     expect([...w.byId.keys()]).toEqual(drafted.map((t) => t.id)); // the provided teams flow through, in order
     expect(w.byId.get("d0")!.owner).toBe("Sub 0");
-    expect([...replayWorld(gState()).byId.keys()]).not.toEqual([...w.byId.keys()]); // ≠ the mock fallback
+    expect([...(await replayWorld(gState())).byId.keys()]).not.toEqual([...w.byId.keys()]); // ≠ the mock fallback
   }, SLOW);
 
   // The group draw is a pure function of the INPUT ARRAY ORDER (drawGroups shuffles it),
   // so the wire MUST preserve team order — this pins that invariant.
-  it("group membership is order-sensitive: the same teams in a different order draw differently", () => {
+  it("group membership is order-sensitive: the same teams in a different order draw differently", async () => {
     const field = replayField().teams;
-    const g0 = (s: NonNullable<ReturnType<typeof replayWorld>["stage"]>) => standings(s.groups[0], s.seed).map((r) => r.teamId).sort();
-    const a = replayWorld(gState(), field).stage!;
-    const b = replayWorld(gState(), [...field].reverse()).stage!;
+    const g0 = (s: NonNullable<Awaited<ReturnType<typeof replayWorld>>["stage"]>) => standings(s.groups[0], s.seed).map((r) => r.teamId).sort();
+    const a = (await replayWorld(gState(), field)).stage!;
+    const b = (await replayWorld(gState(), [...field].reverse())).stage!;
     expect(g0(a)).not.toEqual(g0(b));
   }, SLOW);
 });
