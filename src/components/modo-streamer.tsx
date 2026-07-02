@@ -5,6 +5,7 @@ import { Tv } from "lucide-react";
 import { subscribeScoreboard } from "@/lib/scoreboard-source";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
 import { setStreamerMode, isStreamerMode } from "@/lib/streamer-mode";
+import { togglePromoDisplay, isPromoDisplay, setPromoDisplay, subscribePromoDisplay } from "@/lib/promo-display";
 import { pickMatch } from "@/components/pip/resolve";
 import { streamerClock } from "@/components/streamer-clock";
 
@@ -28,7 +29,10 @@ const PIP_STYLE =
   "body{background:#0b0b0c;color:#62cb84;display:flex;flex-direction:column;align-items:center;" +
   "justify-content:center;gap:4px;font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden}" +
   ".clk{font-variant-numeric:tabular-nums;font-size:22px;font-weight:700;letter-spacing:.02em;white-space:nowrap;line-height:1}" +
-  ".hint{font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:#6a6b66;white-space:nowrap;line-height:1}";
+  ".hint{font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:#6a6b66;white-space:nowrap;line-height:1}" +
+  ".promo-btn{margin-top:9px;font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;" +
+  "padding:6px 12px;border-radius:8px;cursor:pointer;border:1px solid #2a2b2e;background:#15241b;color:#8fd6a6;white-space:nowrap}" +
+  ".promo-btn.on{background:#c8ff2d;color:#0f1f02;border-color:#c8ff2d}";
 
 interface DocumentPiP {
   requestWindow: (opts: { width: number; height: number }) => Promise<Window>;
@@ -42,6 +46,8 @@ export function ModoStreamer() {
   const [prompt, setPrompt] = useState(false);
   const pipRef = useRef<Window | null>(null);
   const clkRef = useRef<HTMLElement | null>(null);
+  const promoBtnRef = useRef<HTMLButtonElement | null>(null);
+  const promoUnsubRef = useRef<(() => void) | null>(null);
   const dataRef = useRef<{ clock: string | null; fetchedAt: number }>({ clock: null, fetchedAt: 0 });
   const stopWorkerRef = useRef<(() => void) | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
@@ -66,7 +72,13 @@ export function ModoStreamer() {
     stopWorkerRef.current = null;
     unsubRef.current?.();
     unsubRef.current = null;
+    promoUnsubRef.current?.();
+    promoUnsubRef.current = null;
+    // The toggle lives in this window; closing it must restore palpites so the live
+    // page can't get stuck on the promo board with no way back.
+    setPromoDisplay(false);
     clkRef.current = null;
+    promoBtnRef.current = null;
     const p = pipRef.current;
     pipRef.current = null;
     if (p && !p.closed) {
@@ -106,7 +118,7 @@ export function ModoStreamer() {
     // Must be called during this click's user activation. Request the smallest
     // window we can; the browser clamps up to its own minimum.
     dpip
-      .requestWindow({ width: 130, height: 64 })
+      .requestWindow({ width: 200, height: 120 })
       .then((pip) => {
         pipRef.current = pip;
         const st = pip.document.createElement("style");
@@ -121,6 +133,18 @@ export function ModoStreamer() {
         hint.className = "hint";
         hint.textContent = "não feche";
         pip.document.body.appendChild(hint);
+        // Promos toggle: flips the live page between palpites and the RB Store board.
+        const btn = pip.document.createElement("button");
+        btn.addEventListener("click", () => togglePromoDisplay());
+        pip.document.body.appendChild(btn);
+        promoBtnRef.current = btn;
+        const syncBtn = () => {
+          const showing = isPromoDisplay();
+          btn.className = showing ? "promo-btn on" : "promo-btn";
+          btn.textContent = showing ? "◀ Palpites" : "🎁 Mostrar promos";
+        };
+        syncBtn();
+        promoUnsubRef.current = subscribePromoDisplay(syncBtn);
         pip.addEventListener("pagehide", () => {
           stop();
           applyOn(false);

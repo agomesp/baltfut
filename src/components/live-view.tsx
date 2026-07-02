@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type { Match, MatchLineups } from "@/lib/espn";
 import { matchShootout } from "@/lib/espn";
 import { supabaseCastVote, type VoteEntry } from "@/lib/votes";
@@ -26,6 +26,8 @@ import { PalpiteForm, PenVote, NameField, useNameLock, type PenOverride } from "
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
 import { decideConcurrent } from "@/lib/concurrent-games";
 import { useIsNarrow } from "@/lib/use-is-narrow";
+import { subscribePromoDisplay, isPromoDisplay } from "@/lib/promo-display";
+import { LivePromosPanel } from "@/components/live/live-promos-panel";
 
 /** A match's display phase (pre / live / post). */
 function matchPhase(m: Match): ChipPhase {
@@ -123,6 +125,10 @@ function PlacarStage({
   // The pen-winner split shows only once the pen UI goes live (≥110', 10 min before
   // pens) — or when the admin manually liberated it; mirrors the PenVote picker gate.
   const penVisible = penOverride === "open" || penVoteVisible({ state: match.state, detail: match.statusDetail, clock: match.displayClock });
+  // Streamer promo board — swaps ONLY the palpites area (the score hero stays) and
+  // ONLY while the match is live. Toggled from the Modo Streamer PiP.
+  const promoOn = useSyncExternalStore(subscribePromoDisplay, isPromoDisplay, () => false);
+  const showPromos = promoOn && phase === "live";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
@@ -141,6 +147,9 @@ function PlacarStage({
           <PenVote variant="hero" match={match} entries={entries} onVoted={onVoted} override={penOverride} />
         </div>
       )}
+      {showPromos ? (
+        <LivePromosPanel />
+      ) : (
       <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 12, flex: 1, minHeight: 0 }}>
         <div style={{ flex: narrow ? "none" : 1.5, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flex: "none" }}>
@@ -166,6 +175,7 @@ function PlacarStage({
           <RankingSubs entries={allEntries} matches={matches} variant={narrow ? "column" : "grid"} style={narrow ? { flex: "none" } : { flex: 1, minHeight: 0 }} />
         </div>
       </div>
+      )}
     </div>
   );
 }
