@@ -507,7 +507,7 @@ export function createMatchSim(
     // ecosystem (goal kicks, corners) without inflating goals. A side CHASING the
     // scoreline late shoots more (urgency) — the real late-goal surge.
     const u = urgency(side);
-    opts.push({ kind: "shoot", score: (xg * 2.6 + (dg < 30 ? 0.14 : 0)) * (1 + 0.35 * Math.max(0, u)) });
+    opts.push({ kind: "shoot", score: (xg * 2.6 + (dg < 30 ? 0.14 : 0)) * (1 + 0.5 * Math.max(0, u)) });
 
     // CROSS from wide + advanced
     if ((carrier.x < 26 || carrier.x > 74) && dg < 36) {
@@ -593,6 +593,24 @@ export function createMatchSim(
       const shotComing = (ballState === "attempt" || ballState === "shot") && attemptSide !== p.side && scoreSide !== p.side;
       if (shotComing && (ballState === "attempt" ? attemptSide : scoreSide)) { gx = clamp(ball.x, 34, 66); gy = g.y + dir * 4; }
       if (p === carrier) { gx = clamp(50 + (ball.x - 50) * 0.2, 42, 58); gy = g.y + dir * 8; }
+      // SWEEP: a ball played in behind that will DIE near his goal, with the keeper
+      // clearly first to it → he comes off his line and claims it instead of statuing
+      // on the line while a through-ball rolls past (the most video-gamey artifact the
+      // audit found). Arrival point is closed-form from the rolling friction; a better
+      // keeper is braver (bigger radius). canContest already lets him win it ≤22 out.
+      if (!shotComing && p !== carrier && (ballState === "pass" || ballState === "loose") && ball.vy * dir < -4) {
+        const ax2 = ball.x + ball.vx / BALL_FRICTION; // where the roll dies
+        const ay2 = ball.y + ball.vy / BALL_FRICTION;
+        const radius = clamp(12 + (p.rating - 70) / 3, 10, 18);
+        if (dist(ax2, ay2, g.x, g.y) < radius) {
+          // the keeper goes on ROUGHLY EQUAL balls — his reach + hands win the tie, so
+          // he only stays home when the striker is clearly first (real sweeps ~1-3/match)
+          const rival = nearest(outfield(p.side === "home" ? "away" : "home"), ax2, ay2);
+          if (dist(p.x, p.y, ax2, ay2) - 1 < dist(rival.x, rival.y, ax2, ay2)) {
+            return { tx: clamp(ax2, 20, 80), ty: dir > 0 ? clamp(ay2, 2, 45) : clamp(ay2, 55, 98) };
+          }
+        }
+      }
       return { tx: gx, ty: gy };
     }
 
@@ -814,7 +832,8 @@ export function createMatchSim(
       } else if (!checkOut()) {
         const rec = passTo;
         const int = nearest(opp(rec.side).filter(canContest), ball.x, ball.y);
-        const intReach = CONTROL * (0.85 + (int.rating - 70) / 110);
+        // tired legs read passes worse late (the real late-game defensive fade)
+        const intReach = CONTROL * (0.85 + (int.rating - 70) / 110) * (1 - 0.22 * matchProgress);
         if (dist(ball.x, ball.y, rec.x, rec.y) < CONTROL) {
           if (pendingCross && rec.role !== "Goleiro") { pendingCross = false; lastTouch = rec.side; shoot(rec, true); }
           else giveBallTo(rec);
@@ -836,8 +855,10 @@ export function createMatchSim(
       // fouls come from LEGIT challenges only, so the per-challenge rate carries the
       // whole real-football budget (~15-22 fouls, ~3-4 bookings a match — the
       // calibration harness gates both; the old 1.1 rate only produced ~6 fouls).
-      const foulRate = clamp(2.9 * (carrier.rating / presser.rating), 1.6, 5.0);
-      const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6);
+      // late-match fatigue: tired defenders mistime challenges — tackles fade, fouls
+      // rise (real fouls/cards cluster late; the late-goal surge needs the fade too)
+      const foulRate = clamp(2.9 * (carrier.rating / presser.rating), 1.6, 5.0) * (1 + 0.3 * matchProgress);
+      const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.34 * matchProgress);
       if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
       else if (near && R() < foulRate * dt) foul(carrier, presser);
       else if (near && R() < tackleRate * dt) giveBallTo(presser);
@@ -889,7 +910,9 @@ export function createMatchSim(
         p.tx = t.tx; p.ty = t.ty;
         p.rt = p === carrier || chasing ? 0.1 : rnd(0.35, 0.8);
       }
-      const sprint = p === carrier || chasing || pressers.includes(p) || ballState === "attempt";
+      // a keeper whose target is far off his line is SWEEPING — that's a sprint
+      const sprint = p === carrier || chasing || pressers.includes(p) || ballState === "attempt"
+        || (p.role === "Goleiro" && dist(p.x, p.y, p.tx, p.ty) > 7);
       steer(p, sprint, dt);
     }
     separate(dt);
