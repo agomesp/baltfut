@@ -45,7 +45,7 @@ describe("simulateMatchOnPitch — the scoreline comes from a headless pitch run
       }
     }
     expect(shootouts).toBeGreaterThan(0); // some ties did occur and were decided on pens
-  });
+  }, 60_000); // 60 full matches at the 3-min clock (~10800 steps each)
 
   it("allows draws in the group stage (no shootout, empty winner)", () => {
     let draws = 0;
@@ -58,7 +58,7 @@ describe("simulateMatchOnPitch — the scoreline comes from a headless pitch run
       }
     }
     expect(draws).toBeGreaterThan(0);
-  });
+  }, 60_000);
 
   it("events reference only the two teams' real players, at sane minutes", () => {
     const ids = new Set([...startingPlayers(A, la), ...startingPlayers(B, lb)].map((p) => p.id));
@@ -71,7 +71,7 @@ describe("simulateMatchOnPitch — the scoreline comes from a headless pitch run
         expect(ids.has(e.playerId)).toBe(true);
       }
     }
-  });
+  }, 30_000);
 
   it("injuries can occur, on the salted side stream (independent of the scoreline seed)", () => {
     let injuries = 0;
@@ -79,7 +79,7 @@ describe("simulateMatchOnPitch — the scoreline comes from a headless pitch run
       injuries += simulateMatchOnPitch(A, B, la, lb, seed).events.filter((e) => e.type === "injury").length;
     }
     expect(injuries).toBeGreaterThan(0);
-  });
+  }, 30_000);
 
   it("a stronger squad wins the tie more often across seeds", () => {
     const strong = field.reduce((best, t) => (avg(t) > avg(best) ? t : best), field[0]);
@@ -88,13 +88,15 @@ describe("simulateMatchOnPitch — the scoreline comes from a headless pitch run
     const lw = autoLineup(weak, "4-4-2", {});
     let strongWins = 0;
     let weakWins = 0;
-    for (let k = 0; k < 24; k++) {
+    // N=60: the measured edge is ~65/35 (200-match probe: 130-70, goals 1.57 vs
+    // 1.09) — at N=24 a fixed-seed run could legitimately TIE 12-12; at 60 it can't.
+    for (let k = 0; k < 60; k++) {
       const r = simulateMatchOnPitch(strong, weak, ls, lw, bracketMatchSeed(2026, 0, k));
       if (r.winnerId === strong.id) strongWins++;
       else if (r.winnerId === weak.id) weakWins++;
     }
     expect(strongWins).toBeGreaterThan(weakWins);
-  });
+  }, 60_000);
 });
 
 function avg(t: (typeof field)[number]): number {

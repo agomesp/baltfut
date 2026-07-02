@@ -1,19 +1,24 @@
 // CALIBRATION GATES — the sim's stats must live in real-football bands.
 //
-// RE-ANCHORED (2026-07-02) after the adversarial-review fix batch: the corner-defence
-// inversion, dead-ball foul chains, and a keeper-positioning quirk were quietly
-// SUPPLYING ~1 goal/match of fake production, and the original bands were calibrated
-// on top of them. Post-fix the economy's RATIOS are real — P(goal|shot) ≈ 0.11 (real
-// ~0.11), on-target ≈ 40% (real ~35-40%), P(goal|on-target) ≈ 0.27 (real ~0.30) — and
-// only VOLUME is low (shots ~7/team vs real ~12), which is the documented build-up-
-// depth gap. Bands sit at the honest levels; raise them WITH mechanics, not knobs.
+// RE-ANCHORED AT THE 3-MINUTE CLOCK (2026-07-02, SECS_PER_MATCH 60 → 180): the 60s
+// clock was the volume-starver all along — at 30× compression build-ups complete, so
+// shots/corners/0-0 fixed themselves and the re-tune was mostly DAMPING (foul + card
+// + conversion rates, shot appetite, a much stricter through-on-goal test — the old
+// one supplied HALF of all shots from wide/far positions). RATIOS are real:
+// P(goal|shot) ≈ 0.10-0.11 (real ~0.11), on-target ≈ 0.37 (real ~35-40%),
+// P(goal|on-target) ≈ 0.28 (real ~0.30), fouls/cards/pens/0-0 all in-band.
 //
-// The empirical audit (2026-07-02) caught the sim drifting into a parallel sport:
-// ZERO corners in 60 matches (shots never missed the frame → nothing crossed the
-// byline), 92.5% shots on target (real ~35%), 6.4 fouls (real ~22), goals DIPPING
-// late. These gates pin the bands so every behavior mechanic (counters, urgency,
-// runs, presses…) lands measurably inside football. Bands are deliberately WIDE and
-// asserted over 150 seeded matches — they gate the DISTRIBUTION, not a lucky seed.
+// KNOWN RESIDUAL (do not knob it away): shot VOLUME ~16/team vs real ~12.5, and
+// goals ride it (~3.4 vs real ~2.7). Instrumentation showed the demand is
+// structural — the defence concedes ~30 high-value positions/match because a beaten
+// line stays beaten (no recovery pace / turn physics / reaction lag yet). Tightening
+// one shot source just routes the same positions through another. The kinematics
+// commit changes chase/recovery fundamentally; re-anchor volume THERE, with
+// mechanics, exactly as the 60s arc raised it with mechanics. Suppressing shots
+// from genuinely great positions would be a new artifact, not realism.
+//
+// Bands are deliberately WIDE, asserted over 150 seeded matches (cross-checked at
+// seedBase 5000) — they gate the DISTRIBUTION, not a lucky seed.
 import { describe, it, expect } from "vitest";
 import { createMatchSim, type PitchResult } from "./match-sim";
 import { autoLineup, fieldLayout } from "./squad";
@@ -65,52 +70,49 @@ function playN(n: number, seedBase: number): Agg {
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
 describe("calibration — the sim's match stats live in real-football bands", () => {
-  // one shared 60-match run for every gate (they inspect different stats of it)
+  // one shared 150-match run for every gate (they inspect different stats of it)
   const agg = playN(N, 1000);
 
-  it("goals per match (real ~2.7; honest low-volume ~1.3-1.8): mean in [1.2, 3.2]", () => {
-    expect(mean(agg.goals)).toBeGreaterThanOrEqual(1.2); // cross-seed-base floor (base 5000 measures 1.25)
-    expect(mean(agg.goals)).toBeLessThanOrEqual(3.2);
+  it("goals per match (real ~2.7; rides the volume residual): mean in [2.4, 4.2]", () => {
+    expect(mean(agg.goals)).toBeGreaterThanOrEqual(2.4);
+    expect(mean(agg.goals)).toBeLessThanOrEqual(4.2); // comes down with the kinematics volume fix
   }, SLOW);
 
-  it("shots per team ≈ real (~12): mean in [6.3, 14.5]", () => {
-    // Volume is SUPPLY-limited, not appetite-limited: extra shots need extra final-third
-    // entries, not a cranked shoot score. History of this floor: counters lifted 7.9 →
-    // 8.8; the aerial-honesty pass (duels + z-gates + real flight time) then removed
-    // ~0.7/team of FICTION (uncontested auto-headers, balls "caught" 8 units overhead)
-    // — bisected, not guessed. 8.1 honest beats 8.8 fake; the road to the real ~12 is
-    // deeper build-up mechanics, and this floor stops regression meanwhile.
-    expect(mean(agg.shotsPerTeam)).toBeGreaterThanOrEqual(6.3); // cross-seed-base floor
-    expect(mean(agg.shotsPerTeam)).toBeLessThanOrEqual(14.5);
+  it("shots per team ≈ real (~12.5; known ~16 residual): mean in [12, 20]", () => {
+    // At 180s volume flipped from starved (~7-8 at 60s) to ~30% HIGH (~16): the
+    // defence concedes too many high-value positions without recovery pace. The
+    // ceiling stops regression; the kinematics commit brings the mean down with
+    // mechanics, then this band narrows toward [9.5, 15.5].
+    expect(mean(agg.shotsPerTeam)).toBeGreaterThanOrEqual(12);
+    expect(mean(agg.shotsPerTeam)).toBeLessThanOrEqual(20);
   }, SLOW);
 
-  it("shots on target ≈ real (~35% of all shots): fraction in [0.26, 0.55]", () => {
+  it("shots on target ≈ real (~35% of all shots): fraction in [0.28, 0.5]", () => {
     // was 92.5% before the aim-error tune — every unblocked shot hit the frame
-    expect(mean(agg.onTargetFrac)).toBeGreaterThanOrEqual(0.26);
-    expect(mean(agg.onTargetFrac)).toBeLessThanOrEqual(0.55);
+    expect(mean(agg.onTargetFrac)).toBeGreaterThanOrEqual(0.28);
+    expect(mean(agg.onTargetFrac)).toBeLessThanOrEqual(0.5);
   }, SLOW);
 
-  it("corners exist (were ZERO in the audit): mean in [1.5, 11]", () => {
-    // real ~10; measured ~1.7-2 from parry-behind/deflect-behind/head-behind sources
-    // — the band floor documents existence, not sufficiency; more corner sources come
-    // with build-up depth (more crosses = more clearances behind).
-    expect(mean(agg.corners)).toBeGreaterThanOrEqual(1.5);
+  it("corners ≈ real-ish (real ~10, measured ~4.3): mean in [2.5, 11]", () => {
+    // the 180s clock tripled the 60s-era ~1.7 (more play = more clearances behind);
+    // the rest of the gap comes with Magnus crosses + deflections, not knobs.
+    expect(mean(agg.corners)).toBeGreaterThanOrEqual(2.5);
     expect(mean(agg.corners)).toBeLessThanOrEqual(11);
   }, SLOW);
 
-  it("fouls per match ≈ real (~22): mean in [9.5, 26]", () => {
-    expect(mean(agg.fouls)).toBeGreaterThanOrEqual(9.5);
+  it("fouls per match ≈ real (~22): mean in [15, 26]", () => {
+    expect(mean(agg.fouls)).toBeGreaterThanOrEqual(15);
     expect(mean(agg.fouls)).toBeLessThanOrEqual(26);
   }, SLOW);
 
-  it("yellow cards ≈ real (~3.5-4.5): mean in [1.6, 5.5]; reds rare (≤ 0.6)", () => {
-    expect(mean(agg.yellows)).toBeGreaterThanOrEqual(1.6);
-    expect(mean(agg.yellows)).toBeLessThanOrEqual(5.5);
-    expect(mean(agg.reds)).toBeLessThanOrEqual(0.6);
+  it("yellow cards ≈ real (~3.5-4.5): mean in [2.0, 5.0]; reds rare (≤ 0.45)", () => {
+    expect(mean(agg.yellows)).toBeGreaterThanOrEqual(2.0);
+    expect(mean(agg.yellows)).toBeLessThanOrEqual(5.0);
+    expect(mean(agg.reds)).toBeLessThanOrEqual(0.45);
   }, SLOW);
 
-  it("0-0 stays uncommon (real ~8%; low-volume economy runs higher): at most 30%", () => {
-    expect(agg.zeroZero / N).toBeLessThanOrEqual(0.3); // cross-seed-base ceiling (base 5000 measures 29%)
+  it("0-0 stays uncommon (real ~8%; the hot economy runs lower): at most 12%", () => {
+    expect(agg.zeroZero / N).toBeLessThanOrEqual(0.12);
   }, SLOW);
 
   it("penalties happen but stay rare (real ~0.3/match): mean in [0.05, 0.7]", () => {

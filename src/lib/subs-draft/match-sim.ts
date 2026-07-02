@@ -1,6 +1,7 @@
-// A lightweight rule-based 2D match simulation for the spotlight pitch. It is
-// COSMETIC — the scoreline comes from tournament.ts; this only makes the on-screen
-// play look like a real game.
+// A lightweight rule-based 2D match simulation for the spotlight pitch. With
+// {scoring:true} (the v2 path) it is AUTHORITATIVE — goals emerge from resolved
+// chances and the headless run IS the result (xG-unification). Without it (the
+// frozen v1 path) it stays cosmetic: scoreFor() injects the scoreline.
 //
 // Model (frame-rate independent, dt seconds; progress 0..1 is match time elapsed):
 //  · Players carry velocity + steer with limited acceleration (momentum); sprint
@@ -311,8 +312,8 @@ export function createMatchSim(
     ball.vx *= 0.15;
     ball.vy *= 0.15;
     ball.z = 0; ball.vz = 0; // controlled → at the player's feet
-    // cadence: ~0.45s of sim time per on-ball decision (the 60s match compresses 90');
-    // the old 0.4-0.9 draw made whole attacks stall at ~33 decisions per MATCH
+    // cadence: ~0.45s per on-ball decision — at the 3-min clock that's ~100+ on-ball
+    // decisions a match (close to real possession counts; the 60s clock managed ~33)
     decideT = liveSteal ? rnd(0.15, 0.4) : rnd(0.3, 0.65); // a stolen ball launches at once
     settleT = 0.35; // protect the new carrier from an instant re-tackle
   }
@@ -372,7 +373,7 @@ export function createMatchSim(
     giveBallTo(nearest(outfield(attSide), ball.x, ball.y));
     forceCross = true;
     cornerDelivery = true;
-    decideT = rnd(0.6, 1.0); // players crowd the box (window compressed like the clock)
+    decideT = rnd(1.0, 1.6); // players crowd the box — a real corner ceremony at the 3-min clock
     caption("Escanteio!");
     breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
     ticker("Escanteio");
@@ -451,7 +452,7 @@ export function createMatchSim(
     carrier = null;
     passTo = null;
     ballState = "loose";
-    resetT = 1.1;
+    resetT = 2.2; // the celebration breathes at the 3-min clock
     kickoffPending = side === "home" ? "away" : "home";
   }
 
@@ -465,15 +466,16 @@ export function createMatchSim(
     ball.x = victim.x; ball.y = victim.y; ball.vx = 0; ball.vy = 0;
     giveBallTo(nearest(team(victim.side), ball.x, ball.y));
     freeKick = true;
-    decideT = rnd(0.4, 0.7); // dead ball — the wall forms (compressed like the clock)
+    decideT = rnd(0.7, 1.2); // dead ball — the wall forms, the taker settles
     caption("Falta!");
     breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
     ticker("Falta");
-    // ~22% of fouls booked (3.5% straight red) → real ~3.5 yellows + ~0.2 reds. Fouls
-    // concentrate on the pressers, so an ALREADY-BOOKED fouler is carded again at a
-    // reduced rate — the ref's second-yellow reluctance + the player easing off; without
-    // it, second yellows stacked into ~0.8 reds/match (real ~0.2).
-    if (R() < (bookings[fouler.id] ? 0.09 : 0.22)) card(fouler, R() < 0.035 ? "red" : "yellow");
+    // ~18% of fouls booked (2% straight red) → real ~3.5-4 yellows + ~0.2 reds at the
+    // 180s foul volume (~22/match). Fouls concentrate on the pressers, so an ALREADY-
+    // BOOKED fouler is carded again at a sharply reduced rate — the ref's second-yellow
+    // reluctance + the player easing off; without it second yellows stack into 3-4×
+    // the real red rate.
+    if (R() < (bookings[fouler.id] ? 0.035 : 0.18)) card(fouler, R() < 0.02 ? "red" : "yellow");
   }
 
   /** Spot kick: the fouled side's best finisher against the keeper — the ceremony is a
@@ -488,11 +490,11 @@ export function createMatchSim(
     penaltyFor = attSide;
     breakT = 0; breakSide = null; // a spot kick is a dead ball — any break is over
     freeKick = false; // no wall on a penalty
-    decideT = rnd(1.5, 1.9); // the ceremony — spot placed, keeper set, crowd holds its breath
-    settleT = 2.0; // nobody may challenge the taker
+    decideT = rnd(2.2, 2.8); // the ceremony — spot placed, keeper set, crowd holds its breath
+    settleT = 3.0; // nobody may challenge the taker
     caption("Pênalti!");
     ticker("Pênalti");
-    if (R() < 0.35) card(fouler, R() < 0.12 ? "red" : "yellow"); // box fouls get booked more
+    if (R() < 0.35) card(fouler, R() < 0.06 ? "red" : "yellow"); // box fouls get booked more
   }
 
   function doCross(p: P) {
@@ -589,10 +591,16 @@ export function createMatchSim(
     // THROUGH ON GOAL: if only the keeper is between the carrier and the net (no
     // outfield defender goalside in the lane), FINISH — never pass backward. Kills
     // the "clean through 1-v-1 but passes back / to an opponent" artifact.
-    const goalsideDefs = defenders.filter(
-      (d) => d.role !== "Goleiro" && (dir > 0 ? d.y > carrier!.y + 1 : d.y < carrier!.y - 1) && Math.abs(d.x - carrier!.x) < 12,
+    // Re-anchored at 180s: the original test (dg<36, goalside |Δx|<12) fired from
+    // wide/far positions ~18×/match — over HALF of all shots — because the longer
+    // clock reaches "no defender in the window" spots constantly. A genuine
+    // breakaway is CLOSE, reasonably CENTRAL, and has a CLEAR shot lane.
+    const oppOutfield = defenders.filter((d) => d.role !== "Goleiro");
+    const goalsideDefs = oppOutfield.filter(
+      (d) => (dir > 0 ? d.y > carrier!.y + 1 : d.y < carrier!.y - 1) && Math.abs(d.x - carrier!.x) < 14,
     );
-    const clearOnGoal = dg < 36 && goalsideDefs.length === 0;
+    const clearOnGoal = dg < 26 && Math.abs(carrier.x - 50) < 18 && goalsideDefs.length === 0
+      && laneClearance(carrier.x, carrier.y, ATTACK[side].x, ATTACK[side].y, oppOutfield) > 6.5;
     if (clearOnGoal) { shoot(carrier); return; }
 
     // ── UTILITY AI: score every option, then pick (a better player picks the best
@@ -600,7 +608,7 @@ export function createMatchSim(
     // pass lane — so they stop firing blind; shooting is an xG estimate (distance ×
     // angle × how clear the shot lane is); dribbling holds the ball into space.
     const mates = outfield(side).filter((p) => p !== carrier);
-    const oppOut = defenders.filter((d) => d.role !== "Goleiro");
+    const oppOut = oppOutfield;
     const opps = oppOut.length ? oppOut : defenders;
     const pd = nearest(defenders, carrier.x, carrier.y);
     const pressed = dist(pd.x, pd.y, carrier.x, carrier.y) < style[side === "home" ? "away" : "home"].pressDist;
@@ -608,9 +616,11 @@ export function createMatchSim(
     type Opt = { kind: "shoot" | "cross" | "pass" | "switch" | "dribble"; target?: P; score: number };
     const opts: Opt[] = [];
 
-    // SHOOT — an xG-ish estimate. The 1.55 appetite gain targets the real ~10-12
-    // shots/team (was ~7): speculative range efforts now exist AND genuinely miss
-    // (the widened aim spray), so extra volume doesn't inflate goals.
+    // SHOOT — an xG-ish estimate. Appetite re-anchored for the 180s clock: the 60s
+    // match was SUPPLY-starved (~7 shots/team) and needed a cranked 3.0 gain; at 180s
+    // build-ups actually complete, so the same appetite overshot to ~17.6/team and
+    // the gain came DOWN to land on the real ~12. Speculative efforts still miss
+    // (the aim spray), so volume doesn't inflate goals.
     const angle = 1 - Math.abs(carrier.x - 50) / 50; // 1 central, 0 at the touchline
     const distF = clamp(1 - (dg - 6) / 36, 0, 1); // 1 close, 0 by ~42 out
     const shotLane = clamp(laneClearance(carrier.x, carrier.y, goal.x, goal.y, oppOut) / 6, 0, 1);
@@ -625,8 +635,8 @@ export function createMatchSim(
     // long-range appetite is a PERSONAL tendency (id-hashed) — the flair player leathers
     // it from 28 yards, his teammate never does
     const roleF = carrier.role === "Atacante" ? 1.15 : carrier.role === "Defensor" ? 0.55 : 1;
-    const spec = (dg < 30 ? 0.14 : 0) * (0.55 + 0.9 * carrier.flair);
-    opts.push({ kind: "shoot", score: (xg * 3.0 * roleF + spec) * settled() * (1 + 0.5 * Math.max(0, u)) });
+    const spec = (dg < 30 ? 0.08 : 0) * (0.55 + 0.9 * carrier.flair);
+    opts.push({ kind: "shoot", score: (xg * 1.9 * roleF + spec) * settled() * (1 + 0.5 * Math.max(0, u)) });
 
     // CROSS from wide + advanced — a REAL team's most frequent delivery (15-20/match):
     // the duel decides the header, defenders clear most, corners + second balls fall out
@@ -1039,7 +1049,9 @@ export function createMatchSim(
               const save = (gk ? clamp(0.5 + (gk.rating - 70) / 90, 0.42, 0.82) : 0.5) * gkOut;
               // conversion drifts up late: tired defenders close down slower, so the same
               // position yields a cleaner strike (the resolve-side half of the fatigue fade)
-              const pGoal = clamp(attemptXG * (1 + 0.12 * matchProgress) * ((1 - save) / (1 - 0.62)), 0.02, 0.95);
+              // ×0.75: re-anchored at 180s — the longer clock's on-target population
+              // converted ~25% hot (P(goal|onT) 0.37 vs real ~0.30)
+              const pGoal = clamp(attemptXG * 0.75 * (1 + 0.12 * matchProgress) * ((1 - save) / (1 - 0.62)), 0.02, 0.95);
               if (R() < pGoal) { const sc = attemptShooter; attemptSide = null; goal(attSide, sc); scored = true; }
             }
             if (scored) {
@@ -1097,7 +1109,7 @@ export function createMatchSim(
               const pAtt = clamp(0.5 + (att.rating - def.rating) / 60 + (dd - da) * 0.06, 0.15, 0.85);
               const winner = dd >= 5.5 || (da < 5.5 && R() < pAtt) ? att : def;
               const gW = ATTACK[winner.side];
-              if (winner.side === rec.side && dist(winner.x, winner.y, gW.x, gW.y) < 26 && R() < 0.4) {
+              if (winner.side === rec.side && dist(winner.x, winner.y, gW.x, gW.y) < 26 && R() < 0.3) {
                 // the SECOND-BALL VOLLEY: an attacker winning the knock-down at the edge
                 // of the box hits it first time — a staple real chance
                 lastTouch = winner.side;
@@ -1188,7 +1200,9 @@ export function createMatchSim(
       // defenders challenge with real care — without the 0.18 damping the pen rate
       // came out ~1.7/match (real ~0.3).
       const inPenBox = Math.abs(carrier.x - 50) < 22 && (carrier.side === "home" ? carrier.y > 84 : carrier.y < 16);
-      const foulRate = clamp(5.6 * (carrier.rating / presser.rating), 3.1, 8.4) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.18 : 1);
+      // per-challenge rate re-anchored at 180s: carriers spend ~3× longer under
+      // pressure per match, so the 60s-era 5.6 produced ~28 fouls (real ~22)
+      const foulRate = clamp(4.2 * (carrier.rating / presser.rating), 2.4, 6.4) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.18 : 1);
       const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.28 * matchProgress);
       if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
       else if (near && R() < foulRate * dt) foul(carrier, presser);
@@ -1216,7 +1230,7 @@ export function createMatchSim(
             settleT = 0.9; // the keeper has it safe for a beat before distributing
             caption("Defesa do goleiro!");
             ticker("Defesa");
-          } else if (best.role !== "Goleiro" && dist(best.x, best.y, g.x, g.y) < 18 && R() < 0.65) { lastTouch = best.side; shoot(best); }
+          } else if (best.role !== "Goleiro" && dist(best.x, best.y, g.x, g.y) < 18 && R() < 0.45) { lastTouch = best.side; shoot(best); }
           else giveBallTo(best);
         }
       }
