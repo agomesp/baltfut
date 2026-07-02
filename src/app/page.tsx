@@ -25,6 +25,8 @@ import {
   fetchVoteCounts,
   type VoteEntry,
 } from "@/lib/votes";
+import { fetchMatchResults } from "@/lib/match-results";
+import type { MatchResult } from "@/lib/ranking";
 import { buildChipGames, defaultChipId } from "@/lib/chips";
 import { releasedMatchIds } from "@/lib/palpite";
 import { teamNamePt } from "@/lib/team-names";
@@ -61,6 +63,9 @@ export default function Home() {
   const [lineups, setLineups] = useState<MatchLineups | null>(null);
   const [entries, setEntries] = useState<VoteEntry[]>([]);
   const [allEntries, setAllEntries] = useState<VoteEntry[]>([]);
+  // Durable finished-match scores (match_results) — the ranking grades on these
+  // first so ESPN can't cost anyone their wins by dropping/changing an old result.
+  const [matchResults, setMatchResults] = useState<Record<string, MatchResult>>({});
   // Admin manual pen-vote control, per match, pushed in realtime (null = auto).
   const [penOverrides, setPenOverrides] = useState<Record<string, "open" | "closed">>({});
   // Admin manual palpite WINDOW, per match: match_id → openUntil (epoch ms). Read
@@ -119,6 +124,7 @@ export default function Home() {
           setVoteCounts(c.voteCounts ?? {});
           setEntries(Array.isArray(c.entries) ? c.entries : []);
           setAllEntries(Array.isArray(c.allEntries) ? c.allEntries : []);
+          setMatchResults(c.matchResults && typeof c.matchResults === "object" ? c.matchResults : {});
           setLoading(false); // show cached content instantly; fresh data updates in place
         }
       }
@@ -256,12 +262,12 @@ export default function Home() {
     try {
       sessionStorage.setItem(
         "baltfut_cache",
-        JSON.stringify({ matches, groups, voteCounts, entries, allEntries }),
+        JSON.stringify({ matches, groups, voteCounts, entries, allEntries, matchResults }),
       );
     } catch {
       /* quota / serialization — non-fatal */
     }
-  }, [loading, matches, groups, voteCounts, entries, allEntries]);
+  }, [loading, matches, groups, voteCounts, entries, allEntries, matchResults]);
 
   // ---- derived ------------------------------------------------------------
   const upcoming = useMemo(
@@ -309,10 +315,15 @@ export default function Home() {
     const client = getSupabaseClient();
     if (!client) {
       setAllEntries([]);
+      setMatchResults({});
       return;
     }
     try {
-      setAllEntries(await fetchAllEntries(client));
+      // Palpites + durable results together — both feed the ranking. fetchMatchResults
+      // is self-resilient ({} on error), so it never fails this fetch.
+      const [entries, results] = await Promise.all([fetchAllEntries(client), fetchMatchResults(client)]);
+      setAllEntries(entries);
+      setMatchResults(results);
     } catch {
       setAllEntries([]);
     }
@@ -495,6 +506,7 @@ export default function Home() {
             entries={entries}
             allEntries={allEntries}
             matches={matches}
+            matchResults={matchResults}
             onVoted={onVoted}
             followCode={follow}
             groupByTeam={groupByTeam}

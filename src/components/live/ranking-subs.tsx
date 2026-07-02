@@ -1,7 +1,7 @@
 import { useMemo, type CSSProperties } from "react";
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
-import { rankSubs, worstPalpiteiro, type SubRank } from "@/lib/ranking";
+import { rankSubs, worstPalpiteiro, type SubRank, type MatchResult } from "@/lib/ranking";
 import { useMyName } from "@/lib/use-my-name";
 import { BRIC, JB, SAIRA, LIME_DEEP, GOLD, GOLD_DEEP, VoceTag, isMe, nameStyle } from "@/components/live/bf-ui";
 
@@ -38,12 +38,15 @@ function Row({ r, rank, dense, myName }: { r: SubRank; rank: number; dense?: boo
 export interface RankingSubsProps {
   entries: VoteEntry[];
   matches: Match[];
+  /** Durable finished-match scores from the DB (match_results). Preferred over
+   *  ESPN for grading so an ESPN outage / dropped match can't erase old wins. */
+  results?: Record<string, MatchResult>;
   /** "grid" = the wide PLACAR 2-col list; "column" = a single fading column. */
   variant?: "grid" | "column";
   style?: CSSProperties;
 }
 
-export function RankingSubs({ entries, matches, variant = "column", style }: RankingSubsProps) {
+export function RankingSubs({ entries, matches, results, variant = "column", style }: RankingSubsProps) {
   const myName = useMyName();
   // Memoized so a bare parent re-render (the live stages tick every second) does
   // NOT rebuild the map / re-rank / re-scan. Recomputes the moment its real inputs
@@ -51,10 +54,13 @@ export function RankingSubs({ entries, matches, variant = "column", style }: Ran
   // a score change → new array), and `entries` on every palpite poll/realtime
   // nudge — so the ranking still updates live, just not on idle clock ticks.
   const byId = useMemo(() => {
-    const m: Record<string, Match> = {};
-    for (const x of matches) m[x.id] = x;
+    const m: Record<string, MatchResult> = {};
+    for (const x of matches) m[x.id] = x; // ESPN — live truth for in-progress/upcoming
+    // Durable snapshots WIN for finished matches (so ESPN dropping/changing an old
+    // result can't cost anyone their wins); ESPN still covers anything not snapshotted.
+    if (results) for (const id in results) m[id] = results[id];
     return m;
-  }, [matches]);
+  }, [matches, results]);
   const ranks = useMemo(() => rankSubs(entries, byId), [entries, byId]);
   const worst = useMemo(() => worstPalpiteiro(ranks), [ranks]);
   const leader = ranks[0] ?? null;

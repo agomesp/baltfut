@@ -2,6 +2,11 @@ import type { Match } from "@/lib/espn";
 import { matchShootout } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 
+/** The slice of a match needed to grade a palpite — satisfied by a full `Match`
+ *  (from ESPN) OR a durable row from the `match_results` table, so the ranking can
+ *  prefer our stored snapshot and stop depending on ESPN's live feed. */
+export type MatchResult = Pick<Match, "state" | "homeScore" | "awayScore" | "homeShootout" | "awayShootout">;
+
 export interface SubRank {
   username: string;
   /** Exact-score hits + 0.5 per correct penalty-winner call. May be fractional. */
@@ -24,7 +29,7 @@ export interface SubRank {
  */
 export function rankSubs(
   entries: VoteEntry[],
-  matchesById: Record<string, Match>,
+  matchesById: Record<string, MatchResult>,
 ): SubRank[] {
   const tally = new Map<string, { wins: number; losses: number; penWins: number; penLosses: number }>();
 

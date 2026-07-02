@@ -232,4 +232,46 @@ begin
   raise notice 'PASS M5: service_role can write palpite_overrides';
 end $$;
 
+-- N) match_results is anon read-only: anon may SELECT the durable scores, never
+--    write them. Only service_role (the results cron) upserts finished matches.
+do $$
+declare n int;
+begin
+  set local role anon;
+  select count(*) into n from public.match_results;       -- anon CAN read (must not raise)
+  raise notice 'PASS N1: anon read match_results (% rows)', n;
+  begin
+    insert into public.match_results (match_id, league, home_score, away_score) values ('rls_probe', 'fifa.world', 1, 0);
+    raise exception 'FAIL N2: anon inserted a match result';
+  exception when insufficient_privilege then raise notice 'PASS N2: anon insert result denied';
+  end;
+  begin
+    update public.match_results set home_score = 9;
+    raise exception 'FAIL N3: anon updated a match result';
+  exception when insufficient_privilege then raise notice 'PASS N3: anon update result denied';
+  end;
+  begin
+    delete from public.match_results;
+    raise exception 'FAIL N4: anon deleted match results';
+  exception when insufficient_privilege then raise notice 'PASS N4: anon delete result denied';
+  end;
+end $$;
+
+-- O) set_match_results: only service_role may execute the privileged upsert RPC.
+do $$
+begin
+  set local role anon;
+  begin
+    perform public.set_match_results('[]'::jsonb);
+    raise exception 'FAIL O1: anon executed set_match_results';
+  exception when insufficient_privilege then raise notice 'PASS O1: anon set_match_results execute denied';
+  end;
+end $$;
+do $$
+begin
+  set local role service_role;
+  perform public.set_match_results('[]'::jsonb);          -- execute grant intact (must not raise)
+  raise notice 'PASS O2: service_role can execute set_match_results';
+end $$;
+
 select 'ALL RLS CHECKS PASSED' as result;

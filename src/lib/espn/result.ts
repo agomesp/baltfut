@@ -15,7 +15,7 @@ export interface Shootout {
  * The regulation/AET scoreline stays on `homeScore`/`awayScore`; this is the
  * separate spot-kick tally used to show "(pên 4–2)" and the advancing side.
  */
-export function matchShootout(m: Match): Shootout | null {
+export function matchShootout(m: Pick<Match, "homeShootout" | "awayShootout">): Shootout | null {
   const h = m.homeShootout;
   const a = m.awayShootout;
   if (h == null || a == null || h === a) return null;

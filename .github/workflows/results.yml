@@ -1,0 +1,34 @@
+name: Snapshot results
+
+# Snapshot every finished match's final score from ESPN into the Supabase
+# `match_results` table (via set_match_results). The page grades the Ranking dos
+# Subs against this durable copy, so an ESPN outage / dropped match can't erase
+# anyone's wins. No git commit → NO Pages deploy → open viewers don't reload.
+#
+# Requires repo secrets:
+#   NEXT_PUBLIC_SUPABASE_URL      (already set)
+#   SUPABASE_SERVICE_ROLE_KEY     (same one the promos cron uses)
+on:
+  schedule:
+    - cron: "23 * * * *" # hourly (ESPN covers just-finished matches until the snapshot)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: results
+  cancel-in-progress: true
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/results-pull.mjs
