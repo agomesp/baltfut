@@ -9,6 +9,12 @@ import { ARCHIVO, BRIC, JB, LIME, SAIRA } from "@/components/live/bf-ui";
 const CHANNEL = "https://t.me/rbstorenet";
 const POLL_MS = 4 * 60_000;
 const STRIPE = "repeating-linear-gradient(135deg,#1a2a20 0 6px,#12201700 6px 12px),#15241b";
+// Static green glow (matches the goal-chip #3ee65f) — a rim + soft halo. Replaces
+// the animated bf-evt travelling beam so 50 cards cost ~0 continuous CPU.
+const GLOW = {
+  border: "1px solid rgba(62,230,95,0.38)",
+  boxShadow: "0 0 15px -1px rgba(62,230,95,0.33)",
+} as const;
 
 /** Product image (or striped placeholder) at a given square size, with a yellow
  *  discount tag pinned to the top-left when the deal carries a `discount`. */
@@ -161,8 +167,7 @@ export function LivePromosPanel() {
         {items.map((p, i) => (
           <div
             key={i}
-            className="bf-evt bf-evt-goal"
-            style={{ display: "flex", alignItems: "center", gap: 16, padding: 16, borderRadius: 16, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}
+            style={{ display: "flex", alignItems: "center", gap: 16, padding: 16, borderRadius: 16, background: "rgba(255,255,255,0.03)", ...GLOW }}
           >
             <a
               href={safeUrl(p.link)}
@@ -216,7 +221,7 @@ export function LivePromosPanel() {
             </button>
           </div>
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", padding: 24 }}>
-            <div className="bf-evt bf-evt-goal" style={{ width: "min(560px, 100%)", margin: "auto", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 15, padding: "26px 26px", borderRadius: 20, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+            <div style={{ width: "min(560px, 100%)", margin: "auto", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 15, padding: "26px 26px", borderRadius: 20, background: "rgba(255,255,255,0.03)", ...GLOW }}>
               <PromoImage p={expanded} size={172} />
               <div style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 22, lineHeight: 1.2, color: "#f1f7f0", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{expanded.product}</div>
               <div style={{ display: "inline-flex", alignItems: "baseline", justifyContent: "center", flexWrap: "wrap", gap: 14 }}>
