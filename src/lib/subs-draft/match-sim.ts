@@ -332,6 +332,40 @@ export function createMatchSim(
     settleT = 0.35; // protect the new carrier from an instant re-tackle
   }
 
+  /** FIRST TOUCH (physics): a live reception is a TOUCH, not a teleport-to-feet.
+   * Touch error grows with incoming ball speed and pressure and shrinks with skill;
+   * a bad touch pushes the ball loose a few units — a live 50/50 and the honest
+   * turnover engine (why great players look calm under pressure). Restarts and
+   * keeper hands are exempt; tackles/knock-downs keep their own chaos machinery. */
+  function receive(p: P) {
+    const inSpeed = ballSpeed();
+    const rivals = opp(p.side).filter(canContest);
+    const pd = rivals.length ? nearest(rivals, p.x, p.y) : null;
+    const pressure = pd ? clamp(1 - dist(pd.x, pd.y, p.x, p.y) / 6, 0, 1) : 0;
+    const skill = clamp((p.rating - 55) / 45, 0.3, 1);
+    const err = (inSpeed / 85) * (0.45 + 0.75 * pressure) * (1.3 - skill);
+    // NB no late-fatigue multiplier here: bad touches ABORT attacking moves, so
+    // scaling them with progress suppressed the late-goal surge (measured -1pp on
+    // the late share). Fatigue already lives in stray passes / tackle fade.
+    const pBad = clamp(err - 0.16, 0, 0.45);
+    if (R() < pBad) {
+      const ang = rnd(0, Math.PI * 2);
+      const push = (2.5 + 7 * clamp(err, 0, 1.2)) * BALL_FRICTION; // v0 so the roll covers ~2.5-9.5 units
+      ball.vx = p.vx * 0.35 + Math.cos(ang) * push;
+      ball.vy = p.vy * 0.35 + Math.sin(ang) * push;
+      ball.z = 0; ball.vz = 0; ball.spin = 0;
+      ballState = "loose";
+      passTo = null;
+      carrier = null;
+      lastTouch = p.side;
+      pendingCross = false;
+      loftedPass = false;
+      caption("Dominou mal!");
+      return;
+    }
+    giveBallTo(p);
+  }
+
   /** Is `rec` in an offside position for a forward pass, judged now? */
   function offsideAt(rec: P, side: Side): boolean {
     const up = side === "home";
@@ -1235,8 +1269,8 @@ export function createMatchSim(
           // starving reception (the bisect showed a symmetric gate cost ~2 shots/team).
           if (ball.z < 3.2 && ball.vz <= 0.01 && dist(ball.x, ball.y, rec.x, rec.y) < CONTROL + 0.8) {
             if (pendingCross && rec.role !== "Goleiro") { pendingCross = false; lastTouch = rec.side; shoot(rec, true); }
-            else giveBallTo(rec);
-          } else if (!airborne && dist(int.x, int.y, ball.x, ball.y) < intReach) { pendingCross = false; giveBallTo(int); }
+            else receive(rec); // the first touch can betray him
+          } else if (!airborne && dist(int.x, int.y, ball.x, ball.y) < intReach) { pendingCross = false; receive(int); } // a stuck-out leg spills too
           else if (ballSpeed() < 9 && ball.z < 1.2) { pendingCross = false; loftedPass = false; ballState = "loose"; } // a landed, slowing ball is anyone's
         }
       }
@@ -1308,7 +1342,7 @@ export function createMatchSim(
             caption("Defesa do goleiro!");
             ticker("Defesa");
           } else if (best.role !== "Goleiro" && dist(best.x, best.y, g.x, g.y) < 18 && R() < 0.45) { lastTouch = best.side; shoot(best); }
-          else giveBallTo(best);
+          else receive(best); // collecting a moving loose ball is a touch like any other
         }
       }
     }
