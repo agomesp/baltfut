@@ -44,7 +44,9 @@ const range = (xs: number[]) => Math.max(...xs) - Math.min(...xs);
 
 describe("match-sim produces real, flowing movement (not lined up)", () => {
   it("moves the ball around the whole pitch over time", () => {
-    const { ball } = run(700); // ~11s at 60fps
+    // 24s window: a real match can legitimately camp one flank for ~11s (a sustained
+    // left-side attack), so the old 700-step window flaked on such spells
+    const { ball } = run(1500);
     expect(range(ball.map((b) => b.y))).toBeGreaterThan(28); // travels end to end
     expect(range(ball.map((b) => b.x))).toBeGreaterThan(13); // and side to side
   });

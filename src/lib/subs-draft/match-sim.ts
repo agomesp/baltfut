@@ -94,6 +94,9 @@ interface P {
   runT: number;
   runX: number;
   runY: number;
+  /** Deterministic per-player tendency (0..1, hashed from the id — NOT the match
+   * stream): a flair-9 midfielder loves the long shot; a flair-1 one recycles. */
+  flair: number;
 }
 
 const ATTACK = { home: { x: 50, y: 100 }, away: { x: 50, y: 0 } };
@@ -109,6 +112,14 @@ const DRIBBLE_LEAD = 2.0;
 const TACKLE_RATE = 3.0;
 const BLOCK_R = 2.3;
 const GRAVITY = 52; // ball-height (z) fall rate — crosses/corners/long balls arc
+
+/** FNV-1a over a string → 0..1. Identity that is a pure function of the id, NOT the
+ * match seed/stream — so a player/team behaves like THEMSELVES in every match. */
+function hash01(str: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0) / 4294967295;
+}
 
 const dist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax - bx, ay - by);
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -153,11 +164,30 @@ export function createMatchSim(
   const rnd = (a: number, b: number) => a + R() * (b - a);
   const mk = (s: FieldSlot, side: Side): P => ({
     id: s.id, name: s.name, side, role: s.role, rating: s.rating ?? 78, ax: s.x, ay: s.y, x: s.x, y: s.y, vx: 0, vy: 0, tx: s.x, ty: s.y, rt: 0,
-    pace: 0.85 + ((s.rating ?? 78) - 70) / 60, runT: 0, runX: 0, runY: 0,
+    pace: 0.85 + ((s.rating ?? 78) - 70) / 60, runT: 0, runX: 0, runY: 0, flair: hash01(s.id),
   });
   const home = homeSlots.map((s) => mk(s, "home"));
   const away = awaySlots.map((s) => mk(s, "away"));
   const all = [...home, ...away];
+
+  // TEAM IDENTITY: a per-side tactical style derived from the XI (role counts) + a hash
+  // of its slot ids — stable across every match and seed (a pure function of the slots,
+  // no stream draws), so YOUR team plays like your team all Copa. Ranges are narrow
+  // enough that quality still decides (the 88v60 calibration gate stands watch).
+  const styleOf = (slots: FieldSlot[]) => {
+    const h = hash01(slots.map((x) => x.id).join("|"));
+    const h2 = hash01(slots.map((x) => x.id).join("&") + "t");
+    const defC = slots.filter((x) => x.role === "Defensor").length;
+    const atkC = slots.filter((x) => x.role === "Atacante").length;
+    return {
+      lineDepth: 20 + (defC >= 5 ? 2.5 : 0) - (atkC >= 3 ? 1.5 : 0) + (h - 0.5) * 6, // deep block ↔ high line
+      pressDist: 4.5 + (atkC >= 3 ? 0.6 : 0) - (defC >= 5 ? 0.4 : 0) + (h2 - 0.5) * 1.6, // press trigger radius
+      directness: 0.85 + h2 * 0.4, // vertical ↔ patient (multiplies forward-pass value)
+      longBall: 0.28 + h * 0.24, // GK distribution: build short ↔ launch it
+      tempo: 0.88 + h2 * 0.24, // divides the on-ball decision cadence
+    };
+  };
+  const style = { home: styleOf(homeSlots), away: styleOf(awaySlots) };
   const ball = { x: 50, y: 50, vx: 0, vy: 0, z: 0, vz: 0 }; // z = height above the pitch
   const shots = { home: 0, away: 0 };
   const onTarget = { home: 0, away: 0 };
@@ -487,7 +517,7 @@ export function createMatchSim(
     const dir = gk.side === "home" ? 1 : -1;
     const mates = outfield(gk.side);
     if (!mates.length) { decideT = rnd(0.4, 0.8); return; }
-    const long = R() < (urgency(gk.side) > 0.3 ? 0.65 : 0.4); // chasing late → hurry it long
+    const long = R() < (urgency(gk.side) > 0.3 ? 0.65 : style[gk.side].longBall); // team identity: build short ↔ launch; chasing late → hurry it long
     const tgt = long
       ? mates.reduce((b, m) => ((dir > 0 ? m.y > b.y : m.y < b.y) ? m : b), mates[0])
       : mates.reduce((b, m) => (dist(gk.x, gk.y, m.x, m.y) < dist(gk.x, gk.y, b.x, b.y) ? m : b), mates[0]);
@@ -548,7 +578,7 @@ export function createMatchSim(
     const oppOut = defenders.filter((d) => d.role !== "Goleiro");
     const opps = oppOut.length ? oppOut : defenders;
     const pd = nearest(defenders, carrier.x, carrier.y);
-    const pressed = dist(pd.x, pd.y, carrier.x, carrier.y) < 4.5;
+    const pressed = dist(pd.x, pd.y, carrier.x, carrier.y) < style[side === "home" ? "away" : "home"].pressDist;
 
     type Opt = { kind: "shoot" | "cross" | "pass" | "dribble"; target?: P; score: number };
     const opts: Opt[] = [];
@@ -566,7 +596,12 @@ export function createMatchSim(
     // ecosystem (goal kicks, corners) without inflating goals. A side CHASING the
     // scoreline late shoots more (urgency) — the real late-goal surge.
     const u = urgency(side);
-    opts.push({ kind: "shoot", score: (xg * 2.6 + (dg < 30 ? 0.14 : 0)) * settled() * (1 + 0.5 * Math.max(0, u)) });
+    // ROLE + FLAIR: a striker backs himself, a centre-back recycles; the speculative
+    // long-range appetite is a PERSONAL tendency (id-hashed) — the flair player leathers
+    // it from 28 yards, his teammate never does
+    const roleF = carrier.role === "Atacante" ? 1.15 : carrier.role === "Defensor" ? 0.55 : 1;
+    const spec = (dg < 30 ? 0.14 : 0) * (0.55 + 0.9 * carrier.flair);
+    opts.push({ kind: "shoot", score: (xg * 2.6 * roleF + spec) * settled() * (1 + 0.5 * Math.max(0, u)) });
 
     // CROSS from wide + advanced
     if ((carrier.x < 26 || carrier.x > 74) && dg < 36) {
@@ -584,9 +619,10 @@ export function createMatchSim(
       const openness = clamp(dist(nd.x, nd.y, m.x, m.y) / 12, 0.05, 1);
       const lane = clamp(laneClearance(ball.x, ball.y, m.x, m.y, oppOut) / 5, 0, 1);
       const range = dist(carrier.x, carrier.y, m.x, m.y);
-      // a leader protecting the scoreline keeps it SHORT and safe (recenter ~15)
-      const rangeF = clamp(1 - Math.abs(range - (u < -0.3 ? 15 : 20)) / 46, 0.25, 1);
-      const progF = clamp(0.5 + ahead / 38, 0.05, 1.25) * (breaking && ahead > 0 ? 1.35 : 1);
+      // a leader protecting the scoreline keeps it SHORT and safe (recenter ~15);
+      // otherwise the preferred pass length is team identity (direct teams go longer)
+      const rangeF = clamp(1 - Math.abs(range - (u < -0.3 ? 15 : 12 + 9 * style[side].directness)) / 46, 0.25, 1);
+      const progF = clamp(0.5 + ahead / 38, 0.05, 1.25) * (breaking && ahead > 0 ? 1.35 : 1) * (ahead > 0 ? style[side].directness : 1);
       // a mate ON A RUN is the ball a real carrier looks for first
       const runBoost = m.runT > 0 && ahead > 4 ? 1.35 : 1;
       opts.push({ kind: "pass", target: m, score: progF * (0.4 + 0.6 * openness) * (0.3 + 0.7 * lane) * rangeF * runBoost });
@@ -605,12 +641,22 @@ export function createMatchSim(
     if (chosen.kind === "shoot") { shoot(carrier); return; }
     if (chosen.kind === "cross") { doCross(carrier); return; }
     // a leader on the ball late slows the game down (time management on the dribble)
-    if (chosen.kind === "dribble" || !chosen.target) { decideT = rnd(0.35, 0.75) * (u < -0.3 ? 1.35 : 1); return; }
+    if (chosen.kind === "dribble" || !chosen.target) { decideT = rnd(0.35, 0.75) * (u < -0.3 ? 1.35 : 1) / style[side].tempo; return; }
 
     // PASS — accuracy + stray + through-ball lead + offside
     const tg = chosen.target;
     const aheadTg = dir > 0 ? tg.y - carrier.y : carrier.y - tg.y;
     const through = aheadTg > 8 && R() < (breaking ? 0.7 : u > 0.3 ? 0.65 : 0.5); // slipped ahead of a run — likelier on the break / when chasing
+    // ONE-TWO: a short pass under pressure and the passer BURSTS beyond his marker for
+    // the return — the give-and-go. His dart is a committed run, so the receiver's own
+    // pass-to-the-run logic finds him back; the whole combination emerges from the two
+    // mechanics without any scripted sequence.
+    const shortFwd = dist(carrier.x, carrier.y, tg.x, tg.y) < 15 && aheadTg > -2;
+    if (shortFwd && pressed && carrier.runT <= 0 && R() < clamp(0.22 + (carrier.rating - 60) / 110, 0.12, 0.5)) {
+      carrier.runT = rnd(1.1, 1.7);
+      carrier.runX = clamp(tg.x + rnd(-7, 7), 10, 90);
+      carrier.runY = clamp(tg.y + dir * rnd(8, 15), 6, 94); // beyond the wall player
+    }
     // fatigue hits the MIND too: stray passes rise late — live turnovers that launch
     // counter-attacks, the engine of the real late-goal surge
     const strayChance = clamp(0.24 - (carrier.rating - 70) / 120, 0.03, 0.3) * (1 + 0.75 * matchProgress);
@@ -744,7 +790,7 @@ export function createMatchSim(
     const uDef = urgency(p.side);
     // tired legs can't hold a high line — the whole block SAGS as the match ages
     // (real late-game lines sink), gifting closer shooting positions late
-    const depth = (breakT > 0 && breakSide === poss ? 27 : 20) + 7 * matchProgress + 6 * Math.max(0, -uDef) - 5 * Math.max(0, uDef);
+    const depth = (breakT > 0 && breakSide === poss ? 27 : style[p.side].lineDepth) + 7 * matchProgress + 6 * Math.max(0, -uDef) - 5 * Math.max(0, uDef);
     const line = clamp(ball.y - dir * depth, lo, hi); // the shared defensive line
     if (p.role === "Defensor") {
       const m = marks.length ? nearest(marks, p.x, p.y) : null;
