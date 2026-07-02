@@ -220,6 +220,7 @@ export function createMatchSim(
   let restartFor: Side | null = null;
   let lastTouch: Side = poss;
   let pendingCross = false;
+  let loftedPass = false; // a punted/switched ball — its DROP is a header contest
   let forceCross = false;
   let cornerDelivery = false;
   let freeKick = false;
@@ -300,13 +301,16 @@ export function createMatchSim(
     restartFor = null;
     attemptSide = null;
     pendingCross = false;
+    loftedPass = false;
     forceCross = false;
     cornerDelivery = false;
     offsidePending = false;
     ball.vx *= 0.15;
     ball.vy *= 0.15;
     ball.z = 0; ball.vz = 0; // controlled → at the player's feet
-    decideT = liveSteal ? rnd(0.15, 0.4) : rnd(0.4, 0.9); // a stolen ball launches at once
+    // cadence: ~0.45s of sim time per on-ball decision (the 60s match compresses 90');
+    // the old 0.4-0.9 draw made whole attacks stall at ~33 decisions per MATCH
+    decideT = liveSteal ? rnd(0.15, 0.4) : rnd(0.3, 0.65); // a stolen ball launches at once
     settleT = 0.35; // protect the new carrier from an instant re-tackle
   }
 
@@ -327,12 +331,12 @@ export function createMatchSim(
     giveBallTo(nearest(team(defSide), ball.x, ball.y));
     decideT = rnd(0.8, 1.2);
     caption("Impedimento!");
-    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
     ticker("Impedimento");
   }
 
   function kickoff(toSide: Side) {
-    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
     ball.x = 50; ball.y = 50; ball.vx = 0; ball.vy = 0;
     giveBallTo(nearest(team(toSide), 50, 50));
   }
@@ -344,7 +348,7 @@ export function createMatchSim(
     ballState = "loose";
     restartFor = side;
     caption("Lateral");
-    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
   }
 
   function goalKick(side: Side, cap: string) {
@@ -354,7 +358,7 @@ export function createMatchSim(
     ball.vx = 0; ball.vy = 0;
     giveBallTo(keeper(side));
     caption(cap);
-    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
   }
 
   function corner(attSide: Side) {
@@ -367,7 +371,7 @@ export function createMatchSim(
     cornerDelivery = true;
     decideT = rnd(1.0, 1.5); // players crowd the box
     caption("Escanteio!");
-    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
     ticker("Escanteio");
   }
 
@@ -458,7 +462,7 @@ export function createMatchSim(
     freeKick = true;
     decideT = rnd(1.0, 1.5); // dead ball — the wall forms
     caption("Falta!");
-    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
     ticker("Falta");
     // ~22% of fouls booked (3.5% straight red) → real ~3.5 yellows + ~0.2 reds. Fouls
     // concentrate on the pressers, so an ALREADY-BOOKED fouler is carded again at a
@@ -507,9 +511,14 @@ export function createMatchSim(
     ball.vx = ((bx - ball.x) / d) * power;
     ball.vy = ((boxY - ball.y) / d) * power;
     ball.z = 0;
-    ball.vz = isCorner ? rnd(24, 32) : rnd(18, 26); // loft it into the box — an arcing delivery
+    ball.vz = isCorner ? rnd(15, 20) : rnd(12, 17); // loft it into the box — an arcing delivery
     ballState = "pass";
     passTo = tgt;
+    // the target ATTACKS the delivery — a committed dart to the drop point, so the
+    // aerial duel is a real contest instead of a defender strolling under it
+    tgt.runT = Math.max(tgt.runT, 0.9);
+    tgt.runX = clamp(bx, 6, 94);
+    tgt.runY = clamp(boxY, 6, 94);
     pendingCross = true;
     lastTouch = p.side;
     caption(isCorner ? "Na área!" : "Cruzamento!");
@@ -530,7 +539,15 @@ export function createMatchSim(
     ball.vx = ((lx - ball.x) / d) * power;
     ball.vy = ((tgt.y - ball.y) / d) * power;
     ball.z = 0;
-    ball.vz = long ? rnd(26, 36) : 0; // a long clearance is lofted; a short throw stays low
+    ball.vz = long ? rnd(16, 22) : 0; // a long clearance is lofted; a short throw stays low
+    loftedPass = long; // the punt's landing is a header duel, like real goal kicks
+    if (long) {
+      // the target ATTACKS the punt's landing area — otherwise the drop is uncontested
+      // and the ball bounces in limbo (nobody may touch an airborne ball)
+      tgt.runT = Math.max(tgt.runT, 1.2);
+      tgt.runX = clamp(lx, 6, 94);
+      tgt.runY = clamp(tgt.y, 6, 94);
+    }
     ballState = "pass";
     passTo = tgt;
     lastTouch = gk.side;
@@ -582,7 +599,7 @@ export function createMatchSim(
     const pd = nearest(defenders, carrier.x, carrier.y);
     const pressed = dist(pd.x, pd.y, carrier.x, carrier.y) < style[side === "home" ? "away" : "home"].pressDist;
 
-    type Opt = { kind: "shoot" | "cross" | "pass" | "dribble"; target?: P; score: number };
+    type Opt = { kind: "shoot" | "cross" | "pass" | "switch" | "dribble"; target?: P; score: number };
     const opts: Opt[] = [];
 
     // SHOOT — an xG-ish estimate. The 1.55 appetite gain targets the real ~10-12
@@ -605,10 +622,11 @@ export function createMatchSim(
     const spec = (dg < 30 ? 0.14 : 0) * (0.55 + 0.9 * carrier.flair);
     opts.push({ kind: "shoot", score: (xg * 2.6 * roleF + spec) * settled() * (1 + 0.5 * Math.max(0, u)) });
 
-    // CROSS from wide + advanced
-    if ((carrier.x < 26 || carrier.x > 74) && dg < 36) {
-      const boxMates = mates.filter((m) => (dir > 0 ? m.y > 76 : m.y < 24)).length;
-      opts.push({ kind: "cross", score: 0.32 + boxMates * 0.16 });
+    // CROSS from wide + advanced — a REAL team's most frequent delivery (15-20/match):
+    // the duel decides the header, defenders clear most, corners + second balls fall out
+    if ((carrier.x < 30 || carrier.x > 70) && dg < 44) {
+      const boxMates = mates.filter((m) => (dir > 0 ? m.y > 74 : m.y < 26)).length;
+      opts.push({ kind: "cross", score: 0.5 + boxMates * 0.2 });
     }
 
     // PASS to each mate — progress × openness × lane-safety × sensible range.
@@ -630,6 +648,24 @@ export function createMatchSim(
       opts.push({ kind: "pass", target: m, score: progF * (0.4 + 0.6 * openness) * (0.3 + 0.7 * lane) * rangeF * runBoost });
     }
 
+    // SWITCH the play: the big lofted diagonal to the far flank — it FLIES over the
+    // congestion (the z-gate makes that literally true), the patient team's escape from
+    // a crowded side. Scored by how OPEN the far man is; only sensible when this flank
+    // is actually crowded (2+ opponents within 14).
+    if (!pressed || carrier.rating > 74) {
+      let sw: P | null = null;
+      let swOpen = 0;
+      for (const m of mates) {
+        if (Math.abs(m.x - carrier.x) < 36) continue;
+        const nd = nearest(opps, m.x, m.y);
+        const o = clamp(dist(nd.x, nd.y, m.x, m.y) / 12, 0, 1);
+        if (o > swOpen) { swOpen = o; sw = m; }
+      }
+      const car = carrier;
+      const crowd = opps.filter((d) => dist(d.x, d.y, car.x, car.y) < 14).length;
+      if (sw && swOpen > 0.62 && crowd >= 2) opts.push({ kind: "switch", target: sw, score: 0.18 + 0.28 * swOpen });
+    }
+
     // DRIBBLE — hold the ball, drive into space (worse under pressure)
     const carryLane = clamp(laneClearance(carrier.x, carrier.y, carrier.x, goal.y, oppOut) / 12, 0, 1);
     opts.push({ kind: "dribble", score: 0.34 + carryLane * 0.34 - (pressed ? 0.28 : 0) });
@@ -642,8 +678,30 @@ export function createMatchSim(
 
     if (chosen.kind === "shoot") { shoot(carrier); return; }
     if (chosen.kind === "cross") { doCross(carrier); return; }
+    if (chosen.kind === "switch" && chosen.target) {
+      const tg2 = chosen.target;
+      const lx2 = clamp(tg2.x + rnd(-4, 4), 4, 96);
+      const ly2 = clamp(tg2.y + rnd(-4, 4), 4, 96);
+      const d2 = Math.max(1, dist(ball.x, ball.y, lx2, ly2));
+      const pw = clamp(34 + d2 * 1.15, 50, 108);
+      ball.vx = ((lx2 - ball.x) / d2) * pw;
+      ball.vy = ((ly2 - ball.y) / d2) * pw;
+      ball.z = 0.2;
+      ball.vz = rnd(14, 19); // high over everything (hang compressed like the match clock)
+      loftedPass = true; // its landing is contested in the air
+      tg2.runT = Math.max(tg2.runT, 1.1); // the open man ATTACKS the landing spot
+      tg2.runX = lx2;
+      tg2.runY = ly2;
+      ballState = "pass";
+      passTo = tg2;
+      carrier = null;
+      lastTouch = side;
+      caption("Inversão!");
+      ticker("Inversão de jogo");
+      return;
+    }
     // a leader on the ball late slows the game down (time management on the dribble)
-    if (chosen.kind === "dribble" || !chosen.target) { decideT = rnd(0.35, 0.75) * (u < -0.3 ? 1.35 : 1) / style[side].tempo; return; }
+    if (chosen.kind === "dribble" || !chosen.target) { decideT = rnd(0.25, 0.55) * (u < -0.3 ? 1.35 : 1) / style[side].tempo; return; }
 
     // PASS — accuracy + stray + through-ball lead + offside
     const tg = chosen.target;
@@ -993,14 +1051,82 @@ export function createMatchSim(
         if (offsideT <= 0) { offsidePending = false; offside(ball.x, ball.y); } // flag up
       } else if (!checkOut()) {
         const rec = passTo;
-        const int = nearest(opp(rec.side).filter(canContest), ball.x, ball.y);
-        // tired legs read passes worse late (the real late-game defensive fade)
-        const intReach = CONTROL * (0.85 + (int.rating - 70) / 110) * (1 - 0.18 * matchProgress);
-        if (dist(ball.x, ball.y, rec.x, rec.y) < CONTROL) {
-          if (pendingCross && rec.role !== "Goleiro") { pendingCross = false; lastTouch = rec.side; shoot(rec, true); }
-          else giveBallTo(rec);
-        } else if (dist(int.x, int.y, ball.x, ball.y) < intReach) { pendingCross = false; giveBallTo(int); }
-        else if (ballSpeed() < 4) { pendingCross = false; ballState = "loose"; }
+        // Z-GATE: a flighted ball (z ≥ 2.4) sails OVER ground contests — nobody
+        // "intercepts" a ball above his head. Contests resume as it drops.
+        const airborne = ball.z >= 2.4;
+        // THE DROP of a cross = an AERIAL DUEL: nearest attacker vs nearest defender
+        // crash for the header — attacker wins → the header shot; defender wins → a
+        // headed CLEARANCE (football's most recognizable defensive beat), whose loose
+        // drop feeds second-ball scrambles and byline corners organically.
+        if ((pendingCross || loftedPass) && !airborne && ball.vz < 0 && ball.z > 0.3) {
+          const atts = team(rec.side).filter((o) => o.role !== "Goleiro");
+          const defs = opp(rec.side).filter((o) => o.role !== "Goleiro");
+          if (atts.length && defs.length) {
+            const att = nearest(atts, ball.x, ball.y);
+            const def = nearest(defs, ball.x, ball.y);
+            const da = dist(att.x, att.y, ball.x, ball.y);
+            const dd = dist(def.x, def.y, ball.x, ball.y);
+            const isCrossDrop = pendingCross;
+            if (!isCrossDrop && (da < 5.5 || dd < 5.5)) {
+              // MIDFIELD KNOCK-DOWN (a punt/switch landing): whoever wins the leap
+              // brings it down for his side — the endless header duels of real goal kicks
+              loftedPass = false;
+              const pAtt = clamp(0.5 + (att.rating - def.rating) / 60 + (dd - da) * 0.06, 0.15, 0.85);
+              const winner = dd >= 5.5 || (da < 5.5 && R() < pAtt) ? att : def;
+              const gW = ATTACK[winner.side];
+              if (winner.side === rec.side && dist(winner.x, winner.y, gW.x, gW.y) < 26 && R() < 0.4) {
+                // the SECOND-BALL VOLLEY: an attacker winning the knock-down at the edge
+                // of the box hits it first time — a staple real chance
+                lastTouch = winner.side;
+                shoot(winner);
+              } else if (R() < 0.3) {
+                // the knock-down squirts loose — a genuine 50/50 second ball
+                ball.vx = winner.vx * 0.4 + rnd(-14, 14);
+                ball.vy = winner.vy * 0.4 + rnd(-8, 8);
+                ball.z = 0.4; ball.vz = 0;
+                ballState = "loose";
+                passTo = null;
+                lastTouch = winner.side;
+              } else giveBallTo(winner);
+            } else if (isCrossDrop && (da < 4.2 || dd < 3.5)) {
+              pendingCross = false;
+              loftedPass = false;
+              // rating decides the leap, defenders get position, proximity matters
+              const pAtt = clamp(0.5 + (att.rating - def.rating) / 60 + (dd - da) * 0.06, 0.15, 0.85);
+              if (da < 4.2 && (dd >= 3.5 || R() < pAtt)) { lastTouch = att.side; shoot(att, true); }
+              else if (R() < 0.18) {
+                // under pressure the defender puts it BEHIND for a corner — the safe out
+                corner(rec.side);
+              } else {
+                const g = OWN[def.side];
+                const d0 = Math.max(1, dist(ball.x, ball.y, g.x, g.y));
+                ball.vx = ((ball.x - g.x) / d0) * 40 + rnd(-12, 12);
+                ball.vy = ((ball.y - g.y) / d0) * 40 + rnd(-6, 6);
+                ball.z = Math.max(ball.z, 1);
+                ball.vz = rnd(9, 14);
+                ballState = "loose";
+                passTo = null;
+                lastTouch = def.side;
+                caption("Afastou!");
+                ticker("Afastou de cabeça");
+              }
+            }
+          }
+        }
+        if (ballState === "pass" && passTo) {
+          const int = nearest(opp(rec.side).filter(canContest), ball.x, ball.y);
+          // tired legs read passes worse late (the real late-game defensive fade)
+          const intReach = CONTROL * (0.85 + (int.rating - 70) / 110) * (1 - 0.18 * matchProgress);
+          // asymmetric aerial reach: the RECEIVER is set for the flight — he kills a
+          // dropping ball with chest/thigh (z<3.2, a longer reach); an INTERCEPTOR
+          // can't nick a ball above his head (z<2.4). The z-gate stays honest without
+          // starving reception (the bisect showed a symmetric gate cost ~2 shots/team).
+          if (ball.z < 3.2 && ball.vz <= 0.01 && dist(ball.x, ball.y, rec.x, rec.y) < CONTROL + 0.8) {
+            if (pendingCross && rec.role !== "Goleiro") { pendingCross = false; lastTouch = rec.side; shoot(rec, true); }
+            else giveBallTo(rec);
+          } else if (!airborne && dist(int.x, int.y, ball.x, ball.y) < intReach) { pendingCross = false; giveBallTo(int); }
+          else if (ballSpeed() < 9 && ball.z < 1.2) { pendingCross = false; loftedPass = false; ballState = "loose"; } // a landed, slowing ball is anyone's
+        }
       }
     } else if (ballState === "dribble" && carrier) {
       const sp = Math.hypot(carrier.vx, carrier.vy);
@@ -1023,7 +1149,7 @@ export function createMatchSim(
       // defenders challenge with real care — without the 0.18 damping the pen rate
       // came out ~1.7/match (real ~0.3).
       const inPenBox = Math.abs(carrier.x - 50) < 22 && (carrier.side === "home" ? carrier.y > 84 : carrier.y < 16);
-      const foulRate = clamp(2.9 * (carrier.rating / presser.rating), 1.6, 5.0) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.18 : 1);
+      const foulRate = clamp(4.4 * (carrier.rating / presser.rating), 2.4, 6.6) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.18 : 1);
       const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.28 * matchProgress);
       if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
       else if (near && R() < foulRate * dt) foul(carrier, presser);
@@ -1039,7 +1165,8 @@ export function createMatchSim(
           const d = dist(p.x, p.y, ball.x, ball.y) - (p.rating - 70) / 12;
           if (d < bd) { bd = d; best = p; }
         }
-        if (best && dist(best.x, best.y, ball.x, ball.y) < CONTROL) {
+        const reachZ = best && best.role === "Goleiro" ? 3.2 : 2.4; // hands beat feet in the air
+        if (best && ball.z < reachZ && dist(best.x, best.y, ball.x, ball.y) < CONTROL) {
           const g = ATTACK[best.side];
           const own = OWN[best.side];
           if (best.role === "Goleiro" && ballSpeed() < 24 && dist(ball.x, ball.y, own.x, own.y) < 12) {

@@ -65,12 +65,14 @@ describe("calibration — the sim's match stats live in real-football bands", ()
     expect(mean(agg.goals)).toBeLessThanOrEqual(3.2);
   }, SLOW);
 
-  it("shots per team ≈ real (~12): mean in [8.3, 14.5]", () => {
+  it("shots per team ≈ real (~12): mean in [8.0, 14.5]", () => {
     // Volume is SUPPLY-limited, not appetite-limited: extra shots need extra final-third
-    // entries. The counter-attack window lifted the mean 7.9 → 8.8 (its predicted
-    // mechanism); committed runs (tier 2) add more — tighten toward 9.5+ then. Do not
-    // crank the shoot appetite instead (players shooting from silly spots to please a band).
-    expect(mean(agg.shotsPerTeam)).toBeGreaterThanOrEqual(8.3);
+    // entries, not a cranked shoot score. History of this floor: counters lifted 7.9 →
+    // 8.8; the aerial-honesty pass (duels + z-gates + real flight time) then removed
+    // ~0.7/team of FICTION (uncontested auto-headers, balls "caught" 8 units overhead)
+    // — bisected, not guessed. 8.1 honest beats 8.8 fake; the road to the real ~12 is
+    // deeper build-up mechanics, and this floor stops regression meanwhile.
+    expect(mean(agg.shotsPerTeam)).toBeGreaterThanOrEqual(8.0);
     expect(mean(agg.shotsPerTeam)).toBeLessThanOrEqual(14.5);
   }, SLOW);
 
