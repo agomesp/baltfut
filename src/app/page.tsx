@@ -32,6 +32,7 @@ import { releasedMatchIds } from "@/lib/palpite";
 import { teamNamePt } from "@/lib/team-names";
 import { Header, type ViewKey } from "@/components/header";
 import { LiveView } from "@/components/live-view";
+import { BracketPalpiteView } from "@/components/bracket-palpite-view";
 import { FixturesView } from "@/components/fixtures-view";
 import { GroupsView } from "@/components/groups-view";
 import { ResultsView } from "@/components/results-view";
@@ -66,6 +67,8 @@ export default function Home() {
   // Durable finished-match scores (match_results) — the ranking grades on these
   // first so ESPN can't cost anyone their wins by dropping/changing an old result.
   const [matchResults, setMatchResults] = useState<Record<string, MatchResult>>({});
+  // Top switcher inside the live tab: the live "Partidas" view vs the bracket palpite.
+  const [liveSubTab, setLiveSubTab] = useState<"partidas" | "chaveamento">("partidas");
   // Admin manual pen-vote control, per match, pushed in realtime (null = auto).
   const [penOverrides, setPenOverrides] = useState<Record<string, "open" | "closed">>({});
   // Admin manual palpite WINDOW, per match: match_id → openUntil (epoch ms). Read
@@ -496,24 +499,50 @@ export default function Home() {
         ) : null}
 
         {!loading && view === "live" && (
-          <LiveView
-            chips={chips}
-            selectedId={activeId}
-            onSelect={setSelectedId}
-            panel={panel}
-            onPanel={setPanel}
-            lineups={lineups}
-            entries={entries}
-            allEntries={allEntries}
-            matches={matches}
-            matchResults={matchResults}
-            onVoted={onVoted}
-            followCode={follow}
-            groupByTeam={groupByTeam}
-            releasedIds={releasedIds}
-            penOverride={(activeId && penOverrides[activeId]) || null}
-            palpiteOverrides={palpiteOverrides}
-          />
+          <>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              {([["partidas", "Partidas"], ["chaveamento", "Palpites · Chaveamento"]] as const).map(([key, label]) => {
+                const on = liveSubTab === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setLiveSubTab(key)}
+                    style={{
+                      fontFamily: "var(--font-jb)", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
+                      padding: "8px 14px", borderRadius: 9, cursor: "pointer",
+                      background: on ? "#c8ff2d" : "transparent", color: on ? "#0f1f02" : "#9bb6a6",
+                      border: `1px solid ${on ? "#c8ff2d" : "rgba(255,255,255,0.14)"}`,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {liveSubTab === "partidas" ? (
+              <LiveView
+                chips={chips}
+                selectedId={activeId}
+                onSelect={setSelectedId}
+                panel={panel}
+                onPanel={setPanel}
+                lineups={lineups}
+                entries={entries}
+                allEntries={allEntries}
+                matches={matches}
+                matchResults={matchResults}
+                onVoted={onVoted}
+                followCode={follow}
+                groupByTeam={groupByTeam}
+                releasedIds={releasedIds}
+                penOverride={(activeId && penOverrides[activeId]) || null}
+                palpiteOverrides={palpiteOverrides}
+              />
+            ) : (
+              <BracketPalpiteView matches={matches} />
+            )}
+          </>
         )}
         {!loading && view === "matches" && (
           <FixturesView matches={upcoming} followCode={follow} groupByTeam={groupByTeam} />
