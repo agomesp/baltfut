@@ -22,6 +22,7 @@ interface Agg {
   onTargetFrac: number[];
   corners: number[];
   fouls: number[];
+  pens: number[];
   yellows: number[];
   reds: number[];
   zeroZero: number;
@@ -31,7 +32,7 @@ function playN(n: number, seedBase: number): Agg {
   const field = mockField();
   const home = fieldLayout(field[0], autoLineup(field[0], "4-4-2", {}), "home");
   const away = fieldLayout(field[1], autoLineup(field[1], "4-3-3", {}), "away");
-  const agg: Agg = { goals: [], goalMinutes: [], shotsPerTeam: [], onTargetFrac: [], corners: [], fouls: [], yellows: [], reds: [], zeroZero: 0 };
+  const agg: Agg = { goals: [], goalMinutes: [], shotsPerTeam: [], onTargetFrac: [], corners: [], fouls: [], pens: [], yellows: [], reds: [], zeroZero: 0 };
   for (let k = 0; k < n; k++) {
     const sim = createMatchSim(home, away, seedBase + k, { scoring: true });
     for (let i = 0; i < TOTAL_STEPS; i++) sim.step(FIXED_DT);
@@ -45,6 +46,7 @@ function playN(n: number, seedBase: number): Agg {
     if (shots > 0) agg.onTargetFrac.push(onT / shots);
     agg.corners.push(r.stats.corners.home + r.stats.corners.away);
     agg.fouls.push(r.stats.fouls.home + r.stats.fouls.away);
+    agg.pens.push(r.stats.pens.home + r.stats.pens.away);
     agg.yellows.push(r.events.filter((e) => e.type === "yellow").length);
     agg.reds.push(r.events.filter((e) => e.type === "red").length);
     for (const e of r.events) if (e.type === "goal") agg.goalMinutes.push(e.minute);
@@ -98,6 +100,11 @@ describe("calibration — the sim's match stats live in real-football bands", ()
 
   it("0-0 stays uncommon (real ~8%): at most 20% of matches", () => {
     expect(agg.zeroZero / N).toBeLessThanOrEqual(0.2);
+  }, SLOW);
+
+  it("penalties happen but stay rare (real ~0.3/match): mean in [0.05, 0.7]", () => {
+    expect(mean(agg.pens)).toBeGreaterThanOrEqual(0.05);
+    expect(mean(agg.pens)).toBeLessThanOrEqual(0.7);
   }, SLOW);
 
   it("goals cluster LATE like real football (last third ≥ 34% and > first third)", () => {

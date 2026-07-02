@@ -41,6 +41,7 @@ export interface PitchStats {
   onTarget: { home: number; away: number };
   corners: { home: number; away: number };
   fouls: { home: number; away: number }; // committed BY that side
+  pens: { home: number; away: number }; // penalties AWARDED TO that side
 }
 export interface PitchResult {
   goals: { home: number; away: number };
@@ -157,6 +158,7 @@ export function createMatchSim(
   const onTarget = { home: 0, away: 0 };
   const corners = { home: 0, away: 0 };
   const foulsBy = { home: 0, away: 0 };
+  const pens = { home: 0, away: 0 };
   const possFrames = { home: 0, away: 0 };
   const bookings: Record<string, Card> = {};
   const sentOff = new Set<string>();
@@ -171,6 +173,8 @@ export function createMatchSim(
   let settleT = 0; // just-gained-possession grace: no tackle for a beat (kills ball ping-pong)
   let breakT = 0; // counter-attack window after a live turnover (see giveBallTo)
   let breakSide: Side | null = null;
+  let penaltyFor: Side | null = null; // a spot kick is being taken (ceremony → strike)
+  let penaltyShot = false; // the in-flight attempt is the penalty (no body blocks)
   let scoreSide: Side | null = null;
   let attemptSide: Side | null = null;
   let attemptOnTarget = false;
@@ -274,12 +278,12 @@ export function createMatchSim(
     giveBallTo(nearest(team(defSide), ball.x, ball.y));
     decideT = rnd(0.8, 1.2);
     caption("Impedimento!");
-    breakT = 0; breakSide = null; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
     ticker("Impedimento");
   }
 
   function kickoff(toSide: Side) {
-    breakT = 0; breakSide = null; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
     ball.x = 50; ball.y = 50; ball.vx = 0; ball.vy = 0;
     giveBallTo(nearest(team(toSide), 50, 50));
   }
@@ -291,7 +295,7 @@ export function createMatchSim(
     ballState = "loose";
     restartFor = side;
     caption("Lateral");
-    breakT = 0; breakSide = null; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
   }
 
   function goalKick(side: Side, cap: string) {
@@ -301,7 +305,7 @@ export function createMatchSim(
     ball.vx = 0; ball.vy = 0;
     giveBallTo(keeper(side));
     caption(cap);
-    breakT = 0; breakSide = null; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
   }
 
   function corner(attSide: Side) {
@@ -314,7 +318,7 @@ export function createMatchSim(
     cornerDelivery = true;
     decideT = rnd(1.0, 1.5); // players crowd the box
     caption("Escanteio!");
-    breakT = 0; breakSide = null; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
     ticker("Escanteio");
   }
 
@@ -390,18 +394,39 @@ export function createMatchSim(
 
   function foul(victim: P, fouler: P) {
     foulsBy[fouler.side] += 1;
+    // a foul INSIDE the box the victim attacks = PENALTY, not a walled free kick
+    const inBox = Math.abs(victim.x - 50) < 22 && (victim.side === "home" ? victim.y > 84 : victim.y < 16);
+    if (inBox) { penalty(victim.side, fouler); return; }
     ball.x = victim.x; ball.y = victim.y; ball.vx = 0; ball.vy = 0;
     giveBallTo(nearest(team(victim.side), ball.x, ball.y));
     freeKick = true;
     decideT = rnd(1.0, 1.5); // dead ball — the wall forms
     caption("Falta!");
-    breakT = 0; breakSide = null; // dead ball — any break is over
+    breakT = 0; breakSide = null; penaltyShot = false; // dead ball — any break is over
     ticker("Falta");
     // ~22% of fouls booked (3.5% straight red) → real ~3.5 yellows + ~0.2 reds. Fouls
     // concentrate on the pressers, so an ALREADY-BOOKED fouler is carded again at a
     // reduced rate — the ref's second-yellow reluctance + the player easing off; without
     // it, second yellows stacked into ~0.8 reds/match (real ~0.2).
     if (R() < (bookings[fouler.id] ? 0.09 : 0.22)) card(fouler, R() < 0.035 ? "red" : "yellow");
+  }
+
+  /** Spot kick: the fouled side's best finisher against the keeper — the ceremony is a
+   * long dead-ball pause (no wall, no tackling), then a near-unstoppable-by-bodies
+   * attempt resolved purely by aim + the keeper (real pens: ~76% scored). */
+  function penalty(attSide: Side, fouler: P) {
+    pens[attSide] += 1;
+    const spotY = attSide === "home" ? 88 : 12;
+    ball.x = 50; ball.y = spotY; ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0;
+    const taker = outfield(attSide).reduce((b, m) => (m.rating > b.rating ? m : b), outfield(attSide)[0]);
+    giveBallTo(taker);
+    penaltyFor = attSide;
+    freeKick = false; // no wall on a penalty
+    decideT = rnd(1.5, 1.9); // the ceremony — spot placed, keeper set, crowd holds its breath
+    settleT = 2.0; // nobody may challenge the taker
+    caption("Pênalti!");
+    ticker("Pênalti");
+    if (R() < 0.35) card(fouler, R() < 0.12 ? "red" : "yellow"); // box fouls get booked more
   }
 
   function doCross(p: P) {
@@ -458,6 +483,16 @@ export function createMatchSim(
 
   function decide() {
     if (!carrier) return;
+    if (penaltyFor === carrier.side) {
+      // the STRIKE: shoot() from the spot (12 out, central → its aim spray is naturally
+      // tight and its on-target check applies — pens CAN be blazed wide); forced high
+      // xG so only the keeper roll stands between spot and net. Real pens ≈ 76% scored.
+      penaltyFor = null;
+      shoot(carrier);
+      penaltyShot = true;
+      if (scoring) attemptXG = 0.78; // spot-kick conversion reference (pGoal bends it by keeper)
+      return;
+    }
     if (carrier.role === "Goleiro") { distribute(carrier); return; }
     if (forceCross) { doCross(carrier); return; }
 
@@ -614,6 +649,13 @@ export function createMatchSim(
       return { tx: gx, ty: gy };
     }
 
+    // penalty ceremony: everyone except the taker and the keepers HOLDS at the edge of
+    // the box (the referee's arc) until the kick is away (keepers returned above)
+    if (penaltyFor && p !== carrier) {
+      const edgeY = penaltyFor === "home" ? 78 : 22;
+      return { tx: clamp(26 + (p.ax / 100) * 48, 26, 74), ty: edgeY + rnd(-2, 2) };
+    }
+
     // corner: attackers crowd the box near/far post, defenders drop in to guard
     if (cornerDelivery) {
       const attackY = up ? 84 : 16;
@@ -767,7 +809,7 @@ export function createMatchSim(
       integrateBall(dt, SHOT_FRICTION);
       const attSide: Side = attemptSide; // stable narrowing (branches below null attemptSide)
       const defSide: Side = attSide === "home" ? "away" : "home";
-      const blocker = team(defSide).find((d) => dist(d.x, d.y, ball.x, ball.y) < BLOCK_R);
+      const blocker = penaltyShot ? undefined : team(defSide).find((d) => dist(d.x, d.y, ball.x, ball.y) < BLOCK_R);
       if (blocker) {
         if (blocker.role === "Goleiro") { goalKick(defSide, "Defesa!"); ticker("Defesa"); }
         else if (R() < 0.22) {
@@ -785,6 +827,7 @@ export function createMatchSim(
       } else {
         const reached = attemptSide === "home" ? ball.y >= 95 : ball.y <= 5;
         if (reached) {
+          penaltyShot = false;
           if (attemptOnTarget) {
             onTarget[attSide] += 1; // real definition: reached the frame (blocked shots excluded)
             let scored = false;
@@ -856,8 +899,12 @@ export function createMatchSim(
       // whole real-football budget (~15-22 fouls, ~3-4 bookings a match — the
       // calibration harness gates both; the old 1.1 rate only produced ~6 fouls).
       // late-match fatigue: tired defenders mistime challenges — tackles fade, fouls
-      // rise (real fouls/cards cluster late; the late-goal surge needs the fade too)
-      const foulRate = clamp(2.9 * (carrier.rating / presser.rating), 1.6, 5.0) * (1 + 0.3 * matchProgress);
+      // rise (real fouls/cards cluster late; the late-goal surge needs the fade too).
+      // Inside the box the whistle costs a PENALTY: refs require a clear foul and
+      // defenders challenge with real care — without the 0.18 damping the pen rate
+      // came out ~1.7/match (real ~0.3).
+      const inPenBox = Math.abs(carrier.x - 50) < 22 && (carrier.side === "home" ? carrier.y > 84 : carrier.y < 16);
+      const foulRate = clamp(2.9 * (carrier.rating / presser.rating), 1.6, 5.0) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.18 : 1);
       const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.34 * matchProgress);
       if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
       else if (near && R() < foulRate * dt) foul(carrier, presser);
@@ -970,7 +1017,7 @@ export function createMatchSim(
     return {
       goals: { ...goals },
       events: recorded.map((e) => ({ ...e })),
-      stats: { shots: { ...shots }, onTarget: { ...onTarget }, corners: { ...corners }, fouls: { ...foulsBy } },
+      stats: { shots: { ...shots }, onTarget: { ...onTarget }, corners: { ...corners }, fouls: { ...foulsBy }, pens: { ...pens } },
     };
   }
 
