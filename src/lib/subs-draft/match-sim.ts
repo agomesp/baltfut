@@ -34,9 +34,18 @@ export interface PitchEvent {
   player: string;
   playerId: string;
 }
+/** Per-side match-stat counters the pitch produced — the calibration harness gates
+ * these against real-football bands, and a match-stats panel can render them. */
+export interface PitchStats {
+  shots: { home: number; away: number };
+  onTarget: { home: number; away: number };
+  corners: { home: number; away: number };
+  fouls: { home: number; away: number }; // committed BY that side
+}
 export interface PitchResult {
   goals: { home: number; away: number };
   events: PitchEvent[];
+  stats: PitchStats;
 }
 
 export type Side = "home" | "away";
@@ -145,6 +154,9 @@ export function createMatchSim(
   const all = [...home, ...away];
   const ball = { x: 50, y: 50, vx: 0, vy: 0, z: 0, vz: 0 }; // z = height above the pitch
   const shots = { home: 0, away: 0 };
+  const onTarget = { home: 0, away: 0 };
+  const corners = { home: 0, away: 0 };
+  const foulsBy = { home: 0, away: 0 };
   const possFrames = { home: 0, away: 0 };
   const bookings: Record<string, Card> = {};
   const sentOff = new Set<string>();
@@ -271,6 +283,7 @@ export function createMatchSim(
   }
 
   function corner(attSide: Side) {
+    corners[attSide] += 1;
     ball.x = ball.x < 50 ? 2 : 98;
     ball.y = attSide === "home" ? 98 : 2;
     ball.vx = 0; ball.vy = 0;
@@ -302,7 +315,11 @@ export function createMatchSim(
     const g = ATTACK[p.side];
     const acc = clamp((p.rating - 55) / 45, 0.3, 1) * (header ? 0.75 : 1);
     const dg = dist(ball.x, ball.y, g.x, g.y);
-    const aimX = clamp(g.x + (1 - acc) * rnd(-9, 9) + rnd(-3, 3) + dg * 0.06 * rnd(-1, 1), 28, 72);
+    // Aim error wide enough that MISSES genuinely happen (real football: only ~a third
+    // of shots hit the frame). Range and poor finishing widen the spray; the calibration
+    // harness gates the on-target fraction. Misses go out for goal kicks; deflected/
+    // parried attempts go behind for corners — the whole byline ecosystem needs these.
+    const aimX = clamp(g.x + (1 - acc) * rnd(-16, 16) + rnd(-6, 6) + dg * 0.14 * rnd(-1, 1), 20, 80);
     attemptOnTarget = Math.abs(aimX - g.x) < 8;
     attemptSide = p.side;
     if (scoring) {
@@ -349,13 +366,18 @@ export function createMatchSim(
   }
 
   function foul(victim: P, fouler: P) {
+    foulsBy[fouler.side] += 1;
     ball.x = victim.x; ball.y = victim.y; ball.vx = 0; ball.vy = 0;
     giveBallTo(nearest(team(victim.side), ball.x, ball.y));
     freeKick = true;
     decideT = rnd(1.0, 1.5); // dead ball — the wall forms
     caption("Falta!");
     ticker("Falta");
-    if (R() < 0.25) card(fouler, R() < 0.06 ? "red" : "yellow");
+    // ~22% of fouls booked (3.5% straight red) → real ~3.5 yellows + ~0.2 reds. Fouls
+    // concentrate on the pressers, so an ALREADY-BOOKED fouler is carded again at a
+    // reduced rate — the ref's second-yellow reluctance + the player easing off; without
+    // it, second yellows stacked into ~0.8 reds/match (real ~0.2).
+    if (R() < (bookings[fouler.id] ? 0.09 : 0.22)) card(fouler, R() < 0.035 ? "red" : "yellow");
   }
 
   function doCross(p: P) {
@@ -448,12 +470,18 @@ export function createMatchSim(
     type Opt = { kind: "shoot" | "cross" | "pass" | "dribble"; target?: P; score: number };
     const opts: Opt[] = [];
 
-    // SHOOT — an xG-ish estimate
+    // SHOOT — an xG-ish estimate. The 1.55 appetite gain targets the real ~10-12
+    // shots/team (was ~7): speculative range efforts now exist AND genuinely miss
+    // (the widened aim spray), so extra volume doesn't inflate goals.
     const angle = 1 - Math.abs(carrier.x - 50) / 50; // 1 central, 0 at the touchline
-    const distF = clamp(1 - (dg - 6) / 32, 0, 1); // 1 close, 0 by ~38 out
+    const distF = clamp(1 - (dg - 6) / 36, 0, 1); // 1 close, 0 by ~42 out
     const shotLane = clamp(laneClearance(carrier.x, carrier.y, goal.x, goal.y, oppOut) / 6, 0, 1);
     const xg = distF * (0.35 + 0.65 * angle) * (0.25 + 0.75 * shotLane);
-    opts.push({ kind: "shoot", score: xg * 1.25 });
+    // the flat 0.14 term is the SPECULATIVE appetite: in range but with weak pass
+    // options, real players let fly from distance — those low-xG efforts mostly miss
+    // (the aim spray) or get blocked, supplying the real ~12 shots/team + the byline
+    // ecosystem (goal kicks, corners) without inflating goals.
+    opts.push({ kind: "shoot", score: xg * 2.6 + (dg < 30 ? 0.14 : 0) });
 
     // CROSS from wide + advanced
     if ((carrier.x < 26 || carrier.x > 74) && dg < 36) {
@@ -680,11 +708,15 @@ export function createMatchSim(
       }
     } else if (ballState === "attempt" && attemptSide) {
       integrateBall(dt, SHOT_FRICTION);
-      const defSide: Side = attemptSide === "home" ? "away" : "home";
+      const attSide: Side = attemptSide; // stable narrowing (branches below null attemptSide)
+      const defSide: Side = attSide === "home" ? "away" : "home";
       const blocker = team(defSide).find((d) => dist(d.x, d.y, ball.x, ball.y) < BLOCK_R);
       if (blocker) {
         if (blocker.role === "Goleiro") { goalKick(defSide, "Defesa!"); ticker("Defesa"); }
-        else {
+        else if (R() < 0.22) {
+          // the block deflects behind the byline — corner (a real corner source)
+          corner(attSide);
+        } else {
           ball.vx = ball.vx * -0.25 + rnd(-14, 14);
           ball.vy = ball.vy * -0.25 + rnd(-6, 6);
           ballState = "loose";
@@ -697,17 +729,25 @@ export function createMatchSim(
         const reached = attemptSide === "home" ? ball.y >= 95 : ball.y <= 5;
         if (reached) {
           if (attemptOnTarget) {
+            onTarget[attSide] += 1; // real definition: reached the frame (blocked shots excluded)
             let scored = false;
-            if (scoring && attemptShooter && attemptSide) {
+            if (scoring && attemptShooter) {
               // resolve the on-target chance: xG vs this keeper. save=0.62 is the
               // reference (xG is average-keeper-calibrated); a better/worse GK bends it.
+              // NOTE the selection effect the aim spray created: long shots now miss the
+              // frame far more, so the ON-TARGET population skews close/central = high
+              // xG — the raw xG needs no extra gain to hit real conversion (~2.5 goals).
               const gk = attemptKeeper;
               const save = gk ? clamp(0.5 + (gk.rating - 70) / 90, 0.42, 0.82) : 0.5;
-              const pGoal = clamp(attemptXG * ((1 - save) / (1 - 0.62)), 0.01, 0.95);
-              if (R() < pGoal) { const sd = attemptSide, sc = attemptShooter; attemptSide = null; goal(sd, sc); scored = true; }
+              const pGoal = clamp(attemptXG * ((1 - save) / (1 - 0.62)), 0.02, 0.95);
+              if (R() < pGoal) { const sc = attemptShooter; attemptSide = null; goal(attSide, sc); scored = true; }
             }
             if (scored) {
               // goal produced — kickoff already restarted play; nothing more to resolve
+            } else if (R() < 0.3) {
+              // parried behind for a corner (keepers push firm shots around the post)
+              attemptSide = null;
+              corner(attSide);
             } else if (R() < 0.55) { goalKick(defSide, "Defesa!"); ticker("Defesa"); }
             else {
               ball.y = attemptSide === "home" ? 88 : 12;
@@ -721,6 +761,7 @@ export function createMatchSim(
             }
           } else {
             goalKick(defSide, "Pra fora!");
+            ticker("Pra fora");
           }
         } else if (checkOut()) {
           attemptSide = null;
@@ -753,10 +794,10 @@ export function createMatchSim(
       decideT -= dt;
       const presser = nearest(opp(carrier.side).filter((p) => p.role !== "Goleiro"), carrier.x, carrier.y);
       const near = dist(presser.x, presser.y, carrier.x, carrier.y) < 4.0;
-      // fouls now come from LEGIT challenges (the scramble ping-pong that used to
-      // manufacture them is fixed), so the per-challenge rate is higher to keep a
-      // realistic ~2-4 bookings/match.
-      const foulRate = clamp(1.1 * (carrier.rating / presser.rating), 0.6, 1.9);
+      // fouls come from LEGIT challenges only, so the per-challenge rate carries the
+      // whole real-football budget (~15-22 fouls, ~3-4 bookings a match — the
+      // calibration harness gates both; the old 1.1 rate only produced ~6 fouls).
+      const foulRate = clamp(2.9 * (carrier.rating / presser.rating), 1.6, 5.0);
       const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6);
       if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
       else if (near && R() < foulRate * dt) foul(carrier, presser);
@@ -782,7 +823,7 @@ export function createMatchSim(
             settleT = 0.9; // the keeper has it safe for a beat before distributing
             caption("Defesa do goleiro!");
             ticker("Defesa");
-          } else if (best.role !== "Goleiro" && dist(best.x, best.y, g.x, g.y) < 16 && R() < 0.6) { lastTouch = best.side; shoot(best); }
+          } else if (best.role !== "Goleiro" && dist(best.x, best.y, g.x, g.y) < 18 && R() < 0.65) { lastTouch = best.side; shoot(best); }
           else giveBallTo(best);
         }
       }
@@ -864,7 +905,11 @@ export function createMatchSim(
   }
 
   function getResult(): PitchResult {
-    return { goals: { ...goals }, events: recorded.map((e) => ({ ...e })) };
+    return {
+      goals: { ...goals },
+      events: recorded.map((e) => ({ ...e })),
+      stats: { shots: { ...shots }, onTarget: { ...onTarget }, corners: { ...corners }, fouls: { ...foulsBy } },
+    };
   }
 
   return { step, snapshot, scoreFor, getResult };
