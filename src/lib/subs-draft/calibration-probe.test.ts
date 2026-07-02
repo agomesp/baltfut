@@ -17,6 +17,7 @@ describe.runIf(process.env.PROBE)("probe: match-economy means (dev tool)", () =>
     const home = fieldLayout(field[0], autoLineup(field[0], "4-4-2", {}), "home");
     const away = fieldLayout(field[1], autoLineup(field[1], "4-3-3", {}), "away");
     let goals = 0, shots = 0, onT = 0, corners = 0, fouls = 0, pens = 0, yellows = 0, reds = 0, zz = 0;
+    const minutes: number[] = [];
     const t0 = performance.now();
     for (let k = 0; k < N; k++) {
       const sim = createMatchSim(home, away, SEED_BASE + k, { scoring: true });
@@ -32,6 +33,7 @@ describe.runIf(process.env.PROBE)("probe: match-economy means (dev tool)", () =>
       pens += r.stats.pens.home + r.stats.pens.away;
       yellows += r.events.filter((e) => e.type === "yellow").length;
       reds += r.events.filter((e) => e.type === "red").length;
+      for (const e of r.events) if (e.type === "goal") minutes.push(e.minute);
     }
     const ms = (performance.now() - t0) / N;
     const line = (label: string, v: string) => process.stdout.write(`${label.padEnd(18)}${v}\n`);
@@ -44,6 +46,9 @@ describe.runIf(process.env.PROBE)("probe: match-economy means (dev tool)", () =>
     line("pens/match", (pens / N).toFixed(2));
     line("yellows/match", `${(yellows / N).toFixed(2)}  reds ${(reds / N).toFixed(2)}`);
     line("0-0 rate", `${((zz / N) * 100).toFixed(0)}%`);
+    const tot = minutes.length || 1;
+    const share = (lo: number, hi: number) => `${((minutes.filter((m) => m >= lo && m <= hi).length / tot) * 100).toFixed(0)}%`;
+    line("goal timing", `1-30' ${share(1, 30)}  31-60' ${share(31, 60)}  61-90' ${share(61, 90)}  (76-90' ${share(76, 90)})`);
     line("headless ms", ms.toFixed(1));
     expect(true).toBe(true);
   }, 600_000);

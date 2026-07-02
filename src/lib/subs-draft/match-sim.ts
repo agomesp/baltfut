@@ -21,8 +21,11 @@
 
 import { mulberry32, randInt32 } from "./prng";
 import { TOTAL_STEPS } from "./sim-timing";
+import { laneClearance, onwardValue, pickOverloadFlank, coachAdjust, COACH_ZERO, type CoachAdjust } from "./brain";
 import type { Cat } from "./data";
 import type { FieldSlot } from "./squad";
+
+export { laneClearance } from "./brain"; // pure geometry lives in brain.ts (re-exported for existing importers)
 
 const FULL_MIN = 90; // a match is 90 minutes for the recorded event timestamps
 
@@ -126,27 +129,6 @@ const dist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax -
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.min(1, t);
 
-/**
- * How CLEAR a pass/shot lane is: the smallest perpendicular distance of any point
- * in `list` whose projection falls BETWEEN the endpoints. Large = an open lane; small
- * = a defender sitting in the pass. The utility AI uses this so passes "see" the
- * defence instead of firing blind.
- */
-export function laneClearance(fx: number, fy: number, tx: number, ty: number, list: { x: number; y: number }[]): number {
-  const dx = tx - fx;
-  const dy = ty - fy;
-  const len2 = dx * dx + dy * dy || 1;
-  const len = Math.sqrt(len2);
-  let min = 99;
-  for (const p of list) {
-    const t = ((p.x - fx) * dx + (p.y - fy) * dy) / len2;
-    if (t <= 0.05 || t >= 0.98) continue; // only bodies between the two points
-    const perp = Math.abs((p.x - fx) * dy - (p.y - fy) * dx) / len;
-    if (perp < min) min = perp;
-  }
-  return min;
-}
-
 // A0 keystone: the whole sim draws from ONE seeded stream (see prng.ts), so the
 // same seed replays the exact same match. `seed` defaults to entropy → the UI and
 // variety-seeking tests behave randomly as before; pass a seed for a fixed replay.
@@ -215,6 +197,17 @@ export function createMatchSim(
   let kickoffPending: Side | null = null; // who restarts once the moment passes
   let presserA: P | null = null; // the PERSISTENT pressing pair (hysteresis — no per-tick churn)
   let presserB: P | null = null;
+  // TEAM INTENTION: a persistent work-it-wide plan — the side commits to overloading
+  // one flank for a few seconds (pass bias + wide runs + the cross it was built for)
+  // instead of re-deciding from scratch every touch. Dies on turnover.
+  const plan = {
+    home: { flank: null as "L" | "R" | null, t: 0 },
+    away: { flank: null as "L" | "R" | null, t: 0 },
+  };
+  // COACH BRAIN: structural style-pack deltas recomputed at halftime/60'/75' and
+  // after every goal — the deterministic "coach" the per-play urgency sits on top of.
+  const coach: Record<Side, CoachAdjust> = { home: COACH_ZERO, away: COACH_ZERO };
+  let coachBucket = 0;
   let scoreSide: Side | null = null;
   let attemptSide: Side | null = null;
   let attemptOnTarget = false;
@@ -251,6 +244,18 @@ export function createMatchSim(
   // real matches OPEN CAGEY — the 1-15' goal bucket is the lowest of the match. Risk
   // appetite ramps from ~0.6 at kickoff to 1.0 by half-time.
   const settled = () => 0.62 + 0.38 * Math.min(1, matchProgress / 0.5);
+
+  // the coach's read for one side (pure mapping in brain.ts; triggers live in
+  // step()/goal()). A ticker line makes a real shift visible in the event feed.
+  const recoach = (announce: boolean) => {
+    for (const s of ["home", "away"] as const) {
+      const o: Side = s === "home" ? "away" : "home";
+      const next = coachAdjust(goals[s] - goals[o], shots[s], shots[o], matchProgress);
+      if (announce && next.lineDelta > coach[s].lineDelta + 1) ticker("Pressão alta");
+      else if (announce && next.lineDelta < coach[s].lineDelta - 1) ticker("Bloco recuado");
+      coach[s] = next;
+    }
+  };
 
   const urgency = (s: Side) => {
     const diff = s === "home" ? goals.away - goals.home : goals.home - goals.away;
@@ -297,6 +302,7 @@ export function createMatchSim(
     const liveSteal = (ballState === "dribble" || ballState === "pass") && !freeKick && p.side !== poss;
     if (liveSteal) { breakT = 3.5 * settled(); breakSide = p.side; } // early breaks are less committed (compact, cautious)
     else if (breakSide !== null && p.side !== breakSide) { breakT = 0; breakSide = null; } // changed hands — break over
+    if (p.side !== poss) { const lost = plan[poss]; lost.flank = null; lost.t = 0; } // the plan dies with the possession
     carrier = p;
     poss = p.side;
     lastTouch = p.side;
@@ -446,6 +452,7 @@ export function createMatchSim(
     record("goal", side, shooter);
     caption("GOL!");
     ticker("⚽️ GOL");
+    recoach(false); // the coach reacts to the scoreline (silently — the goal owns the feed)
     // the MOMENT: ball dead in the net, both teams walk back to shape, THEN the
     // conceding side restarts — kickoff no longer fires mid-goalmouth-stampede
     ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0;
@@ -610,8 +617,24 @@ export function createMatchSim(
     const mates = outfield(side).filter((p) => p !== carrier);
     const oppOut = oppOutfield;
     const opps = oppOut.length ? oppOut : defenders;
+    const defSideName: Side = side === "home" ? "away" : "home";
     const pd = nearest(defenders, carrier.x, carrier.y);
-    const pressed = dist(pd.x, pd.y, carrier.x, carrier.y) < style[side === "home" ? "away" : "home"].pressDist;
+    const pressed = dist(pd.x, pd.y, carrier.x, carrier.y) < style[defSideName].pressDist + coach[defSideName].pressDelta;
+    const breaking = breakT > 0 && breakSide === side;
+    // the coach's directness delta lays over team identity for every forward choice
+    const direct = style[side].directness + coach[side].directDelta;
+
+    // TEAM INTENTION: central congestion in the attacking half → commit to
+    // OVERLOADING the emptier flank for a spell (the plan the passes/runs/cross
+    // below all read). One decision, several seconds of coordinated behavior.
+    const car = carrier;
+    const crowd = opps.filter((d) => dist(d.x, d.y, car.x, car.y) < 14).length;
+    const inAttackHalf = dir > 0 ? carrier.y > 55 : carrier.y < 45;
+    if (!plan[side].flank && inAttackHalf && crowd >= 2 && !breaking && matchProgress > 0.15) {
+      plan[side].flank = pickOverloadFlank(oppOut); // overloads come after the opening feeling-out
+      plan[side].t = rnd(6, 9);
+    }
+    const flank = plan[side].flank;
 
     type Opt = { kind: "shoot" | "cross" | "pass" | "switch" | "dribble"; target?: P; score: number };
     const opts: Opt[] = [];
@@ -642,13 +665,17 @@ export function createMatchSim(
     // the duel decides the header, defenders clear most, corners + second balls fall out
     if ((carrier.x < 30 || carrier.x > 70) && dg < 44) {
       const boxMates = mates.filter((m) => (dir > 0 ? m.y > 74 : m.y < 26)).length;
-      opts.push({ kind: "cross", score: 0.5 + boxMates * 0.2 });
+      // the overload plan CULMINATES here: reaching the committed flank makes the
+      // cross the intended payoff, not just another option
+      const planned = flank && (flank === "L" ? carrier.x < 30 : carrier.x > 70) ? 0.25 : 0;
+      opts.push({ kind: "cross", score: 0.5 + boxMates * 0.2 + planned });
     }
 
-    // PASS to each mate — progress × openness × lane-safety × sensible range.
-    // On the BREAK, forward progress is worth more (vertical, direct play while the
-    // opponent is out of shape) — the counter-attack's decision signature.
-    const breaking = breakT > 0 && breakSide === side;
+    // PASS to each mate — progress × openness × lane-safety × sensible range,
+    // then LOOKAHEAD: the receiver's own best next action (shoot, or an open man
+    // further on — onwardValue self-excludes the receiver) multiplies in, so the
+    // carrier plays the pass BEFORE the pass. On the BREAK, forward progress is
+    // worth more; a mate on the plan's flank carries the overload bias.
     for (const m of mates) {
       const ahead = dir > 0 ? m.y - carrier.y : carrier.y - m.y;
       const nd = nearest(opps, m.x, m.y);
@@ -656,12 +683,17 @@ export function createMatchSim(
       const lane = clamp(laneClearance(ball.x, ball.y, m.x, m.y, oppOut) / 5, 0, 1);
       const range = dist(carrier.x, carrier.y, m.x, m.y);
       // a leader protecting the scoreline keeps it SHORT and safe (recenter ~15);
-      // otherwise the preferred pass length is team identity (direct teams go longer)
-      const rangeF = clamp(1 - Math.abs(range - (u < -0.3 ? 15 : 12 + 9 * style[side].directness)) / 46, 0.25, 1);
-      const progF = clamp(0.5 + ahead / 38, 0.05, 1.25) * (breaking && ahead > 0 ? 1.35 : 1) * (ahead > 0 ? style[side].directness : 1);
+      // otherwise the preferred pass length is team identity + the coach's read
+      const rangeF = clamp(1 - Math.abs(range - (u < -0.3 ? 15 : 12 + 9 * direct)) / 46, 0.25, 1);
+      const progF = clamp(0.5 + ahead / 38, 0.05, 1.25) * (breaking && ahead > 0 ? 1.35 : 1) * (ahead > 0 ? direct : 1);
       // a mate ON A RUN is the ball a real carrier looks for first
       const runBoost = m.runT > 0 && ahead > 4 ? 1.35 : 1;
-      opts.push({ kind: "pass", target: m, score: progF * (0.4 + 0.6 * openness) * (0.3 + 0.7 * lane) * rangeF * runBoost });
+      // lookahead sharpens WITH the match (settled): combinations open up as teams
+      // stop feeling each other out — full incisiveness from kickoff front-loaded
+      // the goal-timing curve (40% of goals before 30')
+      const onward = onwardValue(m.x, m.y, goal, mates, oppOut) * settled();
+      const planBoost = flank && (flank === "L" ? m.x < 40 : m.x > 60) ? 1.3 : 1;
+      opts.push({ kind: "pass", target: m, score: progF * (0.4 + 0.6 * openness) * (0.3 + 0.7 * lane) * rangeF * runBoost * (0.7 + 0.5 * onward) * planBoost });
     }
 
     // SWITCH the play: the big lofted diagonal to the far flank — it FLIES over the
@@ -677,8 +709,6 @@ export function createMatchSim(
         const o = clamp(dist(nd.x, nd.y, m.x, m.y) / 12, 0, 1);
         if (o > swOpen) { swOpen = o; sw = m; }
       }
-      const car = carrier;
-      const crowd = opps.filter((d) => dist(d.x, d.y, car.x, car.y) < 14).length;
       if (sw && swOpen > 0.62 && crowd >= 2) opts.push({ kind: "switch", target: sw, score: 0.18 + 0.28 * swOpen });
     }
 
@@ -717,12 +747,16 @@ export function createMatchSim(
       return;
     }
     // a leader on the ball late slows the game down (time management on the dribble)
-    if (chosen.kind === "dribble" || !chosen.target) { decideT = rnd(0.25, 0.55) * (u < -0.3 ? 1.35 : 1) / style[side].tempo; return; }
+    if (chosen.kind === "dribble" || !chosen.target) { decideT = rnd(0.25, 0.55) * (u < -0.3 ? 1.35 : 1) / (style[side].tempo + coach[side].tempoDelta); return; }
 
     // PASS — accuracy + stray + through-ball lead + offside
     const tg = chosen.target;
     const aheadTg = dir > 0 ? tg.y - carrier.y : carrier.y - tg.y;
-    const through = aheadTg > 8 && R() < (breaking ? 0.7 : u > 0.3 ? 0.65 : 0.5); // slipped ahead of a run — likelier on the break / when chasing
+    // slipped ahead of a run — likelier on the break / when chasing. The base rate
+    // ramps with settled(): early through-balls fed the breakaway pipeline that
+    // front-loaded the goal-timing curve at 180s (the killers come out as the game
+    // stretches; real openings are cagey)
+    const through = aheadTg > 8 && R() < (breaking ? 0.7 : u > 0.3 ? 0.65 : 0.5 * settled());
     // ONE-TWO: a short pass under pressure and the passer BURSTS beyond his marker for
     // the return — the give-and-go. His dart is a committed run, so the receiver's own
     // pass-to-the-run logic finds him back; the whole combination emerges from the two
@@ -839,7 +873,10 @@ export function createMatchSim(
       // second-to-last defender — one committed line for ~2s that a through-ball can
       // actually find (better players make more runs). This is what "movement" is.
       const runner = p.role === "Atacante" || (p.role === "Meio-campo" && (dir > 0 ? p.y > 45 : p.y < 55));
-      if (runner && R() < ((p.role === "Atacante" ? 0.3 : 0.16) + (p.rating - 70) / 150) * settled() * (1 + 0.8 * Math.max(0, urgency(p.side)))) {
+      // the overload plan asks ITS flank's wide men for the extra darts
+      const planF = plan[p.side].flank;
+      const onPlanFlank = planF && (planF === "L" ? p.ax < 28 : p.ax > 72) ? 1.5 : 1;
+      if (runner && R() < ((p.role === "Atacante" ? 0.3 : 0.16) + (p.rating - 70) / 150) * settled() * (1 + 0.8 * Math.max(0, urgency(p.side))) * onPlanFlank) {
         const ys = opp(p.side).map((o) => o.y).sort((a, b) => (dir > 0 ? b - a : a - b));
         const defLine = ys[1] ?? ys[0] ?? (dir > 0 ? 92 : 8); // second-to-last defender
         const gap = dir > 0 ? defLine - p.y : p.y - defLine;
@@ -877,7 +914,7 @@ export function createMatchSim(
     const uDef = urgency(p.side);
     // tired legs can't hold a high line — the whole block SAGS as the match ages
     // (real late-game lines sink), gifting closer shooting positions late
-    const depth = (breakT > 0 && breakSide === poss ? 27 : style[p.side].lineDepth) + 7 * matchProgress + 6 * Math.max(0, -uDef) - 5 * Math.max(0, uDef);
+    const depth = (breakT > 0 && breakSide === poss ? 27 : style[p.side].lineDepth + coach[p.side].lineDelta) + 7 * matchProgress + 6 * Math.max(0, -uDef) - 5 * Math.max(0, uDef);
     const line = clamp(ball.y - dir * depth, lo, hi); // the shared defensive line
     if (p.role === "Defensor") {
       const m = marks.length ? nearest(marks, p.x, p.y) : null;
@@ -974,6 +1011,12 @@ export function createMatchSim(
     // scoring drives the clock from the fixed-step counter (headless == live); the
     // cosmetic path keeps taking the caller's external progress unchanged.
     matchProgress = scoring ? clamp(stepIndex / TOTAL_STEPS, 0, 1) : clamp(progress, 0, 1);
+    // the coach re-reads the match at halftime / ~60' / ~75' (goals retrigger him too)
+    const bucket = matchProgress >= 0.75 ? 3 : matchProgress >= 0.6 ? 2 : matchProgress >= 0.5 ? 1 : 0;
+    if (bucket !== coachBucket) { coachBucket = bucket; recoach(true); }
+    for (const s of ["home", "away"] as const) {
+      if (plan[s].t > 0) { plan[s].t -= dt; if (plan[s].t <= 0) plan[s].flank = null; }
+    }
     if (captionT > 0) captionT -= dt;
     if (settleT > 0) settleT -= dt;
     if (breakT > 0) { breakT -= dt; if (breakT <= 0) breakSide = null; }
@@ -1051,7 +1094,7 @@ export function createMatchSim(
               // position yields a cleaner strike (the resolve-side half of the fatigue fade)
               // ×0.75: re-anchored at 180s — the longer clock's on-target population
               // converted ~25% hot (P(goal|onT) 0.37 vs real ~0.30)
-              const pGoal = clamp(attemptXG * 0.75 * (1 + 0.12 * matchProgress) * ((1 - save) / (1 - 0.62)), 0.02, 0.95);
+              const pGoal = clamp(attemptXG * 0.75 * (1 + 0.16 * matchProgress) * ((1 - save) / (1 - 0.62)), 0.02, 0.95);
               if (R() < pGoal) { const sc = attemptShooter; attemptSide = null; goal(attSide, sc); scored = true; }
             }
             if (scored) {
@@ -1202,7 +1245,7 @@ export function createMatchSim(
       const inPenBox = Math.abs(carrier.x - 50) < 22 && (carrier.side === "home" ? carrier.y > 84 : carrier.y < 16);
       // per-challenge rate re-anchored at 180s: carriers spend ~3× longer under
       // pressure per match, so the 60s-era 5.6 produced ~28 fouls (real ~22)
-      const foulRate = clamp(4.2 * (carrier.rating / presser.rating), 2.4, 6.4) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.18 : 1);
+      const foulRate = clamp(4.0 * (carrier.rating / presser.rating), 2.3, 6.1) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.16 : 1);
       const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.28 * matchProgress);
       if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
       else if (near && R() < foulRate * dt) foul(carrier, presser);
