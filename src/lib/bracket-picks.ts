@@ -1,12 +1,16 @@
-import type { KnockoutColumn } from "@/lib/espn";
+import type { KnockoutColumn, Match } from "@/lib/espn";
 import { matchShootout } from "@/lib/espn";
-import { R16_FROM_R32, QF_FROM_R16, SF_FROM_QF, FINAL_FROM_SF } from "@/lib/bracket-shape";
+import { R16_FROM_R32, QF_FROM_R16, SF_FROM_QF, FINAL_FROM_SF, ROUND_SIZES } from "@/lib/bracket-shape";
 
 /**
  * Interactive knockout-prediction logic. The user picks a winner for every tie
- * from the round of 32 up to the final; each pick advances that team into the next
- * round's slot (following the real FIFA wiring in `bracket-shape`). Pure and
- * deterministic — the component just stores `picks` and renders `resolveBracketPicks`.
+ * that HASN'T kicked off yet; each pick advances that team into the next round's
+ * slot (following the real FIFA wiring in `bracket-shape`).
+ *
+ * A tie whose real match has STARTED (state ≠ "pre") is LOCKED: it can't be
+ * picked, and the REAL result auto-advances (so a viewer arriving late can't
+ * predict a match already under way). Locked finished matches advance the real
+ * winner; locked live matches wait for the result. Pure and deterministic.
  */
 
 /** Round index: 0 = 32-avos, 1 = oitavas, 2 = quartas, 3 = semis, 4 = final. */
@@ -14,25 +18,25 @@ export const ROUND_LABELS = ["32-avos", "Oitavas", "Quartas", "Semifinais", "Fin
 
 // Feeder tie numbers (1-based, previous round) for each tie of rounds 1..4.
 const FEEDERS: (readonly (readonly [number, number])[] | null)[] = [
-  null,
-  R16_FROM_R32,
-  QF_FROM_R16,
-  SF_FROM_QF,
-  FINAL_FROM_SF,
+  null, R16_FROM_R32, QF_FROM_R16, SF_FROM_QF, FINAL_FROM_SF,
 ];
 
-/** A round-of-32 tie's two real teams (by code). */
-export interface R32Slot {
-  home: string;
-  away: string;
-}
+const SLUG_BY_ROUND = ["round-of-32", "round-of-16", "quarterfinals", "semifinals", "final"] as const;
 
-/** A tie in the resolved prediction bracket. `home`/`away` are null until both
- *  feeders are picked; `pickedWinner` is the user's chosen advancer. */
+/** A tie in the resolved prediction bracket. */
 export interface PickTie {
   home: string | null;
   away: string | null;
+  /** The user's chosen advancer (null on a locked tie — reality decides it). */
   pickedWinner: string | null;
+  /** Who advances: the pick on an open tie, or the real winner on a locked one. */
+  advancer: string | null;
+  /** The real match kicked off → not editable; reality is used. */
+  locked: boolean;
+  /** Real winner of a locked+finished tie (else null). */
+  realWinner: string | null;
+  /** The locked tie is in progress (no winner yet). */
+  live: boolean;
 }
 
 /** Stable key for a tie position (round + index), used as the picks map key. */
@@ -40,46 +44,81 @@ export function posKey(round: number, tie: number): string {
   return `${round}-${tie}`;
 }
 
+/** Real matches grouped by round index (0..4), from the live knockout columns. */
+function roundMatches(columns: KnockoutColumn[]): Match[][] {
+  const bySlug = new Map(columns.map((c) => [c.slug, c.matches]));
+  return SLUG_BY_ROUND.map((slug) => bySlug.get(slug) ?? []);
+}
+
+/** The shootout-aware winner code of a finished match, else null. */
+function winnerOf(m: Match): string | null {
+  if (m.state !== "post" || m.homeScore == null || m.awayScore == null) return null;
+  const so = matchShootout(m);
+  const home = so ? so.winner === "home" : m.homeScore >= m.awayScore;
+  return home ? m.home.abbreviation : m.away.abbreviation;
+}
+
 /**
- * Resolve the whole prediction bracket from the round-of-32 real teams + the
- * user's picks. Rounds 1..4 fill from the previous round's picked winners; a pick
- * that no longer matches its (possibly-changed) slot teams is dropped, so
- * de-selecting a team cascades forward automatically. Returns the rendered rounds,
- * the champion (final pick), and the CLEANED picks to store back.
+ * Resolve the whole prediction bracket from the live knockout + the user's picks.
+ * `frozen` = a saved palpite: the user's picks stay put and are scored; only ties
+ * they never picked fall back to reality. Editing (`frozen` false): every started
+ * tie locks to reality and any pick on it is dropped. Returns the rendered rounds,
+ * the champion (final advancer) and the CLEANED picks to store back.
  */
 export function resolveBracketPicks(
-  r32: R32Slot[],
+  columns: KnockoutColumn[],
   picks: Record<string, string>,
+  frozen = false,
 ): { rounds: PickTie[][]; champion: string | null; picks: Record<string, string> } {
+  const real = roundMatches(columns);
   const clean: Record<string, string> = { ...picks };
   const rounds: PickTie[][] = [];
 
-  rounds[0] = r32.map((m, i) => {
-    const k = posKey(0, i);
-    let p: string | null = clean[k] ?? null;
-    if (p && p !== m.home && p !== m.away) {
-      delete clean[k];
-      p = null;
-    }
-    return { home: m.home, away: m.away, pickedWinner: p };
-  });
+  for (let r = 0; r <= 4; r++) {
+    const feeders = FEEDERS[r];
+    rounds[r] = Array.from({ length: ROUND_SIZES[r] }, (_, i) => {
+      const m = real[r]?.[i] ?? null;
+      const started = !!m && m.state !== "pre";
+      const k = posKey(r, i);
+      const hasPick = clean[k] != null;
+      // Editing: any started tie locks. Saved: only started ties the user never
+      // picked lock (their own picks stay, to be scored green/red).
+      const locked = frozen ? started && !hasPick : started;
 
-  for (let r = 1; r <= 4; r++) {
-    const feeders = FEEDERS[r]!;
-    rounds[r] = feeders.map(([a, b], j) => {
-      const home = rounds[r - 1][a - 1]?.pickedWinner ?? null;
-      const away = rounds[r - 1][b - 1]?.pickedWinner ?? null;
-      const k = posKey(r, j);
+      if (locked && m) {
+        delete clean[k];
+        const rw = winnerOf(m);
+        return {
+          home: m.home.abbreviation,
+          away: m.away.abbreviation,
+          pickedWinner: null,
+          advancer: rw,
+          locked: true,
+          realWinner: rw,
+          live: m.state === "in",
+        };
+      }
+
+      let home: string | null;
+      let away: string | null;
+      if (r === 0) {
+        home = m ? m.home.abbreviation : null;
+        away = m ? m.away.abbreviation : null;
+      } else {
+        const [a, b] = feeders![i];
+        home = rounds[r - 1][a - 1].advancer;
+        away = rounds[r - 1][b - 1].advancer;
+      }
       let p: string | null = clean[k] ?? null;
       if (p && p !== home && p !== away) {
         delete clean[k];
         p = null;
       }
-      return { home, away, pickedWinner: p };
+      return { home, away, pickedWinner: p, advancer: p, locked: false, realWinner: null, live: false };
     });
   }
 
-  return { rounds, champion: rounds[4][0].pickedWinner, picks: clean };
+  return { rounds, champion: rounds[4][0].advancer, picks: clean };
 }
 
 /** Toggle a pick: selecting a team sets it, clicking the current pick removes it.
@@ -97,36 +136,24 @@ export function togglePick(
   return next;
 }
 
-const ROUND_BY_SLUG: Record<string, number> = {
-  "round-of-32": 0,
-  "round-of-16": 1,
-  quarterfinals: 2,
-  semifinals: 3,
-  final: 4,
-};
-
-/** The REAL advancer at each tie position, from the live knockout columns — a
- *  finished match's winner (shootout-aware). Positions with no result yet are
- *  absent (they score as "pending"). */
+/** The REAL advancer at each tie position — a finished match's winner. Positions
+ *  with no result yet are absent (they score as "pending"). */
 export function realWinnersByPos(columns: KnockoutColumn[]): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const col of columns) {
-    const round = ROUND_BY_SLUG[col.slug];
-    if (round === undefined) continue; // skip the 3rd-place match
-    col.matches.forEach((m, i) => {
-      if (m.state !== "post" || m.homeScore == null || m.awayScore == null) return;
-      const so = matchShootout(m);
-      const winnerHome = so ? so.winner === "home" : m.homeScore >= m.awayScore;
-      out[posKey(round, i)] = winnerHome ? m.home.abbreviation : m.away.abbreviation;
+  roundMatches(columns).forEach((matches, round) => {
+    matches.forEach((m, i) => {
+      const w = winnerOf(m);
+      if (w) out[posKey(round, i)] = w;
     });
-  }
+  });
   return out;
 }
 
 export type PickVerdict = "correct" | "wrong" | "pending";
 
-/** Score a saved bracket: 0.2 per correct winner, 1 for a correct champion (the
- *  final's winner). Returns the total plus a per-position verdict for green/red. */
+/** Score a saved bracket: 0.2 per correct winner the user PICKED, 1 for a correct
+ *  champion (the final's winner). Locked/reality ties aren't the user's pick, so
+ *  they don't score. Returns the total + a per-position verdict for green/red. */
 export function scoreBracketPicks(
   rounds: PickTie[][],
   realWinners: Record<string, string>,
@@ -138,12 +165,12 @@ export function scoreBracketPicks(
       const pick = tie.pickedWinner;
       if (!pick) return;
       const k = posKey(r, i);
-      const real = realWinners[k];
-      if (!real) {
+      const winner = realWinners[k];
+      if (!winner) {
         byPos[k] = "pending";
         return;
       }
-      if (pick === real) {
+      if (pick === winner) {
         total += r === 4 ? 1 : 0.2;
         byPos[k] = "correct";
       } else {

@@ -13,7 +13,6 @@ import {
   ROUND_LABELS,
   type PickTie,
   type PickVerdict,
-  type R32Slot,
 } from "@/lib/bracket-picks";
 import { ConnectedBracket, type BracketRound } from "@/components/connected-bracket";
 import { useNameLock, NameField } from "@/components/live/palpite-form";
@@ -22,8 +21,17 @@ import { BRIC, JB, SAIRA, LIME, DIM, DIM_2, GOLD, FlagIcon, FlagCrest, ViewHeade
 const STORAGE_KEY = "baltfut_bracket_palpite";
 const GREEN = "#3ee65f";
 const RED = "#ff4d5e";
+const SLATE = "#93a7c4"; // locked "real result" (not the user's pick)
 const card = { borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)" } as const;
 const colHead = { fontFamily: JB, fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" as const, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,0.07)", marginBottom: 6 };
+
+type Tone = "pick" | "correct" | "wrong" | "real";
+const TONE: Record<Tone, { fg: string; bg: string }> = {
+  pick: { fg: LIME, bg: "rgba(200,255,45,0.12)" },
+  correct: { fg: GREEN, bg: "rgba(62,230,95,0.12)" },
+  wrong: { fg: RED, bg: "rgba(255,77,94,0.12)" },
+  real: { fg: SLATE, bg: "rgba(147,167,196,0.12)" },
+};
 
 interface SavedPalpite {
   nickname: string;
@@ -31,47 +39,72 @@ interface SavedPalpite {
   savedAt: string;
 }
 
-/** One clickable side of a tie. Lime when picked (editing); green/red once the
- *  palpite is saved and the match is decided; muted for an empty (unresolved) slot. */
-function TeamSlot({ code, picked, verdict, clickable, onClick }: {
+/** One side of a tie. Highlighted (with `tone`) when it's the advancer — the
+ *  user's pick (lime / green / red) or, on a locked tie, the real winner (slate). */
+function TeamSlot({ code, tone, marker, clickable, onClick }: {
   code: string | null;
-  picked: boolean;
-  verdict: PickVerdict | null;
+  tone: Tone | null;
+  marker: string;
   clickable: boolean;
   onClick: () => void;
 }) {
-  const accent = verdict === "correct" ? GREEN : verdict === "wrong" ? RED : LIME;
-  const bg = picked ? (verdict === "correct" ? "rgba(62,230,95,0.12)" : verdict === "wrong" ? "rgba(255,77,94,0.12)" : "rgba(200,255,45,0.12)") : "transparent";
+  const t = tone ? TONE[tone] : null;
   return (
     <div
       onClick={clickable ? onClick : undefined}
       role={clickable ? "button" : undefined}
       style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "8px 11px", background: bg,
-        cursor: clickable ? "pointer" : "default", opacity: code ? 1 : 0.4, userSelect: "none",
+        display: "flex", alignItems: "center", gap: 8, padding: "8px 11px",
+        background: t ? t.bg : "transparent", cursor: clickable ? "pointer" : "default",
+        opacity: code ? 1 : 0.4, userSelect: "none",
       }}
     >
       {code ? <FlagIcon code={code} size={12} /> : <span style={{ width: 12 }} />}
-      <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13, color: picked ? accent : "#f1f7f0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+      <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 13, color: t ? t.fg : "#f1f7f0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {code ?? "—"}
       </span>
       {code ? <span style={{ fontFamily: BRIC, fontSize: 11, color: DIM, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(code, code)}</span> : null}
-      {picked ? <span style={{ marginLeft: "auto", fontFamily: JB, fontSize: 10, color: accent, flex: "none" }}>▸</span> : null}
+      {marker ? <span style={{ marginLeft: "auto", fontFamily: JB, fontSize: 10, color: t ? t.fg : DIM, flex: "none" }}>{marker}</span> : null}
     </div>
   );
 }
 
-function PickTieCard({ tie, round, tieIndex, verdict, locked, onPick }: {
-  tie: PickTie; round: number; tieIndex: number; verdict: PickVerdict | null; locked: boolean; onPick: (round: number, tie: number, team: string) => void;
+function PickTieCard({ tie, round, tieIndex, verdict, editing, onPick }: {
+  tie: PickTie; round: number; tieIndex: number; verdict: PickVerdict | null; editing: boolean; onPick: (round: number, tie: number, team: string) => void;
 }) {
-  const clickable = !locked && !!tie.home && !!tie.away;
-  const border = verdict === "correct" ? "rgba(62,230,95,0.4)" : verdict === "wrong" ? "rgba(255,77,94,0.4)" : "rgba(255,255,255,0.08)";
+  const clickable = editing && !tie.locked && !!tie.home && !!tie.away;
+
+  // Which team is highlighted, and how.
+  let hi: string | null = null;
+  let tone: Tone | null = null;
+  let marker = "";
+  if (tie.locked) {
+    hi = tie.realWinner; // null while live
+    tone = "real";
+    marker = "🔒";
+  } else if (tie.pickedWinner) {
+    hi = tie.pickedWinner;
+    tone = verdict === "correct" ? "correct" : verdict === "wrong" ? "wrong" : "pick";
+    marker = "▸";
+  }
+
+  const border =
+    tie.live ? "rgba(255,77,94,0.55)" :
+    verdict === "correct" ? "rgba(62,230,95,0.4)" :
+    verdict === "wrong" ? "rgba(255,77,94,0.4)" :
+    tie.locked ? "rgba(147,167,196,0.28)" : "rgba(255,255,255,0.08)";
+
+  const slot = (code: string | null) => (
+    <TeamSlot code={code} tone={code && code === hi ? tone : null} marker={code && code === hi ? marker : ""} clickable={clickable} onClick={() => code && onPick(round, tieIndex, code)} />
+  );
+
   return (
-    <div style={{ ...card, borderColor: border }}>
-      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <TeamSlot code={tie.home} picked={!!tie.home && tie.pickedWinner === tie.home} verdict={tie.pickedWinner === tie.home ? verdict : null} clickable={clickable} onClick={() => tie.home && onPick(round, tieIndex, tie.home)} />
-      </div>
-      <TeamSlot code={tie.away} picked={!!tie.away && tie.pickedWinner === tie.away} verdict={tie.pickedWinner === tie.away ? verdict : null} clickable={clickable} onClick={() => tie.away && onPick(round, tieIndex, tie.away)} />
+    <div style={{ ...card, borderColor: border, position: "relative" }}>
+      {tie.live ? (
+        <span style={{ position: "absolute", top: -7, right: 8, fontFamily: JB, fontSize: 8, letterSpacing: "0.08em", color: "#fff", background: RED, borderRadius: 4, padding: "1px 5px" }}>● AO VIVO</span>
+      ) : null}
+      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>{slot(tie.home)}</div>
+      {slot(tie.away)}
     </div>
   );
 }
@@ -82,10 +115,9 @@ export function BracketPalpiteView({ matches }: { matches: Match[] }) {
   const [saved, setSaved] = useState<SavedPalpite | null>(null);
 
   const columns = useMemo(() => buildKnockout(matches), [matches]);
-  const r32 = useMemo<R32Slot[]>(() => {
+  const drawn = useMemo(() => {
     const col = columns.find((c) => c.slug === "round-of-32");
-    if (!col || col.matches.length !== 16) return [];
-    return col.matches.map((mt) => ({ home: mt.home.abbreviation, away: mt.away.abbreviation }));
+    return !!col && col.matches.length === 16;
   }, [columns]);
   const realWinners = useMemo(() => realWinnersByPos(columns), [columns]);
 
@@ -103,22 +135,22 @@ export function BracketPalpiteView({ matches }: { matches: Match[] }) {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const isSaved = saved != null;
-  const { rounds, champion } = useMemo(() => resolveBracketPicks(r32, picks), [r32, picks]);
+  const { rounds, champion } = useMemo(() => resolveBracketPicks(columns, picks, isSaved), [columns, picks, isSaved]);
   const score = useMemo(() => scoreBracketPicks(rounds, realWinners), [rounds, realWinners]);
 
   const onPick = useCallback((round: number, tie: number, team: string) => {
     if (isSaved) return;
-    setPicks((prev) => resolveBracketPicks(r32, togglePick(prev, round, tie, team)).picks);
-  }, [isSaved, r32]);
+    setPicks((prev) => resolveBracketPicks(columns, togglePick(prev, round, tie, team)).picks);
+  }, [isSaved, columns]);
 
   const onSave = useCallback(() => {
     const finalName = name.trim();
     if (!finalName || !champion) return;
     if (!nameLocked) confirm(finalName);
-    const rec: SavedPalpite = { nickname: finalName, picks: resolveBracketPicks(r32, picks).picks, savedAt: new Date().toISOString() };
+    const rec: SavedPalpite = { nickname: finalName, picks: resolveBracketPicks(columns, picks).picks, savedAt: new Date().toISOString() };
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rec)); } catch { /* ignore */ }
     setSaved(rec);
-  }, [name, champion, nameLocked, confirm, r32, picks]);
+  }, [name, champion, nameLocked, confirm, columns, picks]);
 
   // TEST-ONLY: let the tester redo a saved palpite (the spec locks it in prod).
   const reset = useCallback(() => {
@@ -127,7 +159,7 @@ export function BracketPalpiteView({ matches }: { matches: Match[] }) {
     setPicks({});
   }, []);
 
-  if (r32.length !== 16) {
+  if (!drawn) {
     return (
       <section>
         <ViewHeader label="// PALPITES · CHAVEAMENTO" sub="palpite o mata-mata inteiro — clique no vencedor de cada jogo até a final" />
@@ -142,10 +174,12 @@ export function BracketPalpiteView({ matches }: { matches: Match[] }) {
     key: `r${r}`,
     label: <div style={{ ...colHead, color: r === 4 ? LIME : "#9bb6a6" }}>{ROUND_LABELS[r]}</div>,
     items: ties.map((tie, i) => (
-      <PickTieCard key={`${r}-${i}`} tie={tie} round={r} tieIndex={i} verdict={isSaved ? score.byPos[posKey(r, i)] ?? null : null} locked={isSaved} onPick={onPick} />
+      <PickTieCard key={`${r}-${i}`} tie={tie} round={r} tieIndex={i} verdict={isSaved ? score.byPos[posKey(r, i)] ?? null : null} editing={!isSaved} onPick={onPick} />
     )),
   }));
 
+  const champVerdict = isSaved ? score.byPos[posKey(4, 0)] : null;
+  const champColor = champVerdict === "correct" ? GREEN : champVerdict === "wrong" ? RED : rounds[4][0].locked ? SLATE : LIME;
   const trailing = {
     width: 190,
     label: <div style={{ ...colHead, color: LIME }}>Campeão</div>,
@@ -156,7 +190,7 @@ export function BracketPalpiteView({ matches }: { matches: Match[] }) {
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
               <FlagCrest code={champion} accent={teamAccent(champion)} size={52} />
             </div>
-            <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 28, lineHeight: 1, color: isSaved ? (score.byPos[posKey(4, 0)] === "correct" ? GREEN : score.byPos[posKey(4, 0)] === "wrong" ? RED : LIME) : LIME }}>{champion}</div>
+            <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 28, lineHeight: 1, color: champColor }}>{champion}</div>
             <div style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: "#9bb6a6", marginTop: 8 }}>seu campeão</div>
           </>
         ) : (
@@ -168,7 +202,7 @@ export function BracketPalpiteView({ matches }: { matches: Match[] }) {
 
   return (
     <section>
-      <ViewHeader label="// PALPITES · CHAVEAMENTO" sub="palpite o mata-mata inteiro — clique no vencedor de cada jogo, avançando até a final" />
+      <ViewHeader label="// PALPITES · CHAVEAMENTO" sub="palpite o mata-mata inteiro — jogos que já começaram ficam travados no resultado real 🔒" />
 
       {/* Name + save bar */}
       <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, ...card, padding: "12px 16px", marginBottom: 14 }}>
@@ -179,7 +213,7 @@ export function BracketPalpiteView({ matches }: { matches: Match[] }) {
               <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: "#f1f7f0" }}>{saved!.nickname}</span>
             </span>
           ) : (
-            <NameField name={name} setName={setName} locked={nameLocked} onUnlock={() => { /* keep name; unlock handled by useNameLock's Trocar */ }} />
+            <NameField name={name} setName={setName} locked={nameLocked} onUnlock={() => { /* keep name; Trocar handled by useNameLock */ }} />
           )}
         </div>
         {isSaved ? (
@@ -205,9 +239,9 @@ export function BracketPalpiteView({ matches }: { matches: Match[] }) {
       {/* Legend */}
       <div style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: DIM_2, margin: "0 4px 8px" }}>
         {isSaved ? (
-          <>▸ seu palpite · <span style={{ color: GREEN }}>verde = acertou</span> · <span style={{ color: RED }}>vermelho = errou</span> · restantes = ainda não decididos · 0,2 por vencedor certo · 1 pelo campeão</>
+          <><span style={{ color: GREEN }}>verde = acertou</span> · <span style={{ color: RED }}>vermelho = errou</span> · <span style={{ color: SLATE }}>🔒 resultado real</span> · restantes = a decidir · 0,2 por vencedor · 1 pelo campeão</>
         ) : (
-          <>clique no time que avança · clique de novo para desfazer · 0,2 por vencedor certo · 1 pelo campeão</>
+          <>clique no time que avança · clique de novo para desfazer · <span style={{ color: SLATE }}>🔒 já começou (travado)</span> · 0,2 por vencedor · 1 pelo campeão</>
         )}
       </div>
 

@@ -6,50 +6,79 @@ import {
   realWinnersByPos,
   scoreBracketPicks,
   posKey,
-  type R32Slot,
 } from "@/lib/bracket-picks";
 
-const R32: R32Slot[] = Array.from({ length: 16 }, (_, i) => ({ home: `H${i}`, away: `A${i}` }));
+function mm(home: string, away: string, state: "pre" | "in" | "post", hs?: number, as?: number, hp?: number, ap?: number): Match {
+  return {
+    id: home + away, league: "fifa.world", stage: "round-of-32", name: "", shortName: "", startsAt: "",
+    state, isLive: state === "in", statusDetail: "", displayClock: null, venue: null,
+    home: { id: home, name: home, abbreviation: home, logo: null },
+    away: { id: away, name: away, abbreviation: away, logo: null },
+    homeScore: hs ?? null, awayScore: as ?? null, homeShootout: hp ?? null, awayShootout: ap ?? null, goals: [], cards: [],
+  };
+}
+const r32col = (matches: Match[]): KnockoutColumn => ({ slug: "round-of-32", label: "", matches });
+// 16 not-yet-started round-of-32 ties → all pickable.
+const R32PRE = r32col(Array.from({ length: 16 }, (_, i) => mm(`H${i}`, `A${i}`, "pre")));
 
-describe("resolveBracketPicks", () => {
+describe("resolveBracketPicks — advancement", () => {
   it("advances the picked winners into the next round's slots (real wiring)", () => {
     // R16 tie 0 is fed by R32 ties 1 & 4 (1-based) → R32 index 0 and 3.
-    const { rounds } = resolveBracketPicks(R32, { [posKey(0, 0)]: "H0", [posKey(0, 3)]: "A3" });
+    const { rounds } = resolveBracketPicks([R32PRE], { [posKey(0, 0)]: "H0", [posKey(0, 3)]: "A3" });
     expect(rounds[0][0].pickedWinner).toBe("H0");
-    expect(rounds[1][0]).toEqual({ home: "H0", away: "A3", pickedWinner: null });
+    expect(rounds[1][0]).toMatchObject({ home: "H0", away: "A3", pickedWinner: null });
   });
 
   it("leaves a next-round slot empty until its feeder is picked", () => {
-    const { rounds } = resolveBracketPicks(R32, { [posKey(0, 0)]: "H0" });
-    expect(rounds[1][0]).toEqual({ home: "H0", away: null, pickedWinner: null });
+    const { rounds } = resolveBracketPicks([R32PRE], { [posKey(0, 0)]: "H0" });
+    expect(rounds[1][0]).toMatchObject({ home: "H0", away: null });
   });
 
   it("cascades: changing a feeder pick drops a now-invalid downstream pick", () => {
-    // Pick H0 into R16-0 and advance it; then flip R32-0 to A0 → the R16-0 pick H0
-    // is no longer one of that tie's teams, so it must be cleared.
-    const { rounds, picks } = resolveBracketPicks(R32, {
-      [posKey(0, 0)]: "A0",
-      [posKey(0, 3)]: "A3",
-      [posKey(1, 0)]: "H0",
+    const { rounds, picks } = resolveBracketPicks([R32PRE], {
+      [posKey(0, 0)]: "A0", [posKey(0, 3)]: "A3", [posKey(1, 0)]: "H0",
     });
-    expect(rounds[1][0]).toEqual({ home: "A0", away: "A3", pickedWinner: null });
+    expect(rounds[1][0]).toMatchObject({ home: "A0", away: "A3", pickedWinner: null });
     expect(picks[posKey(1, 0)]).toBeUndefined();
   });
 
   it("names the champion from the final pick", () => {
     const picks: Record<string, string> = {};
-    // Fill one path to the final: winners of R32 → R16 → QF → SF → final.
-    // Simplest: set every round-0..3 pick so the final has two teams, then pick one.
     for (let i = 0; i < 16; i++) picks[posKey(0, i)] = `H${i}`;
-    const r16 = resolveBracketPicks(R32, picks).rounds[1];
-    r16.forEach((t, j) => (picks[posKey(1, j)] = t.home!));
-    const qf = resolveBracketPicks(R32, picks).rounds[2];
-    qf.forEach((t, j) => (picks[posKey(2, j)] = t.home!));
-    const sf = resolveBracketPicks(R32, picks).rounds[3];
-    sf.forEach((t, j) => (picks[posKey(3, j)] = t.home!));
-    const finalTie = resolveBracketPicks(R32, picks).rounds[4][0];
+    for (let r = 1; r <= 3; r++) resolveBracketPicks([R32PRE], picks).rounds[r].forEach((t, j) => (picks[posKey(r, j)] = t.home!));
+    const finalTie = resolveBracketPicks([R32PRE], picks).rounds[4][0];
     picks[posKey(4, 0)] = finalTie.away!;
-    expect(resolveBracketPicks(R32, picks).champion).toBe(finalTie.away);
+    expect(resolveBracketPicks([R32PRE], picks).champion).toBe(finalTie.away);
+  });
+});
+
+describe("resolveBracketPicks — lock on match start", () => {
+  it("locks a started (finished) tie to reality and drops any pick on it", () => {
+    const cols = [r32col([mm("H0", "A0", "post", 2, 1), ...Array.from({ length: 15 }, (_, i) => mm(`H${i + 1}`, `A${i + 1}`, "pre"))])];
+    const { rounds, picks } = resolveBracketPicks(cols, { [posKey(0, 0)]: "A0" }); // tried to pick the loser
+    expect(rounds[0][0]).toMatchObject({ locked: true, advancer: "H0", realWinner: "H0", pickedWinner: null, live: false });
+    expect(picks[posKey(0, 0)]).toBeUndefined();
+    // The real winner still advances into the next round's slot.
+    expect(rounds[1][0].home).toBe("H0");
+  });
+
+  it("locks a live tie with no advancer yet", () => {
+    const cols = [r32col([mm("H0", "A0", "in"), ...Array.from({ length: 15 }, (_, i) => mm(`H${i + 1}`, `A${i + 1}`, "pre"))])];
+    const { rounds } = resolveBracketPicks(cols, {});
+    expect(rounds[0][0]).toMatchObject({ locked: true, live: true, advancer: null });
+  });
+
+  it("leaves a not-yet-started tie open to pick", () => {
+    const { rounds } = resolveBracketPicks([R32PRE], {});
+    expect(rounds[0][0]).toMatchObject({ locked: false, live: false });
+  });
+
+  it("frozen (saved): keeps the user's own pick on a since-started tie, but fills unpicked started ties from reality", () => {
+    const cols = [r32col([mm("H0", "A0", "post", 2, 1), mm("H1", "A1", "post", 0, 1), ...Array.from({ length: 14 }, (_, i) => mm(`H${i + 2}`, `A${i + 2}`, "pre"))])];
+    // The user picked tie 0 (wrongly, A0) before it started; never picked tie 1.
+    const { rounds } = resolveBracketPicks(cols, { [posKey(0, 0)]: "A0" }, true);
+    expect(rounds[0][0]).toMatchObject({ locked: false, pickedWinner: "A0" }); // their pick stays → scored
+    expect(rounds[0][1]).toMatchObject({ locked: true, advancer: "A1" }); // unpicked → reality
   });
 });
 
@@ -65,20 +94,10 @@ describe("togglePick", () => {
   });
 });
 
-function m(id: string, home: string, away: string, hs: number, as: number, hp?: number, ap?: number): Match {
-  return {
-    id, league: "fifa.world", stage: "round-of-32", name: "", shortName: "", startsAt: "",
-    state: "post", isLive: false, statusDetail: "FT", displayClock: null, venue: null,
-    home: { id: home, name: home, abbreviation: home, logo: null },
-    away: { id: away, name: away, abbreviation: away, logo: null },
-    homeScore: hs, awayScore: as, homeShootout: hp ?? null, awayShootout: ap ?? null, goals: [], cards: [],
-  };
-}
-
 describe("realWinnersByPos + scoreBracketPicks", () => {
   const columns: KnockoutColumn[] = [
-    { slug: "round-of-32", label: "", matches: [m("a", "H0", "A0", 2, 1), m("b", "H1", "A1", 1, 1, 3, 4)] },
-    { slug: "final", label: "", matches: [m("f", "H0", "A0", 0, 0, 5, 3)] },
+    r32col([mm("H0", "A0", "post", 2, 1), mm("H1", "A1", "post", 1, 1, 3, 4)]),
+    { slug: "final", label: "", matches: [mm("H0", "A0", "post", 0, 0, 5, 3)] },
   ];
 
   it("reads the real advancer (shootout-aware) at each position", () => {
@@ -97,7 +116,7 @@ describe("realWinnersByPos + scoreBracketPicks", () => {
       ],
       [], [], [],
       [{ home: "H0", away: "A0", pickedWinner: "H0" }], // final correct → 1
-    ];
+    ] as never;
     const { total, byPos } = scoreBracketPicks(rounds, realWinnersByPos(columns));
     expect(total).toBeCloseTo(1.2, 5);
     expect(byPos[posKey(0, 0)]).toBe("correct");
