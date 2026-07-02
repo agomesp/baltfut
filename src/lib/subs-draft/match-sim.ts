@@ -212,6 +212,8 @@ export function createMatchSim(
   let penaltyShot = false; // the in-flight attempt is the penalty (no body blocks)
   let resetT = 0; // post-goal moment: the ball is dead, both teams walk back to shape
   let kickoffPending: Side | null = null; // who restarts once the moment passes
+  let presserA: P | null = null; // the PERSISTENT pressing pair (hysteresis — no per-tick churn)
+  let presserB: P | null = null;
   let scoreSide: Side | null = null;
   let attemptSide: Side | null = null;
   let attemptOnTarget = false;
@@ -1054,12 +1056,38 @@ export function createMatchSim(
     }
 
     const defenders = opp(poss).filter((p) => p.role !== "Goleiro");
-    const byBall = [...defenders].sort((a, b) => dist(a.x, a.y, ball.x, ball.y) - dist(b.x, b.y, ball.x, ball.y));
-    // Press with the nearest defender always, and a SECOND to double up — the
-    // rating-driven tackle pressure this creates is what makes a stronger XI win the
-    // ball back and dominate. (Anti-swarm comes from the OFF-BALL players now holding
-    // formation shape in target(), not from removing pressers.)
-    const pressers = byBall.slice(0, 2);
+    // UNIT PRESS with HYSTERESIS: the pressing pair PERSISTS — a defender only hands
+    // the job to a clearly-closer teammate (2.5+ units), so two near-equidistant
+    // defenders stop flickering roles every frame and the press reads as two committed
+    // men. A BACK-PASS (the classic trigger) hands the press to the nearest man at
+    // once. Squared distances, no per-tick sort — cheaper than the old full sort.
+    const near2 = (q: P | null, x: number, y: number) => (q ? (q.x - x) * (q.x - x) + (q.y - y) * (q.y - y) : Infinity);
+    const backPass = ballState === "pass" && passTo && (poss === "home" ? ball.vy < -6 : ball.vy > 6);
+    if (presserA && (presserA.side === poss || sentOff.has(presserA.id))) presserA = null; // possession flipped — the old press is void
+    if (presserB && (presserB.side === poss || sentOff.has(presserB.id))) presserB = null;
+    if (defenders.length) {
+      const nearest2 = nearest(defenders, ball.x, ball.y);
+      const dNew = near2(nearest2, ball.x, ball.y);
+      if (!presserA || backPass || dNew + 6.25 < near2(presserA, ball.x, ball.y) - 5 * Math.sqrt(dNew)) {
+        // hand over when clearly closer: d_new + 2.5 < d_old (compare via squares
+        // (d+2.5)^2 = d^2 + 5d + 6.25 — the sqrt term uses the NEW distance as the
+        // bound, conservative + cheap)
+        if (nearest2 !== presserB) presserA = nearest2;
+      }
+      if (presserB && near2(presserB, ball.x, ball.y) > 900) presserB = null; // stranded cover (30+) — release
+      if (!presserB || presserB === presserA) {
+        // the SECOND man COVERS: nearest defender that isn't the first presser
+        let cover: P | null = null;
+        let cd = Infinity;
+        for (const d of defenders) {
+          if (d === presserA) continue;
+          const dd = (d.x - ball.x) * (d.x - ball.x) + (d.y - ball.y) * (d.y - ball.y);
+          if (dd < cd) { cd = dd; cover = d; }
+        }
+        presserB = cover;
+      }
+    } else { presserA = null; presserB = null; }
+    const pressers = [presserA, presserB].filter((x): x is P => x !== null);
     let chaseA: P | null = null;
     let chaseB: P | null = null;
     if (ballState === "pass" && passTo) { chaseA = passTo; chaseB = nearest(opp(passTo.side).filter(canContest), ball.x, ball.y); }
