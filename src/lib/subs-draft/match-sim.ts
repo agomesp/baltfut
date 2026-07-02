@@ -23,7 +23,7 @@ import { mulberry32, randInt32 } from "./prng";
 import { TOTAL_STEPS } from "./sim-timing";
 import { laneClearance, onwardValue, pickOverloadFlank, coachAdjust, COACH_ZERO, type CoachAdjust } from "./brain";
 import { magnusAccel, spinDecay, curlSign } from "./ball-physics";
-import { deriveAttrs, applyTurn, sector8, hash01, type KinAttrs } from "./kinematics";
+import { deriveAttrs, applyTurn, sector8, hash01, shieldFactor, type KinAttrs } from "./kinematics";
 import type { Cat } from "./data";
 import type { FieldSlot } from "./squad";
 
@@ -1041,8 +1041,13 @@ export function createMatchSim(
           const push = ((SEP - d) / SEP) * 7 * dt;
           const ux = dx / d;
           const uy = dy / d;
-          a.x = clamp(a.x - ux * push, 2, 98); a.y = clamp(a.y - uy * push, 2, 98);
-          b.x = clamp(b.x + ux * push, 2, 98); b.y = clamp(b.y + uy * push, 2, 98);
+          // JOSTLING: the push splits by STRENGTH — the stronger body holds its
+          // ground, the lighter one gets moved (same total separation, so the
+          // O(n²) axis-reject fast path above is untouched)
+          const wa = b.kin.strength / (a.kin.strength + b.kin.strength);
+          const wb = 1 - wa;
+          a.x = clamp(a.x - ux * push * 2 * wa, 2, 98); a.y = clamp(a.y - uy * push * 2 * wa, 2, 98);
+          b.x = clamp(b.x + ux * push * 2 * wb, 2, 98); b.y = clamp(b.y + uy * push * 2 * wb, 2, 98);
         }
       }
     }
@@ -1311,10 +1316,15 @@ export function createMatchSim(
       // defenders challenge with real care — without the 0.18 damping the pen rate
       // came out ~1.7/match (real ~0.3).
       const inPenBox = Math.abs(carrier.x - 50) < 22 && (carrier.side === "home" ? carrier.y > 84 : carrier.y < 16);
+      // SHIELDING: the carrier keeps his body between ball and tackler — a tackle
+      // from the shielded side is throttled (and fouls more: it goes through the
+      // man); STRENGTH tilts both sides of the duel.
+      const shield = shieldFactor(ball.x - carrier.x, ball.y - carrier.y, presser.x - carrier.x, presser.y - carrier.y);
+      const strengthF = clamp(presser.kin.strength / carrier.kin.strength, 0.8, 1.25);
       // per-challenge rate re-anchored at 180s: carriers spend ~3× longer under
       // pressure per match, so the 60s-era 5.6 produced ~28 fouls (real ~22)
-      const foulRate = clamp(4.0 * (carrier.rating / presser.rating), 2.3, 6.1) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.16 : 1);
-      const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.28 * matchProgress);
+      const foulRate = clamp(4.0 * (carrier.rating / presser.rating), 2.3, 6.1) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.16 : 1) * (shield < 0.7 ? 1.2 : 1);
+      const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.28 * matchProgress) * shield * strengthF;
       if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
       else if (near && R() < foulRate * dt) foul(carrier, presser);
       else if (near && R() < tackleRate * dt) giveBallTo(presser);

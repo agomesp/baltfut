@@ -2,7 +2,7 @@
 // attribute split {topSpeed, accel, agility, reaction, strength}, the speed-scaled
 // turn-rate clamp with plant-and-cut braking, and the 8-way facing quantizer.
 import { describe, it, expect } from "vitest";
-import { deriveAttrs, applyTurn, sector8, hash01 } from "./kinematics";
+import { deriveAttrs, applyTurn, sector8, hash01, shieldFactor } from "./kinematics";
 
 describe("hash01", () => {
   it("is deterministic and spread over [0,1)", () => {
@@ -80,6 +80,23 @@ describe("applyTurn — momentum makes direction a COST", () => {
     for (let i = 0; i < 90; i++) v = applyTurn(v.vx, v.vy, 0, 18, 8, 1 / 60);
     const angle = Math.atan2(v.vy, v.vx);
     expect(angle).toBeGreaterThan(Math.PI / 2 - 0.15); // ~fully around inside 1.5s
+  });
+});
+
+describe("shieldFactor — the carrier's body is between ball and tackler", () => {
+  it("a ball-side tackler challenges cleanly; a shielded one is throttled", () => {
+    // ball ahead (+y); tackler also ahead → clean
+    expect(shieldFactor(0, 2, 0, 3)).toBeCloseTo(1, 5);
+    // tackler directly behind (opposite the ball) → the floor
+    expect(shieldFactor(0, 2, 0, -3)).toBeCloseTo(0.45, 5);
+    // side-on sits between
+    const side = shieldFactor(0, 2, 3, 0);
+    expect(side).toBeGreaterThan(0.45);
+    expect(side).toBeLessThan(1);
+  });
+
+  it("degenerate geometry (ball at feet) means no shield", () => {
+    expect(shieldFactor(0, 0, 1, 1)).toBe(1);
   });
 });
 

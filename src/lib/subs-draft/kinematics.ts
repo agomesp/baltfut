@@ -72,3 +72,18 @@ export function sector8(heading: number): number {
   const s = Math.round(heading / (Math.PI / 4));
   return ((s % 8) + 8) % 8;
 }
+
+/**
+ * SHIELDING: how much of a tackle survives the carrier's body. Inputs are the
+ * carrier→ball vector and the carrier→tackler vector; when the tackler is on the
+ * BALL side (aligned, cos≈1) the challenge is clean (1); when the carrier's body
+ * is between him and the ball (opposed, cos≈-1) the tackle is throttled to the
+ * floor (0.45) — he'd have to go through the man. Pure geometry, no RNG.
+ */
+export function shieldFactor(ballDx: number, ballDy: number, tacklerDx: number, tacklerDy: number): number {
+  const bl = Math.hypot(ballDx, ballDy);
+  const tl = Math.hypot(tacklerDx, tacklerDy);
+  if (bl < 1e-6 || tl < 1e-6) return 1; // degenerate — no shield to speak of
+  const align = (ballDx * tacklerDx + ballDy * tacklerDy) / (bl * tl); // 1 ball-side … -1 shielded
+  return clamp(0.45 + 0.55 * (align + 1) / 2, 0.45, 1);
+}
