@@ -22,7 +22,7 @@
 import { mulberry32, randInt32 } from "./prng";
 import { TOTAL_STEPS } from "./sim-timing";
 import { laneClearance, onwardValue, pickOverloadFlank, coachAdjust, COACH_ZERO, type CoachAdjust } from "./brain";
-import { magnusAccel, spinDecay, curlSign } from "./ball-physics";
+import { magnusAccel, spinDecay, curlSign, K_MAGNUS } from "./ball-physics";
 import { deriveAttrs, applyTurn, sector8, hash01, shieldFactor, type KinAttrs } from "./kinematics";
 import type { Cat } from "./data";
 import type { FieldSlot } from "./squad";
@@ -447,35 +447,56 @@ export function createMatchSim(
     const g = ATTACK[p.side];
     const acc = clamp((p.rating - 55) / 45, 0.3, 1) * (header ? 0.75 : 1);
     const dg = dist(ball.x, ball.y, g.x, g.y);
+    // MIS-HIT: a strike under a body (presser within 3.5 — no time to set) gets
+    // SCUFFED at a rating-scaled rate: half power, doubled spray, rarely troubling
+    // the keeper. Penalties are naturally exempt — the ceremony clears the space.
+    const oppOut2 = opp(p.side).filter((o) => o.role !== "Goleiro");
+    const pd2 = oppOut2.length ? nearest(oppOut2, p.x, p.y) : null;
+    const pressured = !header && pd2 !== null && dist(pd2.x, pd2.y, p.x, p.y) < 3.5;
+    const scuff = pressured && R() < clamp(0.32 - (p.rating - 60) / 140, 0.08, 0.32);
+    const sprayF = scuff ? 2.1 : 1;
     // Aim error wide enough that MISSES genuinely happen (real football: only ~a third
     // of shots hit the frame). Range and poor finishing widen the spray; the calibration
     // harness gates the on-target fraction. Misses go out for goal kicks; deflected/
     // parried attempts go behind for corners — the whole byline ecosystem needs these.
-    const aimX = clamp(g.x + (1 - acc) * rnd(-16, 16) + rnd(-6, 6) + dg * 0.14 * rnd(-1, 1), 20, 80);
+    const aimX = clamp(g.x + (1 - acc) * rnd(-16, 16) * sprayF + rnd(-6, 6) * sprayF + dg * 0.14 * rnd(-1, 1), 20, 80);
     attemptOnTarget = Math.abs(aimX - g.x) < 8;
     attemptSide = p.side;
     if (scoring) {
       // xG for THIS strike — angle (central > wide), distance, finishing. Pure
-      // arithmetic (no R() draws) so the flag-off cursor is untouched; resolved into
+      // arithmetic (no R() draws beyond the strike rolls above) — resolved into
       // a goal/save when the shot reaches the line.
       const shotAngle = 1 - Math.abs(ball.x - 50) / 50; // 1 central, 0 by the touchline
       const distF = clamp(1 - (dg - 6) / 34, 0.05, 1); // 1 in the six-yard box → ~0 at range
       const finish = clamp((p.rating - 55) / 45, 0.25, 1) * (header ? 0.72 : 1);
       attemptXG = clamp(0.09 + 0.62 * distF * (0.45 + 0.55 * shotAngle) * (0.55 + 0.45 * finish), 0.02, 0.83);
+      if (scuff) attemptXG *= 0.45; // a mis-hit rarely beats anyone
       attemptShooter = p;
       attemptKeeper = keeper(p.side === "home" ? "away" : "home");
     }
-    const d = Math.max(1, dist(ball.x, ball.y, aimX, g.y));
-    const power = header ? 100 : 128;
-    ball.vx = ((aimX - ball.x) / d) * power;
+    // FINESSE BEND: a set strike from range, flair-gated — deliberate curl toward a
+    // corner. The strike aims WIDE by the analytic Magnus deflection and bends back
+    // into aimX, so attemptOnTarget (computed from aimX above) stays truthful.
+    const power = (header ? 100 : 128) * (scuff ? rnd(0.5, 0.72) : 1);
+    let strikeX = aimX;
+    let spin = 0;
+    if (!header && !scuff && dg > 12 && dg < 30 && R() < (0.2 + 0.5 * p.flair) * acc) {
+      const mag = rnd(0.3, 0.55);
+      const sgn = R() < 0.5 ? 1 : -1; // curl left/right of travel
+      spin = sgn * mag;
+      const def = (0.5 * K_MAGNUS * mag * dg * dg) / power; // lateral drift over the flight
+      strikeX = clamp(aimX - (p.side === "home" ? -1 : 1) * sgn * def, 12, 88);
+    }
+    const d = Math.max(1, dist(ball.x, ball.y, strikeX, g.y));
+    ball.vx = ((strikeX - ball.x) / d) * power;
     ball.vy = ((g.y - ball.y) / d) * power;
-    ball.spin = 0; // shots fly straight (deliberate finesse bend comes with the shot-physics rework)
+    ball.spin = spin;
     ballState = "attempt";
     carrier = null;
     passTo = null;
     pendingCross = false;
-    caption(header ? "Cabeça!" : "Chute!");
-    ticker(header ? "Cabeçada" : "Chute");
+    caption(scuff ? "Mascou!" : header ? "Cabeça!" : "Chute!");
+    ticker(scuff ? "Chute mascado" : header ? "Cabeçada" : "Chute");
   }
 
   function card(p: P, type: Card) {
@@ -835,7 +856,18 @@ export function createMatchSim(
     lx += -uy * err;
     ly += ux * err;
     const d = Math.max(1, dist(ball.x, ball.y, lx, ly));
-    const power = clamp(24 + d * 1.25, 38, 108);
+    let power = clamp(24 + d * 1.25, 38, 108);
+    // DRIVEN vs FLOATED: a long ball through a TIGHT lane gets clipped over the
+    // traffic instead of drilled through it (through-balls stay on the deck — that
+    // is their nature). A floated long ball drops into a contest like a punt.
+    if (d > 22 && !through) {
+      const tight = laneClearance(ball.x, ball.y, lx, ly, opp(side).filter((o) => o.role !== "Goleiro")) < 4;
+      if (tight || R() < 0.2) {
+        ball.vz = clamp(rnd(9, 13) * (d / 34), 7, 16);
+        loftedPass = d > 30; // a long float's drop is a header contest
+        power *= 0.9;
+      }
+    }
     ball.vx = ((lx - ball.x) / d) * power;
     ball.vy = ((ly - ball.y) / d) * power;
     ballState = stray ? "loose" : "pass";
@@ -1106,7 +1138,21 @@ export function createMatchSim(
     // ball height: gravity pulls it down, then it settles on the pitch (with a small bounce)
     ball.z += ball.vz * dt;
     ball.vz -= GRAVITY * dt;
-    if (ball.z <= 0) { ball.z = 0; ball.vz = ball.vz < -8 ? -ball.vz * 0.3 : 0; }
+    if (ball.z <= 0) {
+      ball.z = 0;
+      if (ball.vz < -8) {
+        ball.vz = -ball.vz * 0.3;
+        // BOUNCE-SPIN: sidespin BITES on contact — one perpendicular impulse, so a
+        // whipped delivery skids OFF its line at the bounce (and sheds spin doing it)
+        if (ball.spin !== 0) {
+          const k = 0.16 * ball.spin;
+          const vx0 = ball.vx;
+          ball.vx += -ball.vy * k;
+          ball.vy += vx0 * k;
+          ball.spin *= 0.55;
+        }
+      } else ball.vz = 0;
+    }
     if (ballState === "dribble" || ballState === "pass") possFrames[poss] += 1;
     updateWall();
 
