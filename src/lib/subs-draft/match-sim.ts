@@ -22,6 +22,7 @@
 import { mulberry32, randInt32 } from "./prng";
 import { TOTAL_STEPS } from "./sim-timing";
 import { laneClearance, onwardValue, pickOverloadFlank, coachAdjust, COACH_ZERO, type CoachAdjust } from "./brain";
+import { magnusAccel, spinDecay, curlSign } from "./ball-physics";
 import type { Cat } from "./data";
 import type { FieldSlot } from "./squad";
 
@@ -115,7 +116,7 @@ const CONTROL = 2.7;
 const DRIBBLE_LEAD = 2.0;
 const TACKLE_RATE = 3.0;
 const BLOCK_R = 2.3;
-const GRAVITY = 52; // ball-height (z) fall rate — crosses/corners/long balls arc
+const GRAVITY = 44; // ball-height (z) fall rate — 52 was the 60s-era hang compression; at the 3-min clock deliveries afford real float (+~18% hang, powers trimmed so drops still land in the box)
 
 /** FNV-1a over a string → 0..1. Identity that is a pure function of the id, NOT the
  * match seed/stream — so a player/team behaves like THEMSELVES in every match. */
@@ -171,7 +172,7 @@ export function createMatchSim(
     };
   };
   const style = { home: styleOf(homeSlots), away: styleOf(awaySlots) };
-  const ball = { x: 50, y: 50, vx: 0, vy: 0, z: 0, vz: 0 }; // z = height above the pitch
+  const ball = { x: 50, y: 50, vx: 0, vy: 0, z: 0, vz: 0, spin: 0 }; // z = height; spin curls flight (Magnus)
   const shots = { home: 0, away: 0 };
   const onTarget = { home: 0, away: 0 };
   const corners = { home: 0, away: 0 };
@@ -317,7 +318,7 @@ export function createMatchSim(
     offsidePending = false;
     ball.vx *= 0.15;
     ball.vy *= 0.15;
-    ball.z = 0; ball.vz = 0; // controlled → at the player's feet
+    ball.z = 0; ball.vz = 0; ball.spin = 0; // controlled → at the player's feet, spin killed
     // cadence: ~0.45s per on-ball decision — at the 3-min clock that's ~100+ on-ball
     // decisions a match (close to real possession counts; the 60s clock managed ~33)
     decideT = liveSteal ? rnd(0.15, 0.4) : rnd(0.3, 0.65); // a stolen ball launches at once
@@ -354,7 +355,7 @@ export function createMatchSim(
   function throwIn(x: number, side: Side) {
     ball.x = clamp(x, 1, 99);
     ball.y = clamp(ball.y, 3, 97);
-    ball.vx = 0; ball.vy = 0;
+    ball.vx = 0; ball.vy = 0; ball.spin = 0;
     ballState = "loose";
     restartFor = side;
     caption("Lateral");
@@ -427,6 +428,7 @@ export function createMatchSim(
     const power = header ? 100 : 128;
     ball.vx = ((aimX - ball.x) / d) * power;
     ball.vy = ((g.y - ball.y) / d) * power;
+    ball.spin = 0; // shots fly straight (deliberate finesse bend comes with the shot-physics rework)
     ballState = "attempt";
     carrier = null;
     passTo = null;
@@ -455,7 +457,7 @@ export function createMatchSim(
     recoach(false); // the coach reacts to the scoreline (silently — the goal owns the feed)
     // the MOMENT: ball dead in the net, both teams walk back to shape, THEN the
     // conceding side restarts — kickoff no longer fires mid-goalmouth-stampede
-    ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0;
+    ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0; ball.spin = 0;
     carrier = null;
     passTo = null;
     ballState = "loose";
@@ -522,11 +524,18 @@ export function createMatchSim(
     }
     const tgt = mates.reduce((b, m) => (dist(m.x, m.y, bx, boxY) < dist(b.x, b.y, bx, boxY) ? m : b), mates[0]);
     const d = Math.max(1, dist(ball.x, ball.y, bx, boxY));
-    const power = clamp(40 + d * 1.1, 45, 92);
+    const power = clamp(38 + d * 1.0, 42, 86); // trimmed with the longer hang so drops still land in the box
     ball.vx = ((bx - ball.x) / d) * power;
     ball.vy = ((boxY - ball.y) / d) * power;
     ball.z = 0;
-    ball.vz = isCorner ? rnd(15, 20) : rnd(12, 17); // loft it into the box — an arcing delivery
+    ball.vz = isCorner ? rnd(16, 21) : rnd(13, 18); // loft it into the box — a real floated delivery
+    // MAGNUS: the delivery is WHIPPED — corners pick in/outswing (65% in), open-play
+    // crosses bend toward the goalmouth. curlSign aims the curl at the goal centre.
+    const g0 = ATTACK[p.side];
+    const sgn = curlSign(ball.vx, ball.vy, g0.x - ball.x, g0.y - ball.y);
+    ball.spin = isCorner
+      ? (R() < 0.65 ? sgn * rnd(0.55, 0.85) : -sgn * rnd(0.35, 0.55))
+      : sgn * rnd(0.3, 0.55);
     ballState = "pass";
     passTo = tgt;
     // the target ATTACKS the delivery — a committed dart to the drop point, so the
@@ -554,7 +563,8 @@ export function createMatchSim(
     ball.vx = ((lx - ball.x) / d) * power;
     ball.vy = ((tgt.y - ball.y) / d) * power;
     ball.z = 0;
-    ball.vz = long ? rnd(16, 22) : 0; // a long clearance is lofted; a short throw stays low
+    ball.vz = long ? rnd(18, 24) : 0; // a long clearance is lofted (real punt hang); a short throw stays low
+    ball.spin = long ? rnd(-0.15, 0.15) : 0;
     loftedPass = long; // the punt's landing is a header duel, like real goal kicks
     if (long) {
       // the target ATTACKS the punt's landing area — otherwise the drop is uncontested
@@ -729,11 +739,12 @@ export function createMatchSim(
       const lx2 = clamp(tg2.x + rnd(-4, 4), 4, 96);
       const ly2 = clamp(tg2.y + rnd(-4, 4), 4, 96);
       const d2 = Math.max(1, dist(ball.x, ball.y, lx2, ly2));
-      const pw = clamp(34 + d2 * 1.15, 50, 108);
+      const pw = clamp(32 + d2 * 1.05, 48, 100);
       ball.vx = ((lx2 - ball.x) / d2) * pw;
       ball.vy = ((ly2 - ball.y) / d2) * pw;
       ball.z = 0.2;
-      ball.vz = rnd(14, 19); // high over everything (hang compressed like the match clock)
+      ball.vz = rnd(15, 20); // high over everything — a real diagonal hangs
+      ball.spin = rnd(-0.25, 0.25); // a touch of fade either way
       loftedPass = true; // its landing is contested in the air
       tg2.runT = Math.max(tg2.runT, 1.1); // the open man ATTACKS the landing spot
       tg2.runX = lx2;
@@ -793,6 +804,14 @@ export function createMatchSim(
   }
 
   function integrateBall(dt: number, friction: number) {
+    // MAGNUS: spin bends the flight perpendicular to travel (inswinging corners,
+    // whipped crosses, fading switches). Decays in flight; zeroed on control.
+    if (ball.spin !== 0) {
+      const m = magnusAccel(ball.vx, ball.vy, ball.spin);
+      ball.vx += m.ax * dt;
+      ball.vy += m.ay * dt;
+      ball.spin = spinDecay(ball.spin, dt);
+    }
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
     const f = Math.exp(-friction * dt);
@@ -1063,6 +1082,7 @@ export function createMatchSim(
         } else {
           ball.vx = ball.vx * -0.25 + rnd(-14, 14);
           ball.vy = ball.vy * -0.25 + rnd(-6, 6);
+          ball.spin = 0; // the deflection kills any organized spin
           ballState = "loose";
           lastTouch = defSide;
           caption("Bloqueio!");
@@ -1109,6 +1129,7 @@ export function createMatchSim(
               ball.x = clamp(ball.x + rnd(-6, 6), 8, 92);
               ball.vx = rnd(-16, 16);
               ball.vy = attemptSide === "home" ? -20 : 20;
+              ball.spin = 0;
               ballState = "loose";
               lastTouch = defSide;
               attemptSide = null;
@@ -1161,7 +1182,7 @@ export function createMatchSim(
                 // the knock-down squirts loose — a genuine 50/50 second ball
                 ball.vx = winner.vx * 0.4 + rnd(-14, 14);
                 ball.vy = winner.vy * 0.4 + rnd(-8, 8);
-                ball.z = 0.4; ball.vz = 0;
+                ball.z = 0.4; ball.vz = 0; ball.spin = 0;
                 ballState = "loose";
                 passTo = null;
                 lastTouch = winner.side;
@@ -1182,6 +1203,7 @@ export function createMatchSim(
                 ball.vy = ((ball.y - g.y) / d0) * 40 + rnd(-6, 6);
                 ball.z = Math.max(ball.z, 1);
                 ball.vz = rnd(9, 14);
+                ball.spin = 0;
                 ballState = "loose";
                 passTo = null;
                 lastTouch = def.side;
@@ -1372,6 +1394,7 @@ export function createMatchSim(
     const d = Math.max(1, dist(ball.x, ball.y, cx, catchY));
     ball.vx = ((cx - ball.x) / d) * 122;
     ball.vy = ((catchY - ball.y) / d) * 122;
+    ball.spin = 0;
     ticker("⚽ GOL");
   }
 
