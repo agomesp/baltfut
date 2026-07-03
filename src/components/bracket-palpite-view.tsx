@@ -128,7 +128,6 @@ export function BracketPalpiteView({
   const narrow = useIsNarrow();
   const [picks, setPicks] = useState<Record<string, string>>({});
   const [justSaved, setJustSaved] = useState<SavedPalpite | null>(null);
-  const [reediting, setReediting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -149,7 +148,9 @@ export function BracketPalpiteView({
     () => justSaved ?? (mine ? { nickname: mine.username, picks: mine.picks, savedAt: mine.updatedAt } : null),
     [justSaved, mine],
   );
-  const isSaved = !reediting && saved != null;
+  // Saving is FINAL: once a bracket is saved it locks (no "refazer"), so the
+  // palpite is a real commitment. `saved` stays set from the DB / the fresh save.
+  const isSaved = saved != null;
 
   const editPicks = isSaved && saved ? saved.picks : picks;
   const { rounds, champion } = useMemo(
@@ -178,18 +179,8 @@ export function BracketPalpiteView({
     }
     if (!nameLocked) confirm(finalName);
     setJustSaved({ nickname: finalName, picks: cleaned, savedAt: new Date().toISOString() });
-    setReediting(false);
     onSaved?.();
   }, [name, champion, submitting, columns, picks, transport, nameLocked, confirm, onSaved]);
-
-  // Re-open the saved bracket for editing (seeded from the saved picks). Re-saving
-  // overwrites the stored one — useful to refine before the knockout begins.
-  const reset = useCallback(() => {
-    setPicks(saved?.picks ?? {});
-    setJustSaved(null);
-    setReediting(true);
-    setError(null);
-  }, [saved]);
 
   if (!drawn) {
     return (
@@ -253,7 +244,7 @@ export function BracketPalpiteView({
             <span style={{ fontFamily: JB, fontSize: 11, color: "#9bb6a6" }}>
               PONTOS: <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 18, color: GOLD }}>{score.total.toFixed(1).replace(".", ",")}</span>
             </span>
-            <button type="button" onClick={reset} title="Refazer o chaveamento (sobrescreve o salvo)" style={{ flex: "none", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9bb6a6", background: "transparent", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 9, padding: "8px 12px", cursor: "pointer" }}>↺ refazer</button>
+            <span title="Chaveamento salvo — não dá pra refazer" style={{ flex: "none", display: "inline-flex", alignItems: "center", gap: 5, fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: SLATE, background: "rgba(147,167,196,0.1)", border: "1px solid rgba(147,167,196,0.28)", borderRadius: 9, padding: "8px 12px" }}>🔒 salvo</span>
           </>
         ) : (
           // The save action is a floating CTA (below) so it stays reachable while
