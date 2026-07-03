@@ -5,15 +5,16 @@
 // enforced by RLS), derives + hashes the client IP, re-validates with the SAME
 // shared schema as the client, and enforces nickname ownership via name_claims.
 //
-// FOLLOW-UP (before the knockout stage begins): drop picks for ties whose real
-// match has already kicked off, so a direct API POST can't score by submitting
-// known results. Not needed yet — the knockout is entirely future (teams TBD),
-// so no tie can be gamed today; the client already locks started ties in the UI.
+// Started-tie lock: using ESPN as the trusted clock, drops any pick whose tie has
+// already kicked off before storing, so a direct API POST can't score by
+// "predicting" a known result (the browser UI lock isn't a security boundary).
+// Fails open on an ESPN hiccup so a network blip never blocks a legit save.
 //
 // Deno-only file (Deno.serve / Deno.env / npm: imports). Excluded from the app's
 // tsconfig; Deno type-checks it on `supabase functions serve`/`deploy`.
 import { createClient } from "@supabase/supabase-js";
 import { validateBracket } from "../_shared/bracket.ts";
+import { dropStartedPicks, knockoutMatchesFromScoreboard, startedTeamsByStage } from "../_shared/knockout-lock.ts";
 import { decideClaim, isReservedName, nameSkeleton } from "../_shared/name-claim.ts";
 import { getClientIp, hashIp, hashToken } from "../_shared/ip.ts";
 import {
@@ -102,12 +103,33 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Esse nome pertence a outra pessoa. Escolha outro." }, 403, cors);
   }
 
+  // Started-tie lock: drop any pick whose tie has already kicked off, using ESPN
+  // as the trusted clock. Fail OPEN on any error/timeout — a network blip must
+  // never block a legit save (mirrors cast-vote's fail-open cutoff). The knockout
+  // lives under the fixed fifa.world league (the only bracket in the app).
+  let picks = bracket.picks;
+  try {
+    const sbUrl = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=400";
+    const espn = await fetch(sbUrl, { signal: AbortSignal.timeout(2500) });
+    if (espn.ok) {
+      const started = startedTeamsByStage(knockoutMatchesFromScoreboard(await espn.json()));
+      picks = dropStartedPicks(picks, started);
+    }
+  } catch {
+    /* ESPN unreachable — fail open, store the picks as submitted */
+  }
+  // Every pick was for an already-started tie (a pure gaming attempt, or a re-save
+  // long after kickoff): nothing legitimate left to store.
+  if (Object.keys(picks).length === 0) {
+    return json({ error: "Esses jogos já começaram — não dá mais pra palpitar." }, 403, cors);
+  }
+
   // Upsert this nickname's bracket (one per name). The owner may re-save to refine
-  // before the knockout; the started-tie lock (follow-up) will bound that later.
+  // before each tie kicks off; the started-tie lock above bounds what's accepted.
   const { error } = await supabase.from("bracket_palpites").upsert(
     {
       username: bracket.username.trim(),
-      picks: bracket.picks,
+      picks,
       ip_hash: ipHash,
       updated_at: new Date().toISOString(),
     },
