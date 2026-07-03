@@ -99,6 +99,8 @@ interface P {
   /** COMMITTED RUN (>0 = running): the player holds one line toward (runX, runY)
    * instead of re-rolling a random drift every retarget — so runs exist to be found. */
   runT: number;
+  /** >0 = this defender is TRACKING a runner in behind (sprint, don't jog). */
+  trackT: number;
   runX: number;
   runY: number;
   /** Deterministic per-player tendency (0..1, hashed from the id — NOT the match
@@ -152,7 +154,7 @@ export function createMatchSim(
   const rnd = (a: number, b: number) => a + R() * (b - a);
   const mk = (s: FieldSlot, side: Side): P => ({
     id: s.id, name: s.name, side, role: s.role, rating: s.rating ?? 78, ax: s.x, ay: s.y, x: s.x, y: s.y, vx: 0, vy: 0, tx: s.x, ty: s.y, rt: 0,
-    pace: (0.85 + ((s.rating ?? 78) - 70) / 60), runT: 0, runX: 0, runY: 0, flair: hash01(s.id),
+    pace: (0.85 + ((s.rating ?? 78) - 70) / 60), runT: 0, trackT: 0, runX: 0, runY: 0, flair: hash01(s.id),
     kin: deriveAttrs(s.id, s.rating ?? 78), heading: side === "home" ? Math.PI / 2 : -Math.PI / 2, lagT: 0, seenSeq: 0,
   });
   const home = homeSlots.map((s) => mk(s, "home"));
@@ -358,6 +360,7 @@ export function createMatchSim(
       passTo = null;
       carrier = null;
       lastTouch = p.side;
+      restartFor = null; // a live spill is anyone's ball — never restart-locked
       pendingCross = false;
       loftedPass = false;
       caption("Dominou mal!");
@@ -378,7 +381,7 @@ export function createMatchSim(
   }
 
   function offside(x: number, y: number) {
-    ball.x = x; ball.y = y; ball.vx = 0; ball.vy = 0;
+    ball.x = x; ball.y = y; ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0; ball.spin = 0;
     const defSide: Side = poss === "home" ? "away" : "home";
     giveBallTo(nearest(team(defSide), ball.x, ball.y));
     decideT = rnd(0.5, 0.9);
@@ -389,14 +392,14 @@ export function createMatchSim(
 
   function kickoff(toSide: Side) {
     breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
-    ball.x = 50; ball.y = 50; ball.vx = 0; ball.vy = 0;
+    ball.x = 50; ball.y = 50; ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0; ball.spin = 0;
     giveBallTo(nearest(team(toSide), 50, 50));
   }
 
   function throwIn(x: number, side: Side) {
     ball.x = clamp(x, 1, 99);
     ball.y = clamp(ball.y, 3, 97);
-    ball.vx = 0; ball.vy = 0; ball.spin = 0;
+    ball.vx = 0; ball.vy = 0; ball.spin = 0; ball.z = 0; ball.vz = 0; // placed in hand, not hanging mid-flight
     ballState = "loose";
     restartFor = side;
     caption("Lateral");
@@ -407,7 +410,7 @@ export function createMatchSim(
     const g = OWN[side];
     ball.x = clamp(g.x + rnd(-10, 10), 6, 94);
     ball.y = side === "home" ? 11 : 89;
-    ball.vx = 0; ball.vy = 0;
+    ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0; ball.spin = 0;
     giveBallTo(keeper(side));
     caption(cap);
     breakT = 0; breakSide = null; penaltyShot = false; loftedPass = false; // dead ball — any break is over
@@ -417,7 +420,7 @@ export function createMatchSim(
     corners[attSide] += 1;
     ball.x = ball.x < 50 ? 2 : 98;
     ball.y = attSide === "home" ? 98 : 2;
-    ball.vx = 0; ball.vy = 0;
+    ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0; ball.spin = 0;
     giveBallTo(nearest(outfield(attSide), ball.x, ball.y));
     forceCross = true;
     cornerDelivery = true;
@@ -534,8 +537,11 @@ export function createMatchSim(
     // there), so the cosmetic v1 route keeps its plain free kick.
     const inBox = scoring && Math.abs(victim.x - 50) < 22 && (victim.side === "home" ? victim.y > 84 : victim.y < 16);
     if (inBox) { penalty(victim.side, fouler); return; }
-    ball.x = victim.x; ball.y = victim.y; ball.vx = 0; ball.vy = 0;
-    giveBallTo(nearest(team(victim.side), ball.x, ball.y));
+    ball.x = victim.x; ball.y = victim.y; ball.vx = 0; ball.vy = 0; ball.z = 0; ball.vz = 0; ball.spin = 0;
+    // an OUTFIELDER takes the free kick — nearest(team) near the box often picked the
+    // KEEPER, whose target() line-keeping then deadlocked the dead-ball referee-wait
+    const takers = outfield(victim.side);
+    giveBallTo(takers.length ? nearest(takers, ball.x, ball.y) : keeper(victim.side));
     freeKick = true;
     decideT = rnd(0.7, 1.2); // dead ball — the wall forms, the taker settles
     caption("Falta!");
@@ -653,7 +659,10 @@ export function createMatchSim(
       if (scoring) attemptXG = 0.78; // spot-kick conversion reference (pGoal bends it by keeper)
       return;
     }
-    if (carrier.role === "Goleiro") { distribute(carrier); return; }
+    // a keeper on a restart just distributes — and the dead-ball state MUST clear
+    // with it (a keeper taking a free kick deep is a punt, not a walled set piece;
+    // leaving freeKick set re-pinned the ball and kept the wall standing)
+    if (carrier.role === "Goleiro") { freeKick = false; distribute(carrier); return; }
     if (forceCross) { doCross(carrier); return; }
 
     const side = carrier.side;
@@ -670,15 +679,17 @@ export function createMatchSim(
     // THROUGH ON GOAL: if only the keeper is between the carrier and the net (no
     // outfield defender goalside in the lane), FINISH — never pass backward. Kills
     // the "clean through 1-v-1 but passes back / to an opponent" artifact.
-    // Re-anchored at 180s: the original test (dg<36, goalside |Δx|<12) fired from
-    // wide/far positions ~18×/match — over HALF of all shots — because the longer
-    // clock reaches "no defender in the window" spots constantly. A genuine
-    // breakaway is CLOSE, reasonably CENTRAL, and has a CLEAR shot lane.
+    // Third anchoring (closeout): even at dg<26/|Δx|<14 this fired ~14×/match — over
+    // HALF of all shots, ~1.9 goals (real breakaways: 1-3/match) — because a strictly-
+    // goalside test ignores what kinematics made true on the pitch: a defender LEVEL
+    // with the runner is racing him, and one breathing down his neck (≤6) tackles back
+    // mid-windup. Cover now includes both, so only the genuinely-away runner finishes.
     const oppOutfield = defenders.filter((d) => d.role !== "Goleiro");
     const goalsideDefs = oppOutfield.filter(
-      (d) => (dir > 0 ? d.y > carrier!.y + 1 : d.y < carrier!.y - 1) && Math.abs(d.x - carrier!.x) < 14,
+      (d) => (dir > 0 ? d.y > carrier!.y - 5 : d.y < carrier!.y + 5) && Math.abs(d.x - carrier!.x) < 14,
     );
-    const clearOnGoal = dg < 26 && Math.abs(carrier.x - 50) < 18 && goalsideDefs.length === 0
+    const hounded = oppOutfield.some((d) => dist(d.x, d.y, carrier!.x, carrier!.y) < 7);
+    const clearOnGoal = dg < 24 && Math.abs(carrier.x - 50) < 18 && goalsideDefs.length === 0 && !hounded
       && laneClearance(carrier.x, carrier.y, ATTACK[side].x, ATTACK[side].y, oppOutfield) > 6.5;
     if (clearOnGoal) { shoot(carrier); return; }
 
@@ -711,27 +722,29 @@ export function createMatchSim(
     type Opt = { kind: "shoot" | "cross" | "pass" | "switch" | "dribble"; target?: P; score: number };
     const opts: Opt[] = [];
 
-    // SHOOT — an xG-ish estimate. Appetite re-anchored for the 180s clock: the 60s
-    // match was SUPPLY-starved (~7 shots/team) and needed a cranked 3.0 gain; at 180s
-    // build-ups actually complete, so the same appetite overshot to ~17.6/team and
-    // the gain came DOWN to land on the real ~12. Speculative efforts still miss
-    // (the aim spray), so volume doesn't inflate goals.
+    // SHOOT — an xG-ish estimate. Appetite history: the 60s clock was SUPPLY-starved
+    // (~7 shots/team, gain cranked to 3.0); the 180s clock overshot and the gain came
+    // down in steps to 1.35. HONESTY NOTE (closeout instrumentation): appetite is a
+    // weak lever now — total volume sits ~15/team (real ~12.5) and the excess is
+    // breakaway SUPPLY, not appetite; further cuts here only skew the mix high-xG
+    // (goals barely move — the selection effect). Volume comes down when coordinated
+    // marking lands, not from this constant.
     const angle = 1 - Math.abs(carrier.x - 50) / 50; // 1 central, 0 at the touchline
     const distF = clamp(1 - (dg - 6) / 36, 0, 1); // 1 close, 0 by ~42 out
     const shotLane = clamp(laneClearance(carrier.x, carrier.y, goal.x, goal.y, oppOut) / 6, 0, 1);
     const xg = distF * (0.35 + 0.65 * angle) * (0.25 + 0.75 * shotLane);
-    // the flat 0.14 term is the SPECULATIVE appetite: in range but with weak pass
+    // the flat spec term is the SPECULATIVE appetite: in range but with weak pass
     // options, real players let fly from distance — those low-xG efforts mostly miss
-    // (the aim spray) or get blocked, supplying the real ~12 shots/team + the byline
-    // ecosystem (goal kicks, corners) without inflating goals. A side CHASING the
-    // scoreline late shoots more (urgency) — the real late-goal surge.
+    // (the aim spray) or get blocked, feeding the byline ecosystem (goal kicks,
+    // corners) without inflating goals. A side CHASING the scoreline late shoots
+    // more (urgency) — the real late-goal surge.
     const u = urgency(side);
     // ROLE + FLAIR: a striker backs himself, a centre-back recycles; the speculative
     // long-range appetite is a PERSONAL tendency (id-hashed) — the flair player leathers
     // it from 28 yards, his teammate never does
     const roleF = carrier.role === "Atacante" ? 1.15 : carrier.role === "Defensor" ? 0.55 : 1;
-    const spec = (dg < 30 ? 0.08 : 0) * (0.55 + 0.9 * carrier.flair);
-    opts.push({ kind: "shoot", score: (xg * 1.9 * roleF + spec) * settled() * (1 + 0.5 * Math.max(0, u)) });
+    const spec = (dg < 30 ? 0.07 : 0) * (0.55 + 0.9 * carrier.flair);
+    opts.push({ kind: "shoot", score: (xg * 1.35 * roleF + spec) * settled() * (1 + 0.5 * Math.max(0, u)) });
 
     // CROSS from wide + advanced — a REAL team's most frequent delivery (15-20/match):
     // the duel decides the header, defenders clear most, corners + second balls fall out
@@ -899,6 +912,15 @@ export function createMatchSim(
     const up = p.side === "home";
     const dir = up ? 1 : -1;
 
+    // DEAD BALL: the taker WALKS TO the placed ball (spot/flag/free kick) — he does
+    // not dribble off with it (the ball is pinned in step() until the restart fires).
+    // This must outrank the Goleiro branch: a keeper who ends up as the taker once
+    // returned to his line here while the referee-wait clamp held decideT open — the
+    // deadlock that froze 22 of 150 gated seeds for up to 166s (closeout review).
+    if (p === carrier && decideT > 0 && (penaltyFor !== null || freeKick || cornerDelivery)) {
+      return { tx: ball.x, ty: ball.y };
+    }
+
     if (p.role === "Goleiro") {
       const g = OWN[p.side];
       let gx = clamp(50 + (ball.x - 50) * 0.4, 37, 63);
@@ -925,12 +947,6 @@ export function createMatchSim(
         }
       }
       return { tx: gx, ty: gy };
-    }
-
-    // DEAD BALL: the taker WALKS TO the placed ball (spot/flag/free kick) — he does
-    // not dribble off with it (the ball is pinned in step() until the restart fires)
-    if (p === carrier && decideT > 0 && (penaltyFor !== null || freeKick || cornerDelivery)) {
-      return { tx: ball.x, ty: ball.y };
     }
 
     // penalty ceremony: everyone except the taker and the keepers HOLDS at the edge of
@@ -1009,6 +1025,38 @@ export function createMatchSim(
     const depth = (breakT > 0 && breakSide === poss ? 27 : style[p.side].lineDepth + coach[p.side].lineDelta) + 7 * matchProgress + 6 * Math.max(0, -uDef) - 5 * Math.max(0, uDef);
     const line = clamp(ball.y - dir * depth, lo, hi); // the shared defensive line
     if (p.role === "Defensor") {
+      // TRACK THE RUNNER: an attacker goalside of the line in my channel is NOT free
+      // real estate — the nearest defender drops WITH him (real back lines defend the
+      // run, not just the ball). This is the mechanical answer to the 1-v-1 flood the
+      // closeout instrumentation exposed (~14 clear-through shots/match; real 1-3):
+      // the through-ball now arrives with a defender on the runner's shoulder.
+      // (Tracking reacts to a runner GOALSIDE only. A run-start trigger was tried in
+      // the closeout and measurably backfired — defenders chased feints, the line
+      // disorganized, and dropping trackers kept runners ONSIDE: more 1-v-1s, not
+      // fewer. Reacting earlier needs coordinated marking + trap discipline — the
+      // named next defensive mechanic, not a one-line trigger.)
+      let runner: P | null = null;
+      let rd = Infinity;
+      for (const a of marks) {
+        if (Math.abs(a.x - p.x) > 16) continue;
+        const goalside = dir > 0 ? a.y < line - 1 : a.y > line + 1;
+        if (!goalside) continue;
+        const dd = (a.x - p.x) * (a.x - p.x) + (a.y - p.y) * (a.y - p.y);
+        if (dd < rd) { rd = dd; runner = a; }
+      }
+      if (runner) {
+        // only the closest defender abandons the line for him — the rest hold shape
+        let closest = true;
+        for (const d2 of team(p.side)) {
+          if (d2 === p || d2.role !== "Defensor" || sentOff.has(d2.id)) continue;
+          const dd2 = (d2.x - runner.x) * (d2.x - runner.x) + (d2.y - runner.y) * (d2.y - runner.y);
+          if (dd2 < rd) { closest = false; break; }
+        }
+        if (closest) {
+          p.trackT = 0.4; // a tracked run is a sprint, not a jog (movement loop reads this)
+          return { tx: clamp(runner.x, 8, 92), ty: clamp(runner.y - dir * 2, 4, 96) };
+        }
+      }
       const m = marks.length ? nearest(marks, p.x, p.y) : null;
       const markX = m ? clamp(m.x, 8, 92) : ball.x;
       return { tx: clamp(p.ax * 0.45 + markX * 0.55, 10, 90), ty: line }; // hold the line, mark the width
@@ -1054,7 +1102,7 @@ export function createMatchSim(
 
   function separate(dt: number) {
     const SEP = 4.2;
-    // O(n²) over 22 bodies × 3600 steps, but almost every pair is far apart. Reject on
+    // O(n²) over 22 bodies × 10800 steps, but almost every pair is far apart. Reject on
     // the cheap axis test first: |dx| > SEP ⟹ hypot(dx,dy) ≥ |dx| > SEP (exact for IEEE
     // hypot), so those pairs never pushed anyway. Survivors take the ORIGINAL hypot path
     // verbatim → bit-identical result (determinism preserved), far fewer sqrt calls.
@@ -1087,7 +1135,7 @@ export function createMatchSim(
 
   function updateWall() {
     // only (re)build the wall on a free kick; the rest of the match it stays empty.
-    // Avoids allocating a fresh Map on all ~3600 non-dead-ball steps.
+    // Avoids allocating a fresh Map on all ~10800 non-dead-ball steps.
     if (!freeKick) { if (wallPos.size) wallPos = new Map(); return; }
     wallPos = new Map();
     const dSide: Side = poss === "home" ? "away" : "home";
@@ -1189,6 +1237,7 @@ export function createMatchSim(
       } else {
         const reached = attemptSide === "home" ? ball.y >= 95 : ball.y <= 5;
         if (reached) {
+          const wasPenalty = penaltyShot;
           penaltyShot = false;
           if (attemptOnTarget) {
             onTarget[attSide] += 1; // real definition: reached the frame (blocked shots excluded)
@@ -1209,9 +1258,26 @@ export function createMatchSim(
               const save = (gk ? clamp(0.5 + (gk.rating - 70) / 90, 0.42, 0.82) : 0.5) * gkOut;
               // conversion drifts up late: tired defenders close down slower, so the same
               // position yields a cleaner strike (the resolve-side half of the fatigue fade)
-              // ×0.75: re-anchored at 180s — the longer clock's on-target population
-              // converted ~25% hot (P(goal|onT) 0.37 vs real ~0.30)
-              const pGoal = clamp(attemptXG * 0.75 * (1 + 0.16 * matchProgress) * ((1 - save) / (1 - 0.62)), 0.02, 0.95);
+              // the late factor is back at 0.12: it was juiced to 0.16 during the 180s
+              // re-tune to fight a front-loaded timing shape whose REAL cause was the
+              // keeper-free-kick freeze (dead matches stopped scoring late). Bug fixed,
+              // knob honest again.
+              //
+              // PENALTIES own their conversion: a spot kick that hits the frame scores
+              // at the real on-target pen rate (~82% of on-target pens; net ~76% incl.
+              // the aim spray's misses), bent only by the keeper — decoupled from the
+              // open-play reference so recalibrating one never distorts the other.
+              //
+              // ×0.66 open-play: the xG→goal reference RE-CALIBRATED against this arc's
+              // shot mix. Honest mechanics (build-ups completing at 180s, kinematic
+              // separation, first-touch chances) shifted the on-target population
+              // toward high-xG looks, and the old 0.75 mapping made P(goal|onT) run
+              // ~25% hot vs real (~0.30). The constant exists exactly for this mapping;
+              // this is calibration, not a drama dial — the timing gate still forbids
+              // shaping WHEN goals happen.
+              const pGoal = wasPenalty
+                ? clamp(0.82 * ((1 - save) / (1 - 0.62)), 0.5, 0.95)
+                : clamp(attemptXG * 0.66 * (1 + 0.12 * matchProgress) * ((1 - save) / (1 - 0.62)), 0.02, 0.95);
               if (R() < pGoal) { const sc = attemptShooter; attemptSide = null; goal(attSide, sc); scored = true; }
             }
             if (scored) {
@@ -1354,13 +1420,13 @@ export function createMatchSim(
       const presser = nearest(opp(carrier.side).filter((p) => p.role !== "Goleiro"), carrier.x, carrier.y);
       const near = dist(presser.x, presser.y, carrier.x, carrier.y) < 4.0;
       // fouls come from LEGIT challenges only, so the per-challenge rate carries the
-      // whole real-football budget (~15-22 fouls, ~3-4 bookings a match — the
-      // calibration harness gates both; the old 1.1 rate only produced ~6 fouls).
+      // whole real-football budget (measured ~24 fouls, ~3.9 bookings a match vs real
+      // ~22 / ~3.5-4.5 — the calibration harness gates both).
       // late-match fatigue: tired defenders mistime challenges — tackles fade, fouls
       // rise (real fouls/cards cluster late; the late-goal surge needs the fade too).
       // Inside the box the whistle costs a PENALTY: refs require a clear foul and
-      // defenders challenge with real care — without the 0.18 damping the pen rate
-      // came out ~1.7/match (real ~0.3).
+      // defenders challenge with real care — the 0.14 damping holds pens at ~0.5/match
+      // (real ~0.3; undamped the raw challenge rate produced ~1.7).
       const inPenBox = Math.abs(carrier.x - 50) < 22 && (carrier.side === "home" ? carrier.y > 84 : carrier.y < 16);
       // SHIELDING: the carrier keeps his body between ball and tackler — a tackle
       // from the shielded side is throttled (and fouls more: it goes through the
@@ -1369,7 +1435,7 @@ export function createMatchSim(
       const strengthF = clamp(presser.kin.strength / carrier.kin.strength, 0.8, 1.25);
       // per-challenge rate re-anchored at 180s: carriers spend ~3× longer under
       // pressure per match, so the 60s-era 5.6 produced ~28 fouls (real ~22)
-      const foulRate = clamp(4.0 * (carrier.rating / presser.rating), 2.3, 6.1) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.16 : 1) * (shield < 0.7 ? 1.2 : 1);
+      const foulRate = clamp(3.7 * (carrier.rating / presser.rating), 2.1, 5.7) * (1 + 0.3 * matchProgress) * (inPenBox ? 0.14 : 1) * (shield < 0.7 ? 1.2 : 1);
       const tackleRate = clamp(TACKLE_RATE * (presser.rating / carrier.rating), 1.4, 6) * (1 - 0.28 * matchProgress) * shield * strengthF;
       if (settleT > 0) { if (decideT <= 0) decide(); } // grace window — dribble/decide, can't be tackled yet
       else if (near && R() < foulRate * dt) foul(carrier, presser);
@@ -1450,6 +1516,7 @@ export function createMatchSim(
     for (const p of all) {
       if (sentOff.has(p.id)) continue; // sent off — off the pitch
       p.rt -= dt;
+      if (p.trackT > 0) p.trackT -= dt;
       if (p.seenSeq !== phaseSeq) {
         p.seenSeq = phaseSeq;
         if (p !== carrier && p !== passTo) p.lagT = p.kin.reaction;
@@ -1460,12 +1527,12 @@ export function createMatchSim(
       if (!lagged && (p === carrier || chasing || p.rt <= 0 || wallPos.has(p) || cornerDelivery)) {
         const t = target(p, pressers.includes(p), chasing);
         p.tx = t.tx; p.ty = t.ty;
-        p.rt = p === carrier || chasing ? 0.1 : rnd(0.35, 0.8);
+        p.rt = p === carrier || chasing || p.trackT > 0 ? 0.1 : rnd(0.35, 0.8);
       }
       // a keeper whose target is far off his line is SWEEPING — that's a sprint;
-      // a COMMITTED RUN is a dart, not a jog
+      // a COMMITTED RUN is a dart, not a jog — and so is TRACKING one
       const sprint = p === carrier || chasing || pressers.includes(p) || ballState === "attempt"
-        || p.runT > 0 || (p.role === "Goleiro" && dist(p.x, p.y, p.tx, p.ty) > 7);
+        || p.runT > 0 || p.trackT > 0 || (p.role === "Goleiro" && dist(p.x, p.y, p.tx, p.ty) > 7);
       steer(p, sprint, dt);
     }
     separate(dt);

@@ -14,4 +14,4 @@ export const FIXED_DT = 1 / 60; // authority tick — 60 Hz
 // re-tuned + the calibration gates re-anchored at this clock; 16× playback keeps
 // the old skim speed (a full match in ~11s).
 export const SECS_PER_MATCH = 180;
-export const TOTAL_STEPS = Math.round(SECS_PER_MATCH / FIXED_DT); // 3600 fixed steps per match
+export const TOTAL_STEPS = Math.round(SECS_PER_MATCH / FIXED_DT); // fixed steps per match (10800 at the 3-min clock)

@@ -1,21 +1,33 @@
 // CALIBRATION GATES — the sim's stats must live in real-football bands.
 //
-// RE-ANCHORED AT THE 3-MINUTE CLOCK (2026-07-02, SECS_PER_MATCH 60 → 180): the 60s
-// clock was the volume-starver all along — at 30× compression build-ups complete, so
-// shots/corners/0-0 fixed themselves and the re-tune was mostly DAMPING (foul + card
-// + conversion rates, shot appetite, a much stricter through-on-goal test — the old
-// one supplied HALF of all shots from wide/far positions). RATIOS are real:
-// P(goal|shot) ≈ 0.10-0.11 (real ~0.11), on-target ≈ 0.37 (real ~35-40%),
-// P(goal|on-target) ≈ 0.28 (real ~0.30), fouls/cards/pens/0-0 all in-band.
+// RE-CERTIFIED AT THE CLOSEOUT (2026-07-03) after the keeper-free-kick freeze fix:
+// 22 of these 150 seeds used to contain frozen spans of 14-166s (foul() handed the
+// free kick to the KEEPER, whose line-keeping never walked to the ball, so the
+// referee-wait pinned the match). Every earlier number certified on this range was
+// measured on a partially-dead distribution — including a "front-loaded goal
+// timing" artifact that was really dead matches not scoring late. The freeze-scan
+// regression test (freeze-scan.test.ts) keeps the three worst seeds honest.
 //
-// KNOWN RESIDUAL (do not knob it away): shot VOLUME ~16/team vs real ~12.5, and
-// goals ride it (~3.4 vs real ~2.7). Instrumentation showed the demand is
-// structural — the defence concedes ~30 high-value positions/match because a beaten
-// line stays beaten (no recovery pace / turn physics / reaction lag yet). Tightening
-// one shot source just routes the same positions through another. The kinematics
-// commit changes chase/recovery fundamentally; re-anchor volume THERE, with
-// mechanics, exactly as the 60s arc raised it with mechanics. Suppressing shots
-// from genuinely great positions would be a new artifact, not realism.
+// THE ECONOMY AT HEAD (N=150, seedBases 1000 & 5000): goals 3.30/3.39 (real ~2.7),
+// shots/team 15.0/14.9 (real ~12.5), on-target 0.40/0.41 (real ~0.35-0.40),
+// P(goal|shot) ≈ 0.11 (real ~0.11), corners ~3.9 (real ~10), fouls ~24 (real ~22),
+// yellows 3.9 (real ~3.5-4.5), reds 0.15/0.25 (real ~0.2), pens 0.45/0.55 (real
+// ~0.3), 0-0 3% (real ~8%), timing flat-to-late with a dead 76-90' dip.
+//
+// KNOWN RESIDUAL (do not knob it away): BREAKAWAY SUPPLY. Source instrumentation
+// (closeout) put clear-through shots at ~7/match (real 1-3) — that is the whole
+// volume+goals excess. Three definitional tightenings and a run-start man-tracking
+// trigger were tried; the definitional margins don't bind (a through runner has
+// 10+ units on a beaten line) and early man-tracking measurably BACKFIRED
+// (defenders chased feints, kept runners onside). What ships: goalside-only
+// runner tracking. The honest fix is coordinated marking + offside-trap
+// discipline — a named future mechanic. Suppressing shots from genuinely great
+// positions, or cutting conversion below its calibration, would fake the shape.
+//
+// The open-play xG→goal reference is 0.66 (recalibrated against this arc's shot
+// mix; penalties own a separate real-anchored 0.82-on-target conversion), and the
+// late-conversion factor is back at its honest 0.12 — the 0.16 juicing existed to
+// fight the freeze artifact.
 //
 // Bands are deliberately WIDE, asserted over 150 seeded matches (cross-checked at
 // seedBase 5000) — they gate the DISTRIBUTION, not a lucky seed.
@@ -73,75 +85,70 @@ describe("calibration — the sim's match stats live in real-football bands", ()
   // one shared 150-match run for every gate (they inspect different stats of it)
   const agg = playN(N, 1000);
 
-  it("goals per match (real ~2.7; rides the volume residual): mean in [2.4, 4.2]", () => {
-    expect(mean(agg.goals)).toBeGreaterThanOrEqual(2.4);
-    expect(mean(agg.goals)).toBeLessThanOrEqual(4.2); // comes down with the kinematics volume fix
+  it("goals per match (real ~2.7; measured 3.3 — rides the breakaway residual): mean in [2.6, 4.0]", () => {
+    expect(mean(agg.goals)).toBeGreaterThanOrEqual(2.6);
+    expect(mean(agg.goals)).toBeLessThanOrEqual(4.0); // narrows when coordinated marking lands
   }, SLOW);
 
-  it("shots per team ≈ real (~12.5; known ~16 residual): mean in [12, 20]", () => {
-    // At 180s volume flipped from starved (~7-8 at 60s) to ~30% HIGH (~16): the
-    // defence concedes too many high-value positions without recovery pace. The
-    // ceiling stops regression; the kinematics commit brings the mean down with
-    // mechanics, then this band narrows toward [9.5, 15.5].
-    expect(mean(agg.shotsPerTeam)).toBeGreaterThanOrEqual(12);
-    expect(mean(agg.shotsPerTeam)).toBeLessThanOrEqual(20);
+  it("shots per team ≈ real (~12.5; measured ~15): mean in [11.5, 17.5]", () => {
+    // the excess IS the breakaway residual (see header) — the band stops regression
+    // both ways and narrows toward [9.5, 15.5] when the marking mechanic lands
+    expect(mean(agg.shotsPerTeam)).toBeGreaterThanOrEqual(11.5);
+    expect(mean(agg.shotsPerTeam)).toBeLessThanOrEqual(17.5);
   }, SLOW);
 
-  it("shots on target ≈ real (~35% of all shots): fraction in [0.28, 0.5]", () => {
+  it("shots on target ≈ real (~35-40% of all shots): fraction in [0.30, 0.50]", () => {
     // was 92.5% before the aim-error tune — every unblocked shot hit the frame
-    expect(mean(agg.onTargetFrac)).toBeGreaterThanOrEqual(0.28);
+    expect(mean(agg.onTargetFrac)).toBeGreaterThanOrEqual(0.3);
     expect(mean(agg.onTargetFrac)).toBeLessThanOrEqual(0.5);
   }, SLOW);
 
-  it("corners ≈ real-ish (real ~10, measured ~4.3): mean in [2.5, 11]", () => {
-    // the 180s clock tripled the 60s-era ~1.7 (more play = more clearances behind);
-    // the rest of the gap comes with Magnus crosses + deflections, not knobs.
+  it("corners ≈ real-ish (real ~10, measured ~3.9): mean in [2.5, 11]", () => {
+    // 60s-era ~1.7 → ~3.9 (more play + Magnus deliveries + deflections). The rest of
+    // the gap needs more crossing volume — build-up width, not a knob.
     expect(mean(agg.corners)).toBeGreaterThanOrEqual(2.5);
     expect(mean(agg.corners)).toBeLessThanOrEqual(11);
   }, SLOW);
 
-  it("fouls per match ≈ real (~22): mean in [15, 26]", () => {
-    expect(mean(agg.fouls)).toBeGreaterThanOrEqual(15);
-    expect(mean(agg.fouls)).toBeLessThanOrEqual(26);
+  it("fouls per match ≈ real (~22, measured ~24): mean in [17, 27]", () => {
+    expect(mean(agg.fouls)).toBeGreaterThanOrEqual(17);
+    expect(mean(agg.fouls)).toBeLessThanOrEqual(27);
   }, SLOW);
 
-  it("yellow cards ≈ real (~3.5-4.5): mean in [2.0, 5.0]; reds rare (≤ 0.45)", () => {
-    expect(mean(agg.yellows)).toBeGreaterThanOrEqual(2.0);
-    expect(mean(agg.yellows)).toBeLessThanOrEqual(5.0);
-    expect(mean(agg.reds)).toBeLessThanOrEqual(0.45);
+  it("yellow cards ≈ real (~3.5-4.5, measured 3.9): mean in [2.4, 5.4]; reds rare (≤ 0.5)", () => {
+    expect(mean(agg.yellows)).toBeGreaterThanOrEqual(2.4);
+    expect(mean(agg.yellows)).toBeLessThanOrEqual(5.4);
+    expect(mean(agg.reds)).toBeLessThanOrEqual(0.5); // measured 0.15-0.25 (real ~0.2)
   }, SLOW);
 
-  it("0-0 stays uncommon (real ~8%; the hot economy runs lower): at most 12%", () => {
+  it("0-0 stays uncommon (real ~8%; the hot economy runs ~3%): at most 12%", () => {
     expect(agg.zeroZero / N).toBeLessThanOrEqual(0.12);
   }, SLOW);
 
-  it("penalties happen but stay rare (real ~0.3/match): mean in [0.05, 0.7]", () => {
-    expect(mean(agg.pens)).toBeGreaterThanOrEqual(0.05);
-    expect(mean(agg.pens)).toBeLessThanOrEqual(0.7);
+  it("penalties happen but stay rare (real ~0.3/match, measured ~0.5): mean in [0.1, 0.8]", () => {
+    // pen SUPPLY rides the same residual (more box entries = more box fouls); the
+    // in-box whistle damp (0.14) keeps it from tripling like the raw challenge rate
+    expect(mean(agg.pens)).toBeGreaterThanOrEqual(0.1);
+    expect(mean(agg.pens)).toBeLessThanOrEqual(0.8);
   }, SLOW);
 
-  it("goal timing has no LATE DIP and leans late (the audit artifact stays dead)", () => {
-    // the audit found goals DIPPING late (13.4% in 76-90' vs real ~24%, late < first).
-    // Drivers now in: urgency (chase/protect/draw risk-on), the fatigue fade (tackles,
-    // reach, stray passes, conversion), thrown-forward fullbacks, committed runs, the
-    // cagey opening, the coach brain's chase/shell, early through-balls ramping with
-    // settled(). Systematic late-third ≈ 28-32%; real no-stoppage is ~35% — the
-    // residual gap IS stoppage time + fresh-legged substitutes, which a fixed-step
-    // no-subs sim does not model. The gate pins the SHAPE (no dip, leans late), not a
-    // share the model structurally cannot reach — do not juice conversion to fake it.
-    //
-    // FRONT-LOAD TOLERANCE re-anchored at the 3-min clock: measured systematic lean
-    // is ~7-9pp front (was ~6pp at 60s — the longer clock completes early build-ups
-    // too). Three tuning passes moved it ±2pp inside seed noise; the bound's job is
-    // stopping REGRESSION (a 45/25 split still fails), the dip asserts carry the
-    // audit artifact. Kinematics (recovery pace, derived stamina) owns narrowing it.
+  it("goal timing has no LATE DIP and no front-load (the audit artifacts stay dead)", () => {
+    // TWO buried artifacts live here. (1) The original audit found goals DIPPING
+    // late (13.4% in 76-90'; real ~24%) — urgency, the fatigue fade, committed runs
+    // and the coach brain fixed it mechanically. (2) The 180s re-tune then measured
+    // a ~10pp FRONT-load and widened this tolerance to 10.5pp blaming the clock —
+    // wrong: the freeze bug was silencing late play (dead matches score early or
+    // never). Post-fix the lean measures ~6pp (base 1000) / ~0pp (base 5000), so
+    // the tolerance is back at 7.5pp. Real no-stoppage late-third is ~35%; the
+    // residual gap IS stoppage time + fresh substitutes, which a fixed-step no-subs
+    // sim does not model. Pin the SHAPE — never juice conversion to fake a share.
     const total = agg.goalMinutes.length;
     const late = agg.goalMinutes.filter((m) => m >= 61).length;
     const first = agg.goalMinutes.filter((m) => m <= 30).length;
     const finalBucket = agg.goalMinutes.filter((m) => m >= 76).length;
     expect(total).toBeGreaterThan(150); // enough sample to judge the shape
-    expect(late / total).toBeGreaterThanOrEqual(0.28);
-    expect(late).toBeGreaterThanOrEqual(first - Math.ceil(total * 0.105)); // bounded front-load (see header note)
-    expect(finalBucket / total).toBeGreaterThanOrEqual(0.13); // the 76-90' dip stays dead
+    expect(late / total).toBeGreaterThanOrEqual(0.27); // measured 0.30/0.33
+    expect(late).toBeGreaterThanOrEqual(first - Math.ceil(total * 0.075)); // measured lean ~6pp/0pp
+    expect(finalBucket / total).toBeGreaterThanOrEqual(0.12); // measured 0.15 — the 76-90' dip stays dead
   }, SLOW);
 });

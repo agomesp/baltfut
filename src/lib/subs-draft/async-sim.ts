@@ -1,6 +1,6 @@
 // Cooperative time-slicing for the heavy headless sim (perf: kill the freeze).
 //
-// After xG-unification every match is a full 3600-step sim (~22ms). Computing a whole
+// After xG-unification every match is a full TOTAL_STEPS sim (~65ms at the 3-min clock). Computing a whole
 // matchday (24) or a whole tournament replay (up to ~72) in one synchronous burst froze
 // the main thread for ~0.5s / ~1.6s. This yields to the event loop between matches so
 // React + the rAF spotlight pump keep breathing — the hard freeze becomes a responsive

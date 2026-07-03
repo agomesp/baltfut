@@ -8,7 +8,7 @@
 // drafted rosters) or fillTo48([]) for an all-mock room.
 //
 // The replay is ASYNC + time-sliced (computeChunked): re-running up to ~72 full
-// 3600-step sims would freeze the main thread ~1.6s, so each stage's matches are
+// full-match sims would freeze the main thread for seconds, so each stage's matches are
 // computed in yielded chunks. Determinism is untouched — status still threads
 // sequentially BETWEEN stages; only the (independent) matches WITHIN a stage are
 // sliced, and results come back in order.
