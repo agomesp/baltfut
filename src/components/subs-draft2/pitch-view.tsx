@@ -224,12 +224,7 @@ export default function PitchView({
       const updVel = (cur: Pt[], pv: Pt[], sk: Skel[]) => {
         cur.forEach((p, i) => {
           const s = sk[i]; if (!s) return;
-          const q = pv[i];
-          const vx = q ? (p.x - q.x) * invStep : 0, vy = q ? (p.y - q.y) * invStep : 0;
-          if (q && Math.hypot(p.x - q.x, p.y - q.y) > 8) { s.feet = [{ x: p.x - 1.1, y: p.y }, { x: p.x + 1.1, y: p.y }]; s.vx = 0; s.vy = 0; s.swing = -1; return; }
-          const nax = (vx - s.vx) * invStep, nay = (vy - s.vy) * invStep;
-          s.ax += (nax - s.ax) * 0.2; s.ay += (nay - s.ay) * 0.2;
-          s.vx += (vx - s.vx) * 0.35; s.vy += (vy - s.vy) * 0.35;
+          updateSkelVel(s, p, pv[i], invStep);
         });
       };
       updVel(snap.home, base.home, skels.current.home);
@@ -336,6 +331,27 @@ export default function PitchView({
 
 /* ─────────────── gait: foot-planting + kick + ragdoll ─────────────── */
 
+// EXPORTED for the gait-integrity test: the pump and the harness must share this
+// math — a hand-copied version silently decouples the test from the pipeline.
+export function updateSkelVel(s: Skel, p: Pt, q: Pt | undefined, invStep: number) {
+  const vx = q ? (p.x - q.x) * invStep : 0, vy = q ? (p.y - q.y) * invStep : 0;
+  if (q && Math.hypot(p.x - q.x, p.y - q.y) > 8) { s.feet = [{ x: p.x - 1.1, y: p.y }, { x: p.x + 1.1, y: p.y }]; s.vx = 0; s.vy = 0; s.swing = -1; return; }
+  const nax = (vx - s.vx) * invStep, nay = (vy - s.vy) * invStep;
+  s.ax += (nax - s.ax) * 0.2; s.ay += (nay - s.ay) * 0.2;
+  s.vx += (vx - s.vx) * 0.35; s.vy += (vy - s.vy) * 0.35;
+}
+
+// EXPORTED for the gait-integrity test. Anatomical reach is FIELD-isotropic but the
+// camera squashes only screen-y (×0.62), and maxLeg is calibrated on the vertically-
+// drawn leg — so measure in the y-calibrated metric (a screen-x px is 0.62 y-px of
+// anatomy). Without this a legitimate full sprint stride along screen-x near the
+// camera got clamped into a visible foot stutter.
+export function capFootReach(hip: Pt, f: Pt, maxLeg: number): Pt {
+  const dx = f.x - hip.x, dy = f.y - hip.y;
+  const d = Math.hypot(dx * 0.62, dy);
+  return d > maxLeg ? { x: hip.x + dx * (maxLeg / d), y: hip.y + dy * (maxLeg / d) } : f;
+}
+
 // exported for the headless gait-integrity test (feet must never stream away from bodies)
 export function stepGait(s: Skel, p: Pt, dt: number) {
   if (s.fall > 0) { s.fall -= dt; return; } // on the ground — freeze the gait
@@ -346,6 +362,13 @@ export function stepGait(s: Skel, p: Pt, dt: number) {
   const stance = 1.05;
   const homeL = { x: p.x + perp.x * -stance, y: p.y + perp.y * -stance };
   const homeR = { x: p.x + perp.x * stance, y: p.y + perp.y * stance };
+
+  // HARD SAFETY — in EVERY gait state (kick and idle included; the review found the
+  // old moving-branch-only snap left both uncovered): a foot >6 from the body snaps
+  // straight home, and any swing pointed at it is cancelled so the fresh radials
+  // below can't immediately re-launch a step toward the pre-snap position.
+  if (Math.hypot(p.x - s.feet[0].x, p.y - s.feet[0].y) > 6) { s.feet[0] = { x: homeL.x, y: homeL.y }; if (s.swing === 0) s.swing = -1; }
+  if (Math.hypot(p.x - s.feet[1].x, p.y - s.feet[1].y) > 6) { s.feet[1] = { x: homeR.x, y: homeR.y }; if (s.swing === 1) s.swing = -1; }
 
   // KICK: sweep one foot toward the ball direction
   if (s.kickT > 0) {
@@ -373,11 +396,11 @@ export function stepGait(s: Skel, p: Pt, dt: number) {
     const behind = (f: Pt) => (p.x - f.x) * dx + (p.y - f.y) * dy;
     const b0 = behind(s.feet[0]), b1 = behind(s.feet[1]);
     // RADIAL drag: arcing runners (turn-clamp kinematics) leave feet LATERALLY —
-    // invisible to the along-track projection — so measure straight distance too
+    // invisible to the along-track projection — so measure straight distance too.
+    // (Computed AFTER the top-of-function snap, so a just-reset foot reads ~stance
+    // and can't force-start a swing from its stale pre-snap distance.)
     const r0 = Math.hypot(p.x - s.feet[0].x, p.y - s.feet[0].y);
     const r1 = Math.hypot(p.x - s.feet[1].x, p.y - s.feet[1].y);
-    if (r0 > 6) { s.feet[0] = { x: homeL.x, y: homeL.y }; if (s.swing === 0) s.swing = -1; } // hard safety — no shin streaks
-    if (r1 > 6) { s.feet[1] = { x: homeR.x, y: homeR.y }; if (s.swing === 1) s.swing = -1; }
     const radial = Math.max(r0, r1) > 3.4;
     const worst = radial ? (r0 > r1 ? 0 : 1) : b0 > b1 ? 0 : 1;
     // start a step when a foot has fallen behind or drifted wide, or FORCE one if far
@@ -503,12 +526,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, p: FPt, s: Skel, col: string,
   // bursts, arc drift), a drawn foot never exceeds anatomical reach — a clamped leg
   // reads as a full stride; an unclamped one reads as a shin streak across the pitch.
   const maxLeg = (thigh + shin) * 1.12;
-  const capFoot = (f: { x: number; y: number }) => {
-    const dx = f.x - hip.x, dy = f.y - hip.y;
-    const d = Math.hypot(dx, dy);
-    return d > maxLeg ? { x: hip.x + (dx / d) * maxLeg, y: hip.y + (dy / d) * maxLeg } : f;
-  };
-  const f0 = capFoot(footScreen(s, 0, legLen)), f1 = capFoot(footScreen(s, 1, legLen));
+  const f0 = capFootReach(hip, footScreen(s, 0, legLen), maxLeg), f1 = capFootReach(hip, footScreen(s, 1, legLen), maxLeg);
   const legOrder: [{ x: number; y: number }, number][] = f0.y <= f1.y ? [[f0, 0], [f1, 1]] : [[f1, 1], [f0, 0]];
 
   if (style === "pixel") {
@@ -559,8 +577,11 @@ function drawPlayer(ctx: CanvasRenderingContext2D, p: FPt, s: Skel, col: string,
     seg(ctx, sho.x - spx * headR * 1.15, sho.y - spy * headR * 0.55, sho.x + spx * headR * 1.15, sho.y + spy * headR * 0.55, lw * 1.05, col);
     ctx.fillStyle = SKIN; ctx.beginPath(); ctx.arc(head.x, head.y, headR, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = dark; ctx.lineWidth = sc; ctx.stroke();
-    if (fy < 0.75) {
-      ctx.fillStyle = "#c49b74"; // the nose — which way is he looking?
+    if (fy < 0.35) {
+      // the nose — which way is he looking? The gate matches the pixel style's
+      // back-of-head threshold (fy > 0.35 = facing away), so the two renderers agree
+      // that a diagonal-away player (NE/NW, fy≈0.71) shows no face to the camera.
+      ctx.fillStyle = "#c49b74";
       ctx.beginPath(); ctx.arc(head.x + sfx * headR * 0.72, head.y + sfy * headR * 0.55, 1.25 * sc, 0, Math.PI * 2); ctx.fill();
     }
   }

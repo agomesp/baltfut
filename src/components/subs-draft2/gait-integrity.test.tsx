@@ -1,9 +1,12 @@
 // GAIT INTEGRITY — headless reproduction of the render pipeline: run the REAL sim,
-// derive per-frame velocities exactly like the pump's updVel, drive stepGait, and
-// assert feet never stream away from bodies (the "shin streak" artifact). This is
-// the deterministic harness for a bug that was only visible in screenshots.
+// derive per-frame velocities with the pump's OWN updateSkelVel (shared export, not
+// a hand copy), drive stepGait, and assert feet never stream away from bodies (the
+// "shin streak" artifact). Hardened by the closeout review: the bound sits BELOW
+// the 6-unit hard-snap threshold (so disabling either the radial stepping or the
+// snap fails the test), and the kick / idle / catch-up-burst states — which the
+// original harness never entered — get direct coverage.
 import { describe, it, expect } from "vitest";
-import { stepGait, type Skel } from "./pitch-view";
+import { stepGait, updateSkelVel, capFootReach, type Skel } from "./pitch-view";
 import { createMatchSim } from "@/lib/subs-draft/match-sim";
 import { autoLineup, fieldLayout, type FieldSlot } from "@/lib/subs-draft/squad";
 import { mockField } from "@/lib/subs-draft/tournament";
@@ -17,8 +20,10 @@ function mkSkels(xi: FieldSlot[]): Skel[] {
   }));
 }
 
+const mkOne = (): Skel => mkSkels([{ id: "t", name: "T", role: "Meio-campo", rating: 78, x: 50, y: 50 } as FieldSlot])[0];
+
 describe("gait integrity — feet stay under bodies through kinematic movement", () => {
-  it("max foot-body distance stays bounded over 3600 frames (60s of play)", () => {
+  it("max foot-body distance stays under the hard-snap threshold over 3600 frames", () => {
     const field = mockField();
     const homeXI = fieldLayout(field[0], autoLineup(field[0], "4-4-2", {}), "home");
     const awayXI = fieldLayout(field[1], autoLineup(field[1], "4-3-3", {}), "away");
@@ -33,14 +38,7 @@ describe("gait integrity — feet stay under bodies through kinematic movement",
       const upd = (cur: { x: number; y: number }[], pv: { x: number; y: number }[], sk: Skel[], label: string) => {
         cur.forEach((p, k) => {
           const s = sk[k];
-          const q = pv[k];
-          const invStep = 1 / FIXED_DT;
-          const vx = q ? (p.x - q.x) * invStep : 0;
-          const vy = q ? (p.y - q.y) * invStep : 0;
-          if (q && Math.hypot(p.x - q.x, p.y - q.y) > 8) { s.feet = [{ x: p.x - 1.1, y: p.y }, { x: p.x + 1.1, y: p.y }]; s.vx = 0; s.vy = 0; s.swing = -1; return; }
-          const nax = (vx - s.vx) * invStep, nay = (vy - s.vy) * invStep;
-          s.ax += (nax - s.ax) * 0.2; s.ay += (nay - s.ay) * 0.2;
-          s.vx += (vx - s.vx) * 0.35; s.vy += (vy - s.vy) * 0.35;
+          updateSkelVel(s, p, pv[k], 1 / FIXED_DT); // the pump's own math — shared export
           stepGait(s, p, FIXED_DT);
           for (const f of s.feet) {
             const d = Math.hypot(f.x - p.x, f.y - p.y);
@@ -53,6 +51,46 @@ describe("gait integrity — feet stay under bodies through kinematic movement",
       prev = snap;
     }
     process.stdout.write(`max foot-body dist: ${maxDist.toFixed(1)} at ${maxAt}\n`);
-    expect(maxDist).toBeLessThan(8);
+    // BELOW the 6-unit snap: if radial stepping regresses, drift reaches 6 and fails
+    // here before the snap can hide it (measured healthy max ≈ 4.6).
+    expect(maxDist).toBeLessThan(6);
   }, 120_000);
+
+  it("the hard snap rescues a stranded foot in EVERY state (idle, moving, kick)", () => {
+    for (const state of ["idle", "moving", "kick"] as const) {
+      const s = mkOne();
+      const p = { x: 50, y: 50 };
+      s.feet[0] = { x: 30, y: 50 }; // 20 units away — far past any legitimate stride
+      s.swing = 0;
+      if (state === "moving") { s.vx = 0; s.vy = 8; }
+      if (state === "kick") { s.kickT = 0.3; s.kx = 0; s.ky = 1; }
+      stepGait(s, p, FIXED_DT);
+      const d0 = Math.hypot(s.feet[0].x - p.x, s.feet[0].y - p.y);
+      expect(d0, `state=${state}`).toBeLessThan(3);
+    }
+  });
+
+  it("catch-up bursts (the live dt cap, 0.05s) keep feet bounded through a sprint", () => {
+    const s = mkOne();
+    const p = { x: 50, y: 50 };
+    for (let i = 0; i < 200; i++) {
+      p.y += 18 * 0.05; // full sprint
+      updateSkelVel(s, { ...p }, { x: p.x, y: p.y - 18 * 0.05 }, 1 / 0.05);
+      stepGait(s, p, 0.05);
+      for (const f of s.feet) expect(Math.hypot(f.x - p.x, f.y - p.y)).toBeLessThan(6);
+    }
+  });
+
+  it("capFootReach is anisotropic: a screen-x stride at anatomical reach is NOT clamped, a screen-y overreach IS", () => {
+    const hip = { x: 100, y: 100 };
+    const maxLeg = 16;
+    // horizontal: field-equivalent reach allows maxLeg/0.62 screen-x px
+    const wide = { x: 100 + (maxLeg / 0.62) * 0.99, y: 100 };
+    expect(capFootReach(hip, wide, maxLeg)).toEqual(wide);
+    // vertical: maxLeg is calibrated on the drawn vertical leg — anything past it clamps
+    const long = { x: 100, y: 100 + maxLeg * 1.2 };
+    const capped = capFootReach(hip, long, maxLeg);
+    expect(Math.hypot((capped.x - hip.x) * 0.62, capped.y - hip.y)).toBeCloseTo(maxLeg, 5);
+    expect(capped.y - hip.y).toBeLessThan(maxLeg * 1.01);
+  });
 });
