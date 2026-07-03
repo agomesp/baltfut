@@ -124,16 +124,16 @@ const SURFACES: Record<Variant, Surface> = {
   },
 };
 
-export function BottomTabBar({ view, onView, variant = "v1" }: { view: ViewKey; onView: (v: ViewKey) => void; variant?: Variant }) {
+export function BottomTabBar({ view, onView, variant = "v1", inline = false }: { view: ViewKey; onView: (v: ViewKey) => void; variant?: Variant; inline?: boolean }) {
   const s = SURFACES[variant];
   return (
     <nav
       style={{
-        position: "fixed",
-        left: "50%",
-        bottom: 14,
-        transform: "translateX(-50%)",
-        zIndex: 65,
+        // `inline`: sit in a flex row (e.g. beside the live second-dock); the
+        // parent owns the fixed bottom-centered positioning. Default: fixed itself.
+        ...(inline
+          ? { position: "relative", flex: "none" }
+          : { position: "fixed", left: "50%", bottom: 14, transform: "translateX(-50%)", zIndex: 65 }),
         display: "flex",
         gap: s.gap,
         maxWidth: "calc(100vw - 24px)",

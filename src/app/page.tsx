@@ -40,6 +40,7 @@ import { ResultsView } from "@/components/results-view";
 import { BracketView } from "@/components/bracket-view";
 import { AiPalpitesView } from "@/components/ai-palpites-view";
 import { BottomTabBar } from "@/components/bottom-tab-bar";
+import { LiveSubDock } from "@/components/live-sub-dock";
 
 const REFRESH_MS = 30_000;
 // Standings drive the bracket (chaveamento) seeds — also worker-polled so they
@@ -510,26 +511,6 @@ export default function Home() {
 
         {!loading && view === "live" && (
           <>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              {([["partidas", "Partidas"], ["chaveamento", "Palpites · Chaveamento"]] as const).map(([key, label]) => {
-                const on = liveSubTab === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setLiveSubTab(key)}
-                    style={{
-                      fontFamily: "var(--font-jb)", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
-                      padding: "8px 14px", borderRadius: 9, cursor: "pointer",
-                      background: on ? "#c8ff2d" : "transparent", color: on ? "#0f1f02" : "#9bb6a6",
-                      border: `1px solid ${on ? "#c8ff2d" : "rgba(255,255,255,0.14)"}`,
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
             {liveSubTab === "partidas" ? (
               <LiveView
                 chips={chips}
@@ -569,8 +550,13 @@ export default function Home() {
           <AiPalpitesView matches={matches} groups={groups} groupByTeam={groupByTeam} palpiteOverrides={palpiteOverrides} />
         )}
       </main>
-      {/* Primary navigation: the bottom dock (2.1 sport). */}
-      <BottomTabBar view={view} onView={setView} variant="v3" />
+      {/* Primary navigation: the bottom dock (2.1 sport). On the live tab a yellow
+          second dock sits to its right to switch Partidas ↔ Chaveamento. The row is
+          bottom-centered; it wraps (second dock above) if it can't fit one line. */}
+      <div style={{ position: "fixed", left: "50%", bottom: 14, transform: "translateX(-50%)", zIndex: 65, display: "flex", alignItems: "flex-end", justifyContent: "center", flexWrap: "wrap-reverse", gap: 10, maxWidth: "calc(100vw - 16px)" }}>
+        <BottomTabBar view={view} onView={setView} variant="v3" inline />
+        {view === "live" ? <LiveSubDock value={liveSubTab} onChange={setLiveSubTab} /> : null}
+      </div>
     </>
   );
 }
