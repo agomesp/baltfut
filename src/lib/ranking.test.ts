@@ -1,7 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { rankSubs, worstPalpiteiro, headToHead } from "@/lib/ranking";
-import type { Match, Side } from "@/lib/espn";
+import { rankSubs, worstPalpiteiro, headToHead, bracketPointsByUser } from "@/lib/ranking";
+import type { KnockoutColumn, Match, Side } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
+
+/** A finished knockout match with distinct team codes (for bracket scoring). */
+function koMatch(id: string, home: string, away: string, hs: number, as: number): Match {
+  return {
+    id, league: "fifa.world", name: id, shortName: id, startsAt: "2026-07-05T16:00:00Z", state: "post",
+    isLive: false, statusDetail: "FT", displayClock: null, venue: null,
+    home: { id: home, name: home, abbreviation: home, logo: null },
+    away: { id: away, name: away, abbreviation: away, logo: null },
+    homeScore: hs, awayScore: as, homeShootout: null, awayShootout: null, goals: [], cards: [],
+  };
+}
 
 function match(
   id: string,
@@ -154,6 +165,35 @@ describe("rankSubs", () => {
     const late = entry("Markler", "m1", 2, 1, "2026-06-20T16:30:00Z");
     expect(rankSubs([late], matchesById)).toEqual([
       { username: "Markler", wins: 1, losses: 0, penWins: 0, penLosses: 0 },
+    ]);
+  });
+});
+
+describe("bracketPointsByUser + rankSubs bracket folding", () => {
+  // A round-of-32 with two finished ties: tie 0 → H wins, tie 1 → A wins.
+  const koColumns: KnockoutColumn[] = [
+    { slug: "round-of-32", label: "", matches: [koMatch("k0", "H0", "A0", 2, 1), koMatch("k1", "H1", "A1", 0, 1)] },
+  ];
+
+  it("awards 0.2 per correct knockout winner and nothing for wrong/pending", () => {
+    const pts = bracketPointsByUser(
+      [{ username: "ana", picks: { "0-0": "H0", "0-1": "H1" } }], // 0-0 right (H0), 0-1 wrong (real A1)
+      koColumns,
+    );
+    expect(pts.ana).toBeCloseTo(0.2, 5);
+    // A pick on an undecided position scores nothing.
+    expect(bracketPointsByUser([{ username: "b", picks: { "1-0": "H0" } }], koColumns).b).toBeUndefined();
+  });
+
+  it("folds bracket points into a sub's wins and surfaces a bracket-only nickname", () => {
+    const ranked = rankSubs(
+      [entry("ana", "m1", 2, 1)], // ana: 1 exact-score win
+      matchesById,
+      { ana: 0.2, solo: 0.4 }, // ana also has bracket pts; solo has ONLY a bracket
+    );
+    expect(ranked).toEqual([
+      { username: "ana", wins: 1.2, losses: 0, penWins: 0, penLosses: 0 },
+      { username: "solo", wins: 0.4, losses: 0, penWins: 0, penLosses: 0 },
     ]);
   });
 });

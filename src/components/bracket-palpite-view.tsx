@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Match } from "@/lib/espn";
 import { buildKnockout } from "@/lib/espn";
 import { teamNamePt } from "@/lib/team-names";
@@ -14,11 +14,11 @@ import {
   type PickTie,
   type PickVerdict,
 } from "@/lib/bracket-picks";
+import { submitBracket, supabaseCastBracket, type CastBracketTransport, type BracketEntry } from "@/lib/bracket-votes";
 import { ConnectedBracket, type BracketRound } from "@/components/connected-bracket";
 import { useNameLock, NameField } from "@/components/live/palpite-form";
-import { BRIC, JB, SAIRA, LIME, DIM, DIM_2, GOLD, FlagIcon, FlagCrest, ViewHeader, teamAccent } from "@/components/live/bf-ui";
+import { BRIC, JB, SAIRA, LIME, DIM, DIM_2, GOLD, FlagIcon, FlagCrest, ViewHeader, teamAccent, isMe } from "@/components/live/bf-ui";
 
-const STORAGE_KEY = "baltfut_bracket_palpite";
 const GREEN = "#3ee65f";
 const RED = "#ff4d5e";
 const SLATE = "#93a7c4"; // locked "real result" (not the user's pick)
@@ -109,10 +109,26 @@ function PickTieCard({ tie, round, tieIndex, verdict, editing, onPick }: {
   );
 }
 
-export function BracketPalpiteView({ matches }: { matches: Match[] }) {
+export function BracketPalpiteView({
+  matches,
+  brackets = [],
+  onSaved,
+  transport = supabaseCastBracket,
+}: {
+  matches: Match[];
+  /** All saved brackets (from the DB) — used to load the viewer's own by nickname. */
+  brackets?: BracketEntry[];
+  /** Called after a successful save so the page refetches (ranking updates). */
+  onSaved?: () => void;
+  /** Injectable for tests; defaults to the cast-bracket Edge Function transport. */
+  transport?: CastBracketTransport;
+}) {
   const { name, setName, locked: nameLocked, confirm } = useNameLock();
   const [picks, setPicks] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState<SavedPalpite | null>(null);
+  const [justSaved, setJustSaved] = useState<SavedPalpite | null>(null);
+  const [reediting, setReediting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const columns = useMemo(() => buildKnockout(matches), [matches]);
   const drawn = useMemo(() => {
@@ -121,43 +137,57 @@ export function BracketPalpiteView({ matches }: { matches: Match[] }) {
   }, [columns]);
   const realWinners = useMemo(() => realWinnersByPos(columns), [columns]);
 
-  // Load a previously-saved palpite once (it locks the bracket + shows green/red).
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const s = JSON.parse(raw) as SavedPalpite;
-        if (s?.picks) { setSaved(s); setPicks(s.picks); }
-      }
-    } catch { /* ignore */ }
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  // The viewer's own saved bracket, loaded from the DB feed by nickname. A fresh
+  // save (justSaved) shows immediately even before the page refetches.
+  const mine = useMemo(
+    () => (name ? brackets.find((b) => isMe(b.username, name)) ?? null : null),
+    [brackets, name],
+  );
+  const saved = useMemo<SavedPalpite | null>(
+    () => justSaved ?? (mine ? { nickname: mine.username, picks: mine.picks, savedAt: mine.updatedAt } : null),
+    [justSaved, mine],
+  );
+  const isSaved = !reediting && saved != null;
 
-  const isSaved = saved != null;
-  const { rounds, champion } = useMemo(() => resolveBracketPicks(columns, picks, isSaved), [columns, picks, isSaved]);
+  const editPicks = isSaved && saved ? saved.picks : picks;
+  const { rounds, champion } = useMemo(
+    () => resolveBracketPicks(columns, editPicks, isSaved),
+    [columns, editPicks, isSaved],
+  );
   const score = useMemo(() => scoreBracketPicks(rounds, realWinners), [rounds, realWinners]);
 
   const onPick = useCallback((round: number, tie: number, team: string) => {
     if (isSaved) return;
+    setError(null);
     setPicks((prev) => resolveBracketPicks(columns, togglePick(prev, round, tie, team)).picks);
   }, [isSaved, columns]);
 
-  const onSave = useCallback(() => {
+  const onSave = useCallback(async () => {
     const finalName = name.trim();
-    if (!finalName || !champion) return;
+    if (!finalName || !champion || submitting) return;
+    const cleaned = resolveBracketPicks(columns, picks).picks;
+    setSubmitting(true);
+    setError(null);
+    const r = await submitBracket({ username: finalName, picks: cleaned }, transport);
+    setSubmitting(false);
+    if (!r.ok) {
+      setError(r.message);
+      return;
+    }
     if (!nameLocked) confirm(finalName);
-    const rec: SavedPalpite = { nickname: finalName, picks: resolveBracketPicks(columns, picks).picks, savedAt: new Date().toISOString() };
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rec)); } catch { /* ignore */ }
-    setSaved(rec);
-  }, [name, champion, nameLocked, confirm, columns, picks]);
+    setJustSaved({ nickname: finalName, picks: cleaned, savedAt: new Date().toISOString() });
+    setReediting(false);
+    onSaved?.();
+  }, [name, champion, submitting, columns, picks, transport, nameLocked, confirm, onSaved]);
 
-  // TEST-ONLY: let the tester redo a saved palpite (the spec locks it in prod).
+  // Re-open the saved bracket for editing (seeded from the saved picks). Re-saving
+  // overwrites the stored one — useful to refine before the knockout begins.
   const reset = useCallback(() => {
-    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
-    setSaved(null);
-    setPicks({});
-  }, []);
+    setPicks(saved?.picks ?? {});
+    setJustSaved(null);
+    setReediting(true);
+    setError(null);
+  }, [saved]);
 
   if (!drawn) {
     return (
@@ -221,27 +251,35 @@ export function BracketPalpiteView({ matches }: { matches: Match[] }) {
             <span style={{ fontFamily: JB, fontSize: 11, color: "#9bb6a6" }}>
               PONTOS: <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 18, color: GOLD }}>{score.total.toFixed(1).replace(".", ",")}</span>
             </span>
-            <button type="button" onClick={reset} title="Refazer (apenas para teste local)" style={{ flex: "none", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9bb6a6", background: "transparent", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 9, padding: "8px 12px", cursor: "pointer" }}>↺ refazer (teste)</button>
+            <button type="button" onClick={reset} title="Refazer o chaveamento (sobrescreve o salvo)" style={{ flex: "none", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9bb6a6", background: "transparent", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 9, padding: "8px 12px", cursor: "pointer" }}>↺ refazer</button>
           </>
         ) : (
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={!champion || !name.trim()}
-            title={!champion ? "Escolha o vencedor de cada jogo até a final" : !name.trim() ? "Digite seu nome" : "Salvar"}
-            style={{ flex: "none", fontFamily: BRIC, fontWeight: 800, fontSize: 13, letterSpacing: "0.02em", padding: "10px 18px", borderRadius: 11, border: "none", cursor: champion && name.trim() ? "pointer" : "not-allowed", background: champion && name.trim() ? LIME : "rgba(255,255,255,0.08)", color: champion && name.trim() ? "#0f1f02" : "#6f8a78" }}
-          >
-            Salvar palpite de chaveamento →
-          </button>
+          (() => {
+            const canSave = !!champion && !!name.trim() && !submitting;
+            return (
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={!canSave}
+                title={!champion ? "Escolha o vencedor de cada jogo até a final" : !name.trim() ? "Digite seu nome" : "Salvar"}
+                style={{ flex: "none", fontFamily: BRIC, fontWeight: 800, fontSize: 13, letterSpacing: "0.02em", padding: "10px 18px", borderRadius: 11, border: "none", cursor: canSave ? "pointer" : "not-allowed", background: canSave ? LIME : "rgba(255,255,255,0.08)", color: canSave ? "#0f1f02" : "#6f8a78" }}
+              >
+                {submitting ? "Salvando…" : "Salvar palpite de chaveamento →"}
+              </button>
+            );
+          })()
         )}
       </div>
+      {error ? (
+        <div style={{ fontFamily: BRIC, fontSize: 12, color: RED, margin: "-6px 4px 10px" }}>{error}</div>
+      ) : null}
 
       {/* Legend */}
       <div style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: DIM_2, margin: "0 4px 8px" }}>
         {isSaved ? (
-          <><span style={{ color: GREEN }}>verde = acertou</span> · <span style={{ color: RED }}>vermelho = errou</span> · <span style={{ color: SLATE }}>🔒 resultado real</span> · restantes = a decidir · 0,2 por vencedor · 1 pelo campeão</>
+          <><span style={{ color: GREEN }}>verde = acertou</span> · <span style={{ color: RED }}>vermelho = errou</span> · <span style={{ color: SLATE }}>🔒 resultado real</span> · restantes = a decidir · 0,2 por vencedor certo · entra no Ranking dos Subs</>
         ) : (
-          <>clique no time que avança · clique de novo para desfazer · <span style={{ color: SLATE }}>🔒 já começou (travado)</span> · 0,2 por vencedor · 1 pelo campeão</>
+          <>clique no time que avança · clique de novo para desfazer · <span style={{ color: SLATE }}>🔒 já começou (travado)</span> · 0,2 por vencedor certo · entra no Ranking dos Subs</>
         )}
       </div>
 

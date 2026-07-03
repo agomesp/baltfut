@@ -1,23 +1,6 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ownerToken } from "@/lib/owner-token";
 import type { CastVoteTransport } from "@/lib/votes/submit";
-
-/**
- * A stable per-browser secret that proves nickname ownership to the Edge
- * Function. Generated once and kept in localStorage; sent (never displayed) with
- * each palpite. Falls back to an ephemeral token if storage is unavailable.
- */
-function ownerToken(): string {
-  try {
-    let t = localStorage.getItem("baltfut_token");
-    if (!t) {
-      t = crypto.randomUUID();
-      localStorage.setItem("baltfut_token", t);
-    }
-    return t;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
 
 /**
  * Production transport: invokes the cast-vote Edge Function via supabase-js and

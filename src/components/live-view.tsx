@@ -18,6 +18,7 @@ import { HeroWithCinematic } from "@/components/live/hero-with-cinematic";
 import { CommunityBar } from "@/components/live/community-bar";
 import { PalpiteBreakdown } from "@/components/live/palpite-breakdown";
 import { RankingSubs } from "@/components/live/ranking-subs";
+import type { BracketEntry } from "@/lib/bracket-votes";
 import { IaVsVoce } from "@/components/live/ia-vs-voce";
 import { LiveDuoCard } from "@/components/live/live-duo-card";
 import { PreMatchPanel, DuoGameCard } from "@/components/live/prematch-panel";
@@ -84,6 +85,7 @@ function PlacarStage({
   allEntries,
   matches,
   results,
+  brackets,
   panel,
   onPanel,
   lineups,
@@ -99,6 +101,7 @@ function PlacarStage({
   allEntries: VoteEntry[];
   matches: Match[];
   results?: Record<string, MatchResult>;
+  brackets?: BracketEntry[];
   panel: "predict" | "lineup";
   onPanel: (p: "predict" | "lineup") => void;
   lineups: MatchLineups | null;
@@ -175,7 +178,7 @@ function PlacarStage({
         <div style={{ flex: narrow ? "none" : 0.82, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <IaVsVoce entries={allEntries} matches={matches} style={{ flex: "none" }} />
           <CommunityBar consensus={consensus} homeCode={homeCode} awayCode={awayCode} homeAccent={teamAccent(homeCode)} awayAccent={teamAccent(awayCode)} />
-          <RankingSubs entries={allEntries} matches={matches} results={results} variant={narrow ? "column" : "grid"} style={narrow ? { flex: "none" } : { flex: 1, minHeight: 0 }} />
+          <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} variant={narrow ? "column" : "grid"} style={narrow ? { flex: "none" } : { flex: 1, minHeight: 0 }} />
         </div>
       </div>
       )}
@@ -191,7 +194,7 @@ function PlacarStage({
  * it flips to a live card at kickoff. When any card is a form, a shared name
  * field sits above the pair (mirrors the pre-match duo).
  */
-function DuoStage({ games, allEntries, matches, results, groupByTeam, releasedIds, palpiteOverrides, onVoted }: { games: Match[]; allEntries: VoteEntry[]; matches: Match[]; results?: Record<string, MatchResult>; groupByTeam: Record<string, string>; releasedIds: Set<string>; palpiteOverrides: Record<string, number>; onVoted: () => void }) {
+function DuoStage({ games, allEntries, matches, results, brackets, groupByTeam, releasedIds, palpiteOverrides, onVoted }: { games: Match[]; allEntries: VoteEntry[]; matches: Match[]; results?: Record<string, MatchResult>; brackets?: BracketEntry[]; groupByTeam: Record<string, string>; releasedIds: Set<string>; palpiteOverrides: Record<string, number>; onVoted: () => void }) {
   const narrow = useIsNarrow();
   const now = useNow(1000);
   const { name, setName, locked, confirm, unlock } = useNameLock();
@@ -212,7 +215,7 @@ function DuoStage({ games, allEntries, matches, results, groupByTeam, releasedId
     );
   };
 
-  const ranking = <RankingSubs entries={allEntries} matches={matches} results={results} variant="column" style={{ flex: "none", width: narrow ? "100%" : 250 }} />;
+  const ranking = <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} variant="column" style={{ flex: "none", width: narrow ? "100%" : 250 }} />;
 
   // Both live (or finished): the original inline layout, unchanged.
   if (!anyForm) {
@@ -256,6 +259,8 @@ export interface LiveViewProps {
   /** Durable finished-match scores from the DB — the ranking grades on these
    *  first, so ESPN dropping/changing an old result can't erase wins. */
   matchResults?: Record<string, MatchResult>;
+  /** Saved knockout brackets — 0.2 per correct winner folds into the ranking. */
+  brackets?: BracketEntry[];
   onVoted: () => void;
   followCode: string | null;
   groupByTeam: Record<string, string>;
@@ -276,6 +281,7 @@ export function LiveView({
   allEntries,
   matches,
   matchResults,
+  brackets,
   onVoted,
   followCode,
   groupByTeam,
@@ -388,7 +394,7 @@ export function LiveView({
               onVoted={onVoted}
             />
           ) : partner ? (
-            <DuoStage games={[primary, partner]} allEntries={allEntries} matches={matches} results={matchResults} groupByTeam={groupByTeam} releasedIds={releasedIds} palpiteOverrides={palpiteOverrides} onVoted={onVoted} />
+            <DuoStage games={[primary, partner]} allEntries={allEntries} matches={matches} results={matchResults} brackets={brackets} groupByTeam={groupByTeam} releasedIds={releasedIds} palpiteOverrides={palpiteOverrides} onVoted={onVoted} />
           ) : (
             <PlacarStage
               match={primary}
@@ -397,6 +403,7 @@ export function LiveView({
               allEntries={allEntries}
               matches={matches}
               results={matchResults}
+              brackets={brackets}
               panel={panel}
               onPanel={onPanel}
               lineups={lineups}

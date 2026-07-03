@@ -391,6 +391,11 @@ deno_version = 2
 # away keyless bots. The function still does its own validation + IP dedup.
 verify_jwt = true
 
+[functions.cast-bracket]
+# Same baseline gate as cast-vote: require the anon key, then do our own
+# validation + nickname ownership + IP hash inside the function.
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

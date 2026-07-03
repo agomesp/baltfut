@@ -151,9 +151,14 @@ export function realWinnersByPos(columns: KnockoutColumn[]): Record<string, stri
 
 export type PickVerdict = "correct" | "wrong" | "pending";
 
-/** Score a saved bracket: 0.2 per correct winner the user PICKED, 1 for a correct
- *  champion (the final's winner). Locked/reality ties aren't the user's pick, so
- *  they don't score. Returns the total + a per-position verdict for green/red. */
+/** Points awarded per correctly-picked knockout winner — every round, champion
+ *  included. Bracket points fold into the same Ranking dos Subs as score palpites. */
+export const BRACKET_POINTS_PER_WINNER = 0.2;
+
+/** Score a saved bracket: {@link BRACKET_POINTS_PER_WINNER} for every correct
+ *  winner the user PICKED (all rounds, champion included). Locked/reality ties
+ *  aren't the user's pick, so they don't score. Returns the total + a per-position
+ *  verdict for green/red. */
 export function scoreBracketPicks(
   rounds: PickTie[][],
   realWinners: Record<string, string>,
@@ -171,7 +176,7 @@ export function scoreBracketPicks(
         return;
       }
       if (pick === winner) {
-        total += r === 4 ? 1 : 0.2;
+        total += BRACKET_POINTS_PER_WINNER;
         byPos[k] = "correct";
       } else {
         byPos[k] = "wrong";

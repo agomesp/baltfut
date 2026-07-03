@@ -274,4 +274,46 @@ begin
   raise notice 'PASS O2: service_role can execute set_match_results';
 end $$;
 
+-- P) bracket_palpites is anon read-only on the PUBLIC columns: anon may read
+--    username/picks (and the bracket_entries feed), never ip_hash, and can never
+--    write. Only the cast-bracket Edge Function (service_role) upserts brackets.
+do $$
+declare n int;
+begin
+  set local role anon;
+  select count(*) into n from public.bracket_palpites;      -- anon CAN read public cols
+  raise notice 'PASS P1: anon read bracket_palpites (% rows)', n;
+  select count(*) into n from public.bracket_entries;       -- anon CAN read the feed view
+  raise notice 'PASS P2: anon read bracket_entries (% rows)', n;
+  begin
+    perform ip_hash from public.bracket_palpites;
+    raise exception 'FAIL P3: anon read bracket_palpites.ip_hash';
+  exception when insufficient_privilege then raise notice 'PASS P3: anon read ip_hash denied';
+  end;
+  begin
+    insert into public.bracket_palpites (username, picks, ip_hash) values ('rls_probe', '{}'::jsonb, repeat('a', 32));
+    raise exception 'FAIL P4: anon inserted a bracket palpite';
+  exception when insufficient_privilege then raise notice 'PASS P4: anon insert bracket denied';
+  end;
+  begin
+    update public.bracket_palpites set picks = '{}'::jsonb;
+    raise exception 'FAIL P5: anon updated a bracket palpite';
+  exception when insufficient_privilege then raise notice 'PASS P5: anon update bracket denied';
+  end;
+  begin
+    delete from public.bracket_palpites;
+    raise exception 'FAIL P6: anon deleted bracket palpites';
+  exception when insufficient_privilege then raise notice 'PASS P6: anon delete bracket denied';
+  end;
+end $$;
+do $$
+begin
+  set local role service_role;
+  insert into public.bracket_palpites (username, picks, ip_hash)
+  values ('rls_probe', '{"0-0":"BRA"}'::jsonb, repeat('a', 32))
+  on conflict (username) do update set picks = excluded.picks, updated_at = now();
+  delete from public.bracket_palpites where username = 'rls_probe';
+  raise notice 'PASS P7: service_role can write bracket_palpites';
+end $$;
+
 select 'ALL RLS CHECKS PASSED' as result;

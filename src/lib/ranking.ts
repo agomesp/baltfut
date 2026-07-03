@@ -1,6 +1,34 @@
-import type { Match } from "@/lib/espn";
+import type { KnockoutColumn, Match } from "@/lib/espn";
 import { matchShootout } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
+import { resolveBracketPicks, scoreBracketPicks, realWinnersByPos } from "@/lib/bracket-picks";
+
+/** A saved knockout bracket, keyed by the same nickname as the score palpites. */
+export interface BracketPalpite {
+  username: string;
+  picks: Record<string, string>;
+}
+
+/**
+ * Points each nickname earns from their saved bracket — 0.2 per correctly-picked
+ * knockout winner (champion included), graded against the real knockout. Only
+ * decided ties score (pending ones award nothing yet). Keyed by username, folded
+ * into the same Ranking dos Subs as score palpites via {@link rankSubs}.
+ */
+export function bracketPointsByUser(
+  brackets: BracketPalpite[],
+  columns: KnockoutColumn[],
+): Record<string, number> {
+  const realWinners = realWinnersByPos(columns);
+  const out: Record<string, number> = {};
+  for (const b of brackets) {
+    // frozen: score the user's OWN picks (locked reality ties don't count).
+    const { rounds } = resolveBracketPicks(columns, b.picks, true);
+    const { total } = scoreBracketPicks(rounds, realWinners);
+    if (total > 0) out[b.username] = (out[b.username] ?? 0) + total;
+  }
+  return out;
+}
 
 /** The slice of a match needed to grade a palpite — satisfied by a full `Match`
  *  (from ESPN) OR a durable row from the `match_results` table, so the ranking can
@@ -26,10 +54,15 @@ export interface SubRank {
  * counts (the kickoff+5min form lock already prevents late ones). Sorted by wins
  * (correct palpites, incl. the pen halves) desc, then name — losses are tallied
  * for display but never affect the order, so a wrong palpite costs nothing in rank.
+ *
+ * `bracketPoints` (username → 0.2-per-correct-winner from {@link bracketPointsByUser})
+ * folds into the SAME table: added to a sub's wins, and surfacing a bracket-only
+ * nickname (no score palpites) as its own row.
  */
 export function rankSubs(
   entries: VoteEntry[],
   matchesById: Record<string, MatchResult>,
+  bracketPoints: Record<string, number> = {},
 ): SubRank[] {
   const tally = new Map<string, { wins: number; losses: number; penWins: number; penLosses: number }>();
 
@@ -53,6 +86,15 @@ export function rankSubs(
       }
     }
     tally.set(e.username, t);
+  }
+
+  // Fold in bracket points (0.2 per correct knockout winner). A nickname with only
+  // a bracket and no score palpites still gets a row.
+  for (const [username, pts] of Object.entries(bracketPoints)) {
+    if (!(pts > 0)) continue;
+    const t = tally.get(username) ?? { wins: 0, losses: 0, penWins: 0, penLosses: 0 };
+    t.wins += pts;
+    tally.set(username, t);
   }
 
   return [...tally.entries()]

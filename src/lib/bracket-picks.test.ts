@@ -107,7 +107,7 @@ describe("realWinnersByPos + scoreBracketPicks", () => {
     expect(real[posKey(4, 0)]).toBe("H0"); // final pens 5-3 → home
   });
 
-  it("scores 0.2 per correct winner and 1 for a correct champion; pending when undecided", () => {
+  it("scores a flat 0.2 per correct winner (champion included); pending when undecided", () => {
     const rounds = [
       [
         { home: "H0", away: "A0", pickedWinner: "H0" }, // correct → 0.2
@@ -115,10 +115,10 @@ describe("realWinnersByPos + scoreBracketPicks", () => {
         { home: "H2", away: "A2", pickedWinner: "H2" }, // pending (no result)
       ],
       [], [], [],
-      [{ home: "H0", away: "A0", pickedWinner: "H0" }], // final correct → 1
+      [{ home: "H0", away: "A0", pickedWinner: "H0" }], // final correct → 0.2
     ] as never;
     const { total, byPos } = scoreBracketPicks(rounds, realWinnersByPos(columns));
-    expect(total).toBeCloseTo(1.2, 5);
+    expect(total).toBeCloseTo(0.4, 5);
     expect(byPos[posKey(0, 0)]).toBe("correct");
     expect(byPos[posKey(0, 1)]).toBe("wrong");
     expect(byPos[posKey(0, 2)]).toBe("pending");

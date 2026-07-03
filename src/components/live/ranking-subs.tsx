@@ -1,7 +1,9 @@
 import { useMemo, type CSSProperties } from "react";
 import type { Match } from "@/lib/espn";
+import { buildKnockout } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
-import { rankSubs, worstPalpiteiro, type SubRank, type MatchResult } from "@/lib/ranking";
+import type { BracketEntry } from "@/lib/bracket-votes";
+import { rankSubs, worstPalpiteiro, bracketPointsByUser, type SubRank, type MatchResult } from "@/lib/ranking";
 import { useMyName } from "@/lib/use-my-name";
 import { BRIC, JB, SAIRA, LIME_DEEP, GOLD, GOLD_DEEP, VoceTag, isMe, nameStyle } from "@/components/live/bf-ui";
 
@@ -41,12 +43,14 @@ export interface RankingSubsProps {
   /** Durable finished-match scores from the DB (match_results). Preferred over
    *  ESPN for grading so an ESPN outage / dropped match can't erase old wins. */
   results?: Record<string, MatchResult>;
+  /** Saved knockout brackets — 0.2 per correct winner folds into each sub's total. */
+  brackets?: BracketEntry[];
   /** "grid" = the wide PLACAR 2-col list; "column" = a single fading column. */
   variant?: "grid" | "column";
   style?: CSSProperties;
 }
 
-export function RankingSubs({ entries, matches, results, variant = "column", style }: RankingSubsProps) {
+export function RankingSubs({ entries, matches, results, brackets, variant = "column", style }: RankingSubsProps) {
   const myName = useMyName();
   // Memoized so a bare parent re-render (the live stages tick every second) does
   // NOT rebuild the map / re-rank / re-scan. Recomputes the moment its real inputs
@@ -61,7 +65,13 @@ export function RankingSubs({ entries, matches, results, variant = "column", sty
     if (results) for (const id in results) m[id] = results[id];
     return m;
   }, [matches, results]);
-  const ranks = useMemo(() => rankSubs(entries, byId), [entries, byId]);
+  // Bracket points (0.2 per correct knockout winner) graded against the real
+  // knockout, folded into the same table. Empty until brackets are saved.
+  const bracketPoints = useMemo(
+    () => bracketPointsByUser(brackets ?? [], buildKnockout(matches)),
+    [brackets, matches],
+  );
+  const ranks = useMemo(() => rankSubs(entries, byId, bracketPoints), [entries, byId, bracketPoints]);
   const worst = useMemo(() => worstPalpiteiro(ranks), [ranks]);
   const leader = ranks[0] ?? null;
   const rest = ranks.slice(1);

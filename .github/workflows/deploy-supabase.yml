@@ -1,6 +1,6 @@
 name: Deploy Supabase
 
-# Manual trigger: push DB migrations + the cast-vote function to your project.
+# Manual trigger: push DB migrations + the cast-vote / cast-bracket functions.
 # Requires these repository secrets:
 #   SUPABASE_ACCESS_TOKEN   - personal access token (account -> Access Tokens)
 #   SUPABASE_PROJECT_REF    - project ref (Project Settings -> General)
@@ -39,3 +39,6 @@ jobs:
 
       - name: Deploy cast-vote function
         run: supabase functions deploy cast-vote
+
+      - name: Deploy cast-bracket function
+        run: supabase functions deploy cast-bracket
