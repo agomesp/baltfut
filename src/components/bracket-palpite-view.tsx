@@ -16,6 +16,7 @@ import {
 } from "@/lib/bracket-picks";
 import { submitBracket, supabaseCastBracket, type CastBracketTransport, type BracketEntry } from "@/lib/bracket-votes";
 import { ConnectedBracket, type BracketRound } from "@/components/connected-bracket";
+import { useIsNarrow } from "@/lib/use-is-narrow";
 import { useNameLock, NameField } from "@/components/live/palpite-form";
 import { BRIC, JB, SAIRA, LIME, DIM, DIM_2, GOLD, FlagIcon, FlagCrest, ViewHeader, teamAccent, isMe } from "@/components/live/bf-ui";
 
@@ -124,6 +125,7 @@ export function BracketPalpiteView({
   transport?: CastBracketTransport;
 }) {
   const { name, setName, locked: nameLocked, confirm } = useNameLock();
+  const narrow = useIsNarrow();
   const [picks, setPicks] = useState<Record<string, string>>({});
   const [justSaved, setJustSaved] = useState<SavedPalpite | null>(null);
   const [reediting, setReediting] = useState(false);
@@ -254,25 +256,11 @@ export function BracketPalpiteView({
             <button type="button" onClick={reset} title="Refazer o chaveamento (sobrescreve o salvo)" style={{ flex: "none", fontFamily: JB, fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9bb6a6", background: "transparent", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 9, padding: "8px 12px", cursor: "pointer" }}>↺ refazer</button>
           </>
         ) : (
-          (() => {
-            const canSave = !!champion && !!name.trim() && !submitting;
-            return (
-              <button
-                type="button"
-                onClick={onSave}
-                disabled={!canSave}
-                title={!champion ? "Escolha o vencedor de cada jogo até a final" : !name.trim() ? "Digite seu nome" : "Salvar"}
-                style={{ flex: "none", fontFamily: BRIC, fontWeight: 800, fontSize: 13, letterSpacing: "0.02em", padding: "10px 18px", borderRadius: 11, border: "none", cursor: canSave ? "pointer" : "not-allowed", background: canSave ? LIME : "rgba(255,255,255,0.08)", color: canSave ? "#0f1f02" : "#6f8a78" }}
-              >
-                {submitting ? "Salvando…" : "Salvar palpite de chaveamento →"}
-              </button>
-            );
-          })()
+          // The save action is a floating CTA (below) so it stays reachable while
+          // scrolling the tall bracket; here we just show a hint.
+          <span style={{ flex: "none", fontFamily: JB, fontSize: 10, letterSpacing: "0.03em", color: "#7d9a86" }}>preencha até a final e salve ↓</span>
         )}
       </div>
-      {error ? (
-        <div style={{ fontFamily: BRIC, fontSize: 12, color: RED, margin: "-6px 4px 10px" }}>{error}</div>
-      ) : null}
 
       {/* Legend */}
       <div style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: DIM_2, margin: "0 4px 8px" }}>
@@ -283,9 +271,40 @@ export function BracketPalpiteView({
         )}
       </div>
 
-      <div style={{ overflowX: "auto", paddingBottom: 12 }}>
+      {/* Extra bottom room while editing so the last ties clear the floating CTA + docks. */}
+      <div style={{ overflowX: "auto", paddingBottom: isSaved ? 12 : narrow ? 168 : 104 }}>
         <ConnectedBracket rounds={bracketRounds} colWidth={244} unitHeight={84} gap={24} trailing={trailing} />
       </div>
+
+      {/* Floating save CTA: fixed above the docks so it stays visible while
+          scrolling the tall bracket. Editing only (saved = no save action). */}
+      {!isSaved ? (() => {
+        const canSave = !!champion && !!name.trim() && !submitting;
+        return (
+          <div style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: narrow ? 188 : 80, zIndex: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, maxWidth: "calc(100vw - 24px)", pointerEvents: "none" }}>
+            {error ? (
+              <div style={{ pointerEvents: "auto", fontFamily: BRIC, fontSize: 12, color: "#fff", background: "rgba(214,48,49,0.95)", padding: "6px 12px", borderRadius: 8, boxShadow: "0 8px 20px -6px rgba(0,0,0,0.55)" }}>{error}</div>
+            ) : null}
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={!canSave}
+              title={!champion ? "Escolha o vencedor de cada jogo até a final" : !name.trim() ? "Digite seu nome no topo" : "Salvar"}
+              style={{
+                pointerEvents: "auto", fontFamily: BRIC, fontWeight: 800, fontSize: 13.5, letterSpacing: "0.02em",
+                padding: "13px 22px", borderRadius: 999, cursor: canSave ? "pointer" : "not-allowed",
+                background: canSave ? LIME : "rgba(16,26,14,0.94)", color: canSave ? "#0f1f02" : "#8fae99",
+                border: canSave ? "none" : "1px solid rgba(255,255,255,0.12)",
+                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                boxShadow: canSave ? "0 12px 34px -8px rgba(0,0,0,0.6), 0 0 26px -4px rgba(200,255,45,0.7)" : "0 10px 26px -10px rgba(0,0,0,0.6)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {submitting ? "Salvando…" : "Salvar palpite de chaveamento →"}
+            </button>
+          </div>
+        );
+      })() : null}
     </section>
   );
 }
