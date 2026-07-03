@@ -1,6 +1,7 @@
 // cast-bracket — the ONLY writer to public.bracket_palpites.
 //
-// Saves one knockout bracket per nickname (upsert). Same security model as
+// Saves one knockout bracket per nickname — INSERT only, so it's one-shot (first
+// save wins, later attempts rejected). Same security model as
 // cast-vote: runs server-side with the service_role key (anon has zero DB write,
 // enforced by RLS), derives + hashes the client IP, re-validates with the SAME
 // shared schema as the client, and enforces nickname ownership via name_claims.
@@ -124,19 +125,20 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Esses jogos já começaram — não dá mais pra palpitar." }, 403, cors);
   }
 
-  // Upsert this nickname's bracket (one per name). The owner may re-save to refine
-  // before each tie kicks off; the started-tie lock above bounds what's accepted.
-  const { error } = await supabase.from("bracket_palpites").upsert(
-    {
-      username: bracket.username.trim(),
-      picks,
-      ip_hash: ipHash,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "username" },
-  );
+  // Save this nickname's bracket — INSERT only, so saving is one-shot: the first
+  // save wins and any later attempt is rejected. No overwrite path exists, which
+  // makes a saved chaveamento a real commitment (matches the locked UI).
+  const { error } = await supabase.from("bracket_palpites").insert({
+    username: bracket.username.trim(),
+    picks,
+    ip_hash: ipHash,
+  });
   if (error) {
-    console.error("cast-bracket upsert failed:", error.code, error.message);
+    // 23505 = unique_violation on username: this nickname already saved a bracket.
+    if (error.code === "23505") {
+      return json({ error: "Esse nome já salvou um chaveamento — não dá pra refazer." }, 409, cors);
+    }
+    console.error("cast-bracket insert failed:", error.code, error.message);
     return json({ error: "Não foi possível salvar seu chaveamento." }, 500, cors);
   }
 
