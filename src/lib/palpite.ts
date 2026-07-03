@@ -1,4 +1,5 @@
 import type { Match } from "@/lib/espn";
+import { isReservedName } from "@shared/name-claim";
 
 /** Palpites stay open until kickoff + this grace period (the first 5 minutes). */
 export const PALPITE_GRACE_MS = 5 * 60_000;
@@ -103,6 +104,18 @@ export function palpiteFormVisible(
   if (hasOverride(openUntil)) return now < openUntil + FORM_TAIL_MS;
   const deadline = palpiteDeadline(match.startsAt);
   return releasedIds.has(match.id) && !Number.isNaN(deadline) && now < deadline + FORM_TAIL_MS;
+}
+
+/**
+ * The palpites a viewer may SEE for a match's feed/list. While the window is
+ * still open the house bot's (ChatGPT's) pick is withheld — so nobody can copy
+ * the AI's palpite before locking in their own — then it's revealed the moment
+ * palpites close, like everyone else's. The bot's row stays in the DB and in
+ * scoring/ranking; this gates DISPLAY only. Generic over any row with a
+ * `username` (VoteEntry, chegando rows, optimistic sends).
+ */
+export function visiblePalpites<T extends { username: string }>(entries: T[], palpitesOpen: boolean): T[] {
+  return palpitesOpen ? entries.filter((e) => !isReservedName(e.username)) : entries;
 }
 
 /** Remaining ms -> "M:SS" (minutes may exceed 59), clamped at 0:00. */

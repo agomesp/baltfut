@@ -10,6 +10,7 @@ import {
   formatCountdown,
   formatCountdownLong,
   releasedMatchIds,
+  visiblePalpites,
 } from "@/lib/palpite";
 import type { Match } from "@/lib/espn";
 
@@ -131,6 +132,28 @@ describe("palpiteFormVisible (form stays mounted into the post-deadline tail)", 
   it("is hidden for an unreleased match and for an unknown kickoff", () => {
     expect(palpiteFormVisible(mkMatch("x", "in", KICK), new Set(), deadline + 1000)).toBe(false);
     expect(palpiteFormVisible(mkMatch("x", "in", "nope"), released, Date.now())).toBe(false);
+  });
+});
+
+describe("visiblePalpites", () => {
+  const rows = [
+    { username: "ChatGPT", predHome: 2, predAway: 1 },
+    { username: "ana", predHome: 0, predAway: 0 },
+    { username: "Chat GPT", predHome: 3, predAway: 0 }, // homoglyph/spacing variant of the bot
+  ];
+
+  it("hides the house bot (all reserved-name variants) while palpites are OPEN", () => {
+    const shown = visiblePalpites(rows, true);
+    expect(shown.map((r) => r.username)).toEqual(["ana"]);
+  });
+
+  it("reveals the bot once palpites are CLOSED", () => {
+    expect(visiblePalpites(rows, false)).toBe(rows); // same reference, untouched
+  });
+
+  it("is a no-op when there is no bot row", () => {
+    const humans = [{ username: "ana" }, { username: "bob" }];
+    expect(visiblePalpites(humans, true).map((r) => r.username)).toEqual(["ana", "bob"]);
   });
 });
 

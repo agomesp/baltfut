@@ -555,7 +555,7 @@ export default function Home() {
         )}
         {!loading && view === "bracket" && <BracketView stages={knockout} />}
         {!loading && view === "ai" && (
-          <AiPalpitesView matches={matches} groups={groups} groupByTeam={groupByTeam} />
+          <AiPalpitesView matches={matches} groups={groups} groupByTeam={groupByTeam} palpiteOverrides={palpiteOverrides} />
         )}
       </main>
       {/* Primary navigation: the bottom dock (2.1 sport). */}

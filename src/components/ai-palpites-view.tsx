@@ -11,6 +11,8 @@ import {
 import { fmtTime, groupByDay } from "@/lib/format";
 import { teamNamePt } from "@/lib/team-names";
 import { useIsNarrow } from "@/lib/use-is-narrow";
+import { useNow } from "@/lib/use-now";
+import { isPalpiteOpen, effectiveDeadline } from "@/lib/palpite";
 import { groupLabelFor } from "@/components/match-meta";
 import { ConnectedBracket } from "@/components/connected-bracket";
 import {
@@ -32,6 +34,9 @@ export interface AiPalpitesViewProps {
   matches: Match[];
   groups: Group[];
   groupByTeam: Record<string, string>;
+  /** Admin per-match palpite windows (match_id → openUntil ms); gates when each
+   *  upcoming prediction is revealed, mirroring the live feed. */
+  palpiteOverrides?: Record<string, number>;
 }
 
 const card = {
@@ -64,6 +69,76 @@ function ScorePill({ score }: { score: ScorePalpite }) {
       <span style={{ color: "#42565b", margin: "0 7px" }}>–</span>
       <span style={{ color: awayOn ? "#fff" : "#7d9a86" }}>{score.away}</span>
     </span>
+  );
+}
+
+/** Score-slot placeholder shown while a match's palpites are still open — the
+ *  AI's prediction is withheld so it can't be copied, revealed once closed. */
+function LockedScore() {
+  return (
+    <span title="A previsão da IA aparece quando os palpites desta partida fecharem" style={{ display: "inline-flex", alignItems: "center", gap: 5, minWidth: 58, justifyContent: "center", fontFamily: SAIRA, fontWeight: 800, fontSize: 22, lineHeight: 0.9, color: "#42565b", whiteSpace: "nowrap" }}>
+      <span aria-hidden style={{ fontSize: 13 }}>🔒</span>
+      <span>?<span style={{ margin: "0 6px" }}>–</span>?</span>
+    </span>
+  );
+}
+
+/** One upcoming-game row. While that game's palpite window is still OPEN every
+ *  AI-derived hint (score, winner tint, confidence) is withheld so viewers can't
+ *  copy the model's pick before locking in their own; it's revealed once closed. */
+function UpcomingRow({ mt, score, open, groupByTeam, narrow }: { mt: Match; score: ScorePalpite; open: boolean; groupByTeam: Record<string, string>; narrow: boolean }) {
+  const homeColor = !open && score.winner === "home" ? LIME : "#f1f7f0";
+  const awayColor = !open && score.winner === "away" ? LIME : "#f1f7f0";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 6px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+      <span style={{ flex: "0 0 46px", fontFamily: SAIRA, fontWeight: 700, fontSize: 16, color: DIM }}>{fmtTime(mt.startsAt)}</span>
+      <div style={{ flex: "1 1 240px", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, minWidth: 0 }}>
+          {!narrow && <span style={{ fontFamily: BRIC, fontSize: 13, color: DIM, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(mt.home.abbreviation, mt.home.name)}</span>}
+          <FlagIcon code={mt.home.abbreviation} size={12} />
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: homeColor }}>{mt.home.abbreviation}</span>
+        </div>
+        {open ? <LockedScore /> : <ScorePill score={score} />}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: awayColor }}>{mt.away.abbreviation}</span>
+          <FlagIcon code={mt.away.abbreviation} size={12} />
+          {!narrow && <span style={{ fontFamily: BRIC, fontSize: 13, color: DIM, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(mt.away.abbreviation, mt.away.name)}</span>}
+        </div>
+      </div>
+      {!narrow && (
+        <div style={{ flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+          {open ? <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.04em", color: "#54706a" }}>🔒 previsão ao fechar</span> : <Confidence value={score.confidence} />}
+          <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.06em", color: "#54706a" }}>{(groupLabelFor(mt, groupByTeam) || "").toUpperCase()}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The "próximos jogos" list. Owns the clock tick so only this section re-renders
+ *  as each match's window flips closed (the heavy bracket above stays still). */
+function UpcomingPalpites({ days, palpiteByMatch, palpiteOverrides, groupByTeam, narrow }: {
+  days: { key: string; label: string; items: Match[] }[];
+  palpiteByMatch: Map<string, ScorePalpite>;
+  palpiteOverrides: Record<string, number>;
+  groupByTeam: Record<string, string>;
+  narrow: boolean;
+}) {
+  const now = useNow(15_000);
+  return (
+    <div style={{ marginBottom: 26 }}>
+      {days.map((day) => (
+        <div key={day.key} style={{ marginBottom: 8 }}>
+          <div style={{ fontFamily: JB, fontSize: 10.5, letterSpacing: "0.08em", color: DIM, padding: "10px 4px 6px" }}>{(day.label || "").toUpperCase()}</div>
+          {day.items.map((mt) => {
+            const score = palpiteByMatch.get(mt.id);
+            if (!score) return null;
+            const open = isPalpiteOpen(effectiveDeadline(mt.startsAt, palpiteOverrides[mt.id] ?? null), now);
+            return <UpcomingRow key={mt.id} mt={mt} score={score} open={open} groupByTeam={groupByTeam} narrow={narrow} />;
+          })}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -128,7 +203,7 @@ function TieCard({ tie }: { tie: SimTie }) {
   );
 }
 
-export function AiPalpitesView({ matches, groups, groupByTeam }: AiPalpitesViewProps) {
+export function AiPalpitesView({ matches, groups, groupByTeam, palpiteOverrides = {} }: AiPalpitesViewProps) {
   const narrow = useIsNarrow();
   const model = useMemo(() => buildAiPalpites(matches, groups), [matches, groups]);
   const { upcoming, bracket, champion, ranking } = model;
@@ -239,49 +314,18 @@ export function AiPalpitesView({ matches, groups, groupByTeam }: AiPalpitesViewP
       ) : null}
 
       {/* Palpites for upcoming games */}
-      <div style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.1em", color: "#9bb6a6", margin: "4px 4px 8px" }}>
+      <div style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.1em", color: "#9bb6a6", margin: "4px 4px 3px" }}>
         PALPITES DOS PRÓXIMOS JOGOS
+      </div>
+      <div style={{ fontFamily: JB, fontSize: 8.5, letterSpacing: "0.02em", color: DIM_2, margin: "0 4px 8px", lineHeight: 1.5 }}>
+        🔒 a previsão de cada jogo só aparece quando os palpites daquela partida fecham — pra ninguém copiar a IA.
       </div>
       {upcoming.length === 0 ? (
         <div style={{ ...card, padding: "28px 24px", textAlign: "center", fontFamily: BRIC, color: DIM, marginBottom: 26 }}>
           Nenhum jogo agendado para palpitar.
         </div>
       ) : (
-        <div style={{ marginBottom: 26 }}>
-          {days.map((day) => (
-            <div key={day.key} style={{ marginBottom: 8 }}>
-              <div style={{ fontFamily: JB, fontSize: 10.5, letterSpacing: "0.08em", color: DIM, padding: "10px 4px 6px" }}>{(day.label || "").toUpperCase()}</div>
-              {day.items.map((mt) => {
-                const score = palpiteByMatch.get(mt.id);
-                if (!score) return null;
-                return (
-                  <div key={mt.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 6px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                    <span style={{ flex: "0 0 46px", fontFamily: SAIRA, fontWeight: 700, fontSize: 16, color: DIM }}>{fmtTime(mt.startsAt)}</span>
-                    <div style={{ flex: "1 1 240px", display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, minWidth: 0 }}>
-                        {!narrow && <span style={{ fontFamily: BRIC, fontSize: 13, color: DIM, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(mt.home.abbreviation, mt.home.name)}</span>}
-                        <FlagIcon code={mt.home.abbreviation} size={12} />
-                        <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: score.winner === "home" ? LIME : "#f1f7f0" }}>{mt.home.abbreviation}</span>
-                      </div>
-                      <ScorePill score={score} />
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                        <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: score.winner === "away" ? LIME : "#f1f7f0" }}>{mt.away.abbreviation}</span>
-                        <FlagIcon code={mt.away.abbreviation} size={12} />
-                        {!narrow && <span style={{ fontFamily: BRIC, fontSize: 13, color: DIM, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{teamNamePt(mt.away.abbreviation, mt.away.name)}</span>}
-                      </div>
-                    </div>
-                    {!narrow && (
-                      <div style={{ flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-                        <Confidence value={score.confidence} />
-                        <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.06em", color: "#54706a" }}>{(groupLabelFor(mt, groupByTeam) || "").toUpperCase()}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+        <UpcomingPalpites days={days} palpiteByMatch={palpiteByMatch} palpiteOverrides={palpiteOverrides} groupByTeam={groupByTeam} narrow={narrow} />
       )}
     </section>
   );

@@ -8,7 +8,7 @@ import { teamNamePt } from "@/lib/team-names";
 import { fmtTime } from "@/lib/format";
 import { teamCupHistory, type TeamHistoryGame } from "@/lib/team-history";
 import { communityConsensus, type Consensus } from "@/lib/consensus";
-import { palpiteDeadline, effectiveDeadline, isPalpiteOpen, formatCountdown, formatCountdownLong } from "@/lib/palpite";
+import { palpiteDeadline, effectiveDeadline, isPalpiteOpen, formatCountdown, formatCountdownLong, visiblePalpites } from "@/lib/palpite";
 import { detectChegandoChanges, buildChegandoRows } from "@/lib/chegando";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { useNow } from "@/lib/use-now";
@@ -368,9 +368,14 @@ export function PreMatchPanel({ match, pen = false, second, entries, secondEntri
   // The parent (decideConcurrent) only hands us a `second` when it wants the duo,
   // so simply mirror that — AUTO with a simultaneous partner shows both games.
   const showDuo = second != null;
+  // Hide the house bot (ChatGPT) from this match's feed + consensus until palpites
+  // close, so its pick can't be copied; revealed the moment the window shuts.
+  const now = useNow(1000);
+  const open = isPalpiteOpen(effectiveDeadline(match.startsAt, ovr(match)), now);
+  const visibleEntries = useMemo(() => visiblePalpites(entries, open), [entries, open]);
   // Crowd's home/draw/away split for this match — recomputes as palpites stream in
   // (poll/realtime).
-  const consensus = useMemo(() => communityConsensus(entries), [entries]);
+  const consensus = useMemo(() => communityConsensus(visibleEntries), [visibleEntries]);
 
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
@@ -409,7 +414,7 @@ export function PreMatchPanel({ match, pen = false, second, entries, secondEntri
                   {formCard}
                   {historyEl}
                   <ChatCta homeCode={homeCode} awayCode={awayCode} pen={pen} />
-                  <ChegandoFeed entries={entries} pen={pen} homeCode={homeCode} awayCode={awayCode} />
+                  <ChegandoFeed entries={visibleEntries} pen={pen} homeCode={homeCode} awayCode={awayCode} />
                   {iaEl}
                   {ranking}
                 </div>
@@ -456,7 +461,7 @@ export function PreMatchPanel({ match, pen = false, second, entries, secondEntri
               </div>
               {/* Row 2, cols 1-2: chat-palpite CTA | live "chegando" feed */}
               <ChatCta homeCode={homeCode} awayCode={awayCode} pen={pen} />
-              <ChegandoFeed entries={entries} pen={pen} homeCode={homeCode} awayCode={awayCode} />
+              <ChegandoFeed entries={visibleEntries} pen={pen} homeCode={homeCode} awayCode={awayCode} />
             </div>
           );
         })()
@@ -536,9 +541,12 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
     () => (sent && !meInEntries ? [sent, ...entries] : entries),
     [sent, meInEntries, entries],
   );
+  // Hide the house bot's (ChatGPT's) pick until this match's palpite window closes,
+  // so viewers can't copy the AI before locking in their own; revealed once closed.
+  const visibleEntries = useMemo(() => visiblePalpites(shownEntries, open), [shownEntries, open]);
   // Live home/draw/away split for this game — recomputes whenever palpites change
   // (the entries prop refreshes via polling/realtime), like the single-match view.
-  const consensus = useMemo(() => communityConsensus(shownEntries), [shownEntries]);
+  const consensus = useMemo(() => communityConsensus(visibleEntries), [visibleEntries]);
 
   async function submit() {
     const trimmed = name.trim();
@@ -638,9 +646,9 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
       <CommunityBar consensus={consensus} homeCode={homeCode} awayCode={awayCode} homeAccent={homeAccent} awayAccent={awayAccent} />
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginTop: 2 }}>
         <span style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.1em", color: "#6f8a78" }}>PALPITES ENVIADOS</span>
-        <span style={{ fontFamily: JB, fontSize: 9, color: "#4d6353" }}>{shownEntries.length}</span>
+        <span style={{ fontFamily: JB, fontSize: 9, color: "#4d6353" }}>{visibleEntries.length}</span>
       </div>
-      <SentList entries={shownEntries} homeCode={homeCode} awayCode={awayCode} myName={myName} pendingName={saving ? lowerName : null} />
+      <SentList entries={visibleEntries} homeCode={homeCode} awayCode={awayCode} myName={myName} pendingName={saving ? lowerName : null} />
     </div>
   );
 }
