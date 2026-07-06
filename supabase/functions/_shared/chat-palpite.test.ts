@@ -39,7 +39,7 @@ describe("parseChatPalpite — orientation", () => {
 describe("parseChatPalpite — rejects non-palpites", () => {
   it("rejects prose that merely MENTIONS a scoreline", () => {
     expect(p("no 7x1 ao menos a gente tava na semifinal")).toBeNull(); // the reported case
-    expect(p("aquele 7x1 doeu demais")).toBeNull();
+    expect(p("aquele 7x1 doeu")).toBeNull(); // the reported case
     expect(p("acho que vai dar uns 3x0 sei la")).toBeNull();
     expect(p("quero ver 2x1 hoje e amanha tambem")).toBeNull();
   });
