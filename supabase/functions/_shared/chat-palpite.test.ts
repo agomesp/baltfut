@@ -11,6 +11,8 @@ describe("parseChatPalpite — orientation", () => {
     expect(p("2x1")).toEqual({ home: 2, away: 1 });
     expect(p("2 x 1")).toEqual({ home: 2, away: 1 });
     expect(p("2 a 1")).toEqual({ home: 2, away: 1 }); // "dois a um"
+    expect(p("2-1")).toEqual({ home: 2, away: 1 });
+    expect(p("2:1")).toEqual({ home: 2, away: 1 });
     expect(p("0x0")).toEqual({ home: 0, away: 0 });
   });
 

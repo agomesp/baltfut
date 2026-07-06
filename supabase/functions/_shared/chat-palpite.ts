@@ -29,9 +29,10 @@ export interface ChatPalpite {
   away: number;
 }
 
-// A single-digit score with x / × / "a" ("2 a 1") as the separator, NOT glued to
-// a longer number (so "10x1" or "às 21a30" never misparse into a bogus score).
-const SCORE_RE = /(?<!\d)(\d)\s*(?:[x×]|a)\s*(\d)(?!\d)/;
+// A single-digit score with x / × / : / - / – or "a" ("2 a 1") as the separator,
+// NOT glued to a longer number (so "10x1", a "2025-01" date, or "às 21a30" never
+// misparse into a bogus score).
+const SCORE_RE = /(?<!\d)(\d)\s*(?:[x×:–-]|a)\s*(\d)(?!\d)/;
 // Directional filler that may sit next to the score without disqualifying it.
 const CONNECTORS = new Set(["pro", "pra", "para"]);
 // Legit palpites carry at most ~two team mentions (a couple more for multi-word
