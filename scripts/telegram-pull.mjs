@@ -1,16 +1,23 @@
 #!/usr/bin/env node
-// Pull the latest promos from the PUBLIC Telegram channel (no bot/auth/secrets)
-// and write public/promos.json for the page to render.
+// Pull the latest promos from the PUBLIC Telegram channel (no bot/auth/secrets) and
+// push them to Supabase via the set_promos RPC (with creds) or write public/promos.json
+// (local, no creds). set_promos REPLACES the whole set, so a full re-pull is idempotent.
 //
-// Run:  node scripts/telegram-pull.mjs            (Node 22: `nvm use 22`)
-//       CHANNEL=rbstorenet LIMIT=10 node scripts/telegram-pull.mjs
+// Run (CLI / GitHub cron):  node scripts/telegram-pull.mjs
+//   CHANNEL=rbstorenet LIMIT=10 node scripts/telegram-pull.mjs
 //
-// CORS note: the browser can't fetch t.me directly, so this runs server-side
-// (locally now; a no-secret GitHub Action cron or tiny endpoint later) and emits
-// a static JSON the static page can read. See docs/telegram-spike.md.
+// EXPORTED for reuse (the baltfut-admin Telegram watcher pushes new posts in real time):
+//   scrapeChannel({channel,limit}) → items[]   — fetch + parse only (cheap; use to diff)
+//   writePromos(items, {supabaseUrl,serviceRole,out,channel}) — set_promos, or the JSON file
+//   pullPromos(opts) → items[]                  — scrapeChannel + writePromos (idempotent)
+// Creds default to process.env (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) for the cron;
+// callers (the bot) can pass them explicitly.
+//
+// CORS note: the browser can't fetch t.me directly, so this runs server-side and the
+// static page reads the resulting Supabase rows (or the JSON). See docs/telegram-spike.md.
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const CHANNEL = process.env.CHANNEL || "rbstorenet";
 const LIMIT = Number(process.env.LIMIT || 10);
@@ -25,14 +32,14 @@ function decode(s) {
     .replace(/&quot;/g, '"').replace(/&nbsp;/g, " ");
 }
 
-function parse(htmlDoc) {
+function parse(htmlDoc, limit = LIMIT) {
   // One chunk per message bubble.
   const chunks = htmlDoc.split(/tgme_widget_message_wrap/).slice(1);
   const out = [];
   for (const c of chunks) {
     const textM = c.match(/tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/);
     if (!textM) continue;
-    const text = decode(textM[1]).replace(/ /g, " ").trim();
+    const text = decode(textM[1]).replace(/ /g, " ").trim();
     const imgM = c.match(/tgme_widget_message_photo_wrap[^>]*background-image:url\('([^']+)'\)/);
     const dateM = c.match(/datetime="([^"]+)"/);
     const link = (text.match(/https?:\/\/rbstore\.net\/\S+/) || [])[0] || null;
@@ -54,29 +61,60 @@ function parse(htmlDoc) {
   }
   // Newest last in the page → reverse to newest-first, dedupe by link, cap.
   const seen = new Set();
-  return out.reverse().filter((i) => !seen.has(i.link) && seen.add(i.link)).slice(0, LIMIT);
+  return out.reverse().filter((i) => !seen.has(i.link) && seen.add(i.link)).slice(0, limit);
 }
 
-const res = await fetch(`https://t.me/s/${CHANNEL}`, { headers: { "user-agent": "Mozilla/5.0 baltfut-promos" } });
-if (!res.ok) { console.error(`✋ t.me returned ${res.status}`); process.exit(1); }
-const parsed = parse(await res.text());
-const items = parsed.map((it, i) => ({ position: i, ...it }));
-
-// With Supabase creds (the GitHub cron) → atomically replace the `promos` table
-// via the set_promos RPC. No git commit, so NO Pages deploy / viewer reload.
-// Without creds (local dev) → just write the JSON file for inspection.
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (SUPABASE_URL && SERVICE_ROLE) {
-  const res2 = await fetch(`${SUPABASE_URL}/rest/v1/rpc/set_promos`, {
-    method: "POST",
-    headers: { apikey: SERVICE_ROLE, authorization: `Bearer ${SERVICE_ROLE}`, "content-type": "application/json" },
-    body: JSON.stringify({ items }),
-  });
-  if (!res2.ok) { console.error(`✋ set_promos failed: ${res2.status} ${await res2.text()}`); process.exit(1); }
-  console.log(`✓ upserted ${items.length} promos → Supabase (no deploy, no reload)`);
-} else {
-  fs.writeFileSync(OUT, JSON.stringify({ channel: CHANNEL, url: `https://t.me/${CHANNEL}`, fetchedAt: new Date().toISOString(), items }, null, 2) + "\n");
-  console.log(`✓ wrote ${items.length} promos → ${path.relative(process.cwd(), OUT)} (local; set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to upsert to the DB)`);
+/** Fetch + parse the public channel → newest-first deals with a `position`. No write. */
+export async function scrapeChannel({ channel = CHANNEL, limit = LIMIT } = {}) {
+  const res = await fetch(`https://t.me/s/${channel}`, { headers: { "user-agent": "Mozilla/5.0 baltfut-promos" } });
+  if (!res.ok) throw new Error(`t.me returned ${res.status}`);
+  const parsed = parse(await res.text(), limit);
+  return parsed.map((it, i) => ({ position: i, ...it }));
 }
-for (const i of items.slice(0, 5)) console.log(`  · ${i.store ?? "?"} — ${i.product?.slice(0, 48)} — ${i.price ?? "?"}${i.image ? " [img]" : ""}`);
+
+/**
+ * Replace the promos set: the set_promos RPC when Supabase creds are present (the cron
+ * and the bot), else write the local JSON file. Returns { target, count }.
+ */
+export async function writePromos(items, {
+  supabaseUrl = process.env.SUPABASE_URL,
+  serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY,
+  out = OUT,
+  channel = CHANNEL,
+} = {}) {
+  if (supabaseUrl && serviceRole) {
+    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/set_promos`, {
+      method: "POST",
+      headers: { apikey: serviceRole, authorization: `Bearer ${serviceRole}`, "content-type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+    if (!res.ok) throw new Error(`set_promos failed: ${res.status} ${await res.text()}`);
+    return { target: "supabase", count: items.length };
+  }
+  fs.writeFileSync(out, JSON.stringify({ channel, url: `https://t.me/${channel}`, fetchedAt: new Date().toISOString(), items }, null, 2) + "\n");
+  return { target: "file", count: items.length, out };
+}
+
+/** Full pull: scrape the channel + replace the set. Idempotent. Returns the items. */
+export async function pullPromos(opts = {}) {
+  const items = await scrapeChannel(opts);
+  await writePromos(items, opts);
+  return items;
+}
+
+// CLI / cron entrypoint (node scripts/telegram-pull.mjs) — unchanged behavior/output.
+if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
+  try {
+    const items = await scrapeChannel();
+    const result = await writePromos(items);
+    if (result.target === "supabase") {
+      console.log(`✓ upserted ${result.count} promos → Supabase (no deploy, no reload)`);
+    } else {
+      console.log(`✓ wrote ${result.count} promos → ${path.relative(process.cwd(), result.out)} (local; set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to upsert to the DB)`);
+    }
+    for (const i of items.slice(0, 5)) console.log(`  · ${i.store ?? "?"} — ${i.product?.slice(0, 48)} — ${i.price ?? "?"}${i.image ? " [img]" : ""}`);
+  } catch (e) {
+    console.error(`✋ ${e.message}`);
+    process.exit(1);
+  }
+}

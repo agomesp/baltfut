@@ -5,12 +5,18 @@ name: Update promos
 # deploy → open viewers do NOT reload; the page picks up new deals on its next
 # poll. See docs/telegram-spike.md.
 #
+# This is the always-on BACKSTOP (~every 15 min). Real-time freshness during a
+# stream comes from the baltfut-admin Telegram watcher (fast-polls the channel and
+# re-pulls within ~30-60s of a new post) — this cron covers the rest of the time.
+#
 # Requires repo secrets:
 #   NEXT_PUBLIC_SUPABASE_URL      (already set)
 #   SUPABASE_SERVICE_ROLE_KEY     (ADD THIS — Supabase → Settings → API → service_role)
 on:
   schedule:
-    - cron: "17 */2 * * *" # every 2 hours (cheap now — no deploy per refresh)
+    # ~every 15 min. Offset minutes (not :00/:15) — GitHub cron is unreliable below
+    # ~15 min and congested at round times, so it drifts less off the hour.
+    - cron: "2,17,32,47 * * * *"
   workflow_dispatch:
 
 permissions:
