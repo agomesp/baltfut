@@ -50,6 +50,20 @@ const STANDINGS_WORKER_MS = 30_000;
 // The selected match's palpites poll faster so new ones appear near-live.
 const ENTRIES_REFRESH_MS = 12_000;
 
+// DEV-ONLY test aid: with `?mocklive` in the URL (and only under `next dev`), flip
+// the earliest upcoming match to a live 1st half so the live-match UI — including
+// the streamer promo mode, which is live-only — can be exercised without waiting
+// for a real kickoff. Guarded by NODE_ENV so it's a no-op in the production build.
+function withMockLive(matches: Match[]): Match[] {
+  if (process.env.NODE_ENV === "production") return matches;
+  if (typeof window === "undefined" || !new URLSearchParams(window.location.search).has("mocklive")) return matches;
+  const i = matches.findIndex((m) => m.state === "pre");
+  if (i < 0) return matches;
+  const kickoff = new Date(Date.now() - 2 * 60_000).toISOString(); // 2' ago → live + palpites still open
+  const mock: Match = { ...matches[i], state: "in", isLive: true, statusDetail: "1º tempo", displayClock: "2'", startsAt: kickoff, homeScore: 0, awayScore: 0 };
+  return matches.map((x, k) => (k === i ? mock : x));
+}
+
 export default function Home() {
   const [view, setView] = useState<ViewKey>("live");
   const [dark, setDark] = useState(true);
@@ -126,7 +140,7 @@ export default function Home() {
       if (raw) {
         const c = JSON.parse(raw);
         if (Array.isArray(c.matches) && c.matches.length) {
-          setMatches(c.matches);
+          setMatches(withMockLive(c.matches));
           setGroups(Array.isArray(c.groups) ? c.groups : []);
           setVoteCounts(c.voteCounts ?? {});
           setEntries(Array.isArray(c.entries) ? c.entries : []);
@@ -196,7 +210,7 @@ export default function Home() {
         fetchStandings({ signal }),
       ]);
       if (sb.status === "fulfilled") {
-        setMatches(sb.value);
+        setMatches(withMockLive(sb.value));
         setError(null);
       } else if ((sb.reason as Error)?.name !== "AbortError") {
         setError("Não foi possível carregar os jogos. Tentando de novo…");
@@ -243,7 +257,7 @@ export default function Home() {
   // Streamer OFF). Don't add deps or gate this, or it'll churn/stop the worker.
   useEffect(() => {
     return subscribeScoreboard((next) => {
-      setMatches(next);
+      setMatches(withMockLive(next));
       setError(null);
     });
   }, []);
