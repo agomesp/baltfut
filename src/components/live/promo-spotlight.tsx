@@ -64,6 +64,38 @@ function AutoProgress({ speed, paused, onComplete }: { speed: number; paused: bo
   );
 }
 
+/** Brand-colored badge so the store reads as a logo, not plain text. Unknown
+ *  stores fall back to a neutral pill with their name. */
+const STORE_BRANDS: Record<string, { bg: string; fg: string; label: string }> = {
+  "shopee": { bg: "#EE4D2D", fg: "#fff", label: "Shopee" },
+  "amazon": { bg: "#232F3E", fg: "#FF9900", label: "amazon" },
+  "mercado livre": { bg: "#FFE600", fg: "#2D3277", label: "Mercado Livre" },
+  "magalu": { bg: "#0086FF", fg: "#fff", label: "Magalu" },
+  "magazine luiza": { bg: "#0086FF", fg: "#fff", label: "Magalu" },
+  "kabum": { bg: "#0A2C57", fg: "#FF6A00", label: "KaBuM!" },
+  "aliexpress": { bg: "#E62E04", fg: "#fff", label: "AliExpress" },
+  "casas bahia": { bg: "#0A00B4", fg: "#fff", label: "Casas Bahia" },
+  "pichau": { bg: "#E4022A", fg: "#fff", label: "Pichau" },
+  "terabyte": { bg: "#141414", fg: "#FF6B00", label: "Terabyte" },
+  "netshoes": { bg: "#141414", fg: "#fff", label: "Netshoes" },
+  "centauro": { bg: "#141414", fg: "#F58220", label: "Centauro" },
+};
+function StoreBadge({ store, absolute }: { store: string; absolute?: boolean }) {
+  const b = STORE_BRANDS[store.trim().toLowerCase()] ?? { bg: "rgba(0,0,0,0.6)", fg: "#d7e0d4", label: store };
+  return (
+    <span style={{ position: absolute ? "absolute" : undefined, bottom: absolute ? 10 : undefined, left: absolute ? 10 : undefined, display: "inline-flex", alignItems: "center", gap: 6, fontFamily: ARCHIVO, fontWeight: 800, fontSize: 11, letterSpacing: "0.01em", color: b.fg, background: b.bg, padding: "5px 10px", borderRadius: 8, boxShadow: "0 4px 12px -3px rgba(0,0,0,0.55)" }}>
+      <span aria-hidden style={{ width: 7, height: 7, borderRadius: 2, background: b.fg, opacity: 0.92, flex: "none" }} />{b.label}
+    </span>
+  );
+}
+
+/** A small streamer control button (prev / pin / next). */
+function Ctrl({ children, onClick, title, active }: { children: string; onClick: () => void; title: string; active?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} title={title} aria-label={title} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, cursor: "pointer", fontSize: 11, lineHeight: 1, fontFamily: JB, color: active ? "#0f1f02" : "#dfe8db", background: active ? LIME : "rgba(255,255,255,0.07)", border: active ? "none" : "1px solid rgba(255,255,255,0.12)", flex: "none" }}>{children}</button>
+  );
+}
+
 function Deal({ p, d }: { p: Promo; d: Density }) {
   const orig = originalPrice(p.price, p.discount);
   const cut = !!p.cutout && !!p.image; // transparent product → float it, no filled card
@@ -84,12 +116,17 @@ function Deal({ p, d }: { p: Promo; d: Density }) {
           <span aria-hidden style={{ fontSize: d.tiny ? 64 : 100 }}>🎁</span>
         )}
         {p.discount != null ? <span style={{ position: "absolute", top: 12, left: 12 }}><DiscountBurst pct={p.discount} size={burst} /></span> : null}
-        {p.store && !d.tiny ? <span style={{ position: "absolute", bottom: 10, left: 10, fontFamily: JB, fontSize: 11, letterSpacing: "0.06em", color: "#d7e0d4", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)", padding: "5px 11px", borderRadius: 999 }}>{p.store.toUpperCase()}</span> : null}
+        {p.store && !d.tiny ? <StoreBadge store={p.store} absolute /> : null}
       </div>
 
       {/* Deal details + CTA */}
       <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center", gap: colGap }}>
-        {!d.tiny ? <div style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.14em", color: GOLD, flex: "none" }}>🔥 OFERTA DO GRUPO</div> : null}
+        {!d.tiny ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flex: "none" }}>
+            <span style={{ fontFamily: JB, fontSize: 11, letterSpacing: "0.14em", color: GOLD }}>🔥 OFERTA DO GRUPO</span>
+            {(p.discount ?? 0) >= 30 ? <span style={{ fontFamily: JB, fontWeight: 700, fontSize: 10, letterSpacing: "0.07em", color: "#ff6a4d", background: "rgba(255,90,60,0.14)", border: "1px solid rgba(255,90,60,0.5)", padding: "2px 8px", borderRadius: 999, animation: "bfUrgent 1.3s ease-in-out infinite" }}>⚡ ENQUANTO DURAR</span> : null}
+          </div>
+        ) : null}
         <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: nameFont, lineHeight: 1.08, color: "#f4f8f2", flex: "none", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: d.tiny ? 1 : 2, WebkitBoxOrient: "vertical" as const }}>{p.product}</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", flex: "none" }}>
           {p.price ? <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: priceFont, lineHeight: 0.9, color: LIME }}>{p.price}</span> : null}
@@ -144,6 +181,7 @@ export function PromoSpotlight() {
   const [fetched, setFetched] = useState<Promo[]>([]);
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const [h, setH] = useState(600);
 
@@ -187,6 +225,8 @@ export function PromoSpotlight() {
   const safeIdx = n ? idx % n : 0;
   const current = items[safeIdx];
   const advance = useCallback(() => setIdx((i) => (n ? (i + 1) % n : 0)), [n]);
+  // Streamer stepping: move + pin so the deal being pitched doesn't rotate away.
+  const go = useCallback((delta: number) => { setPinned(true); setIdx((i) => (n ? (i + delta + n) % n : 0)); }, [n]);
 
   if (!current) return null;
 
@@ -197,17 +237,27 @@ export function PromoSpotlight() {
 
   return (
     <div ref={rootRef} style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: density.compact ? 8 : 11 }} onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+      <style dangerouslySetInnerHTML={{ __html: "@keyframes bfDealIn{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}@keyframes bfUrgent{0%,100%{opacity:1}50%{opacity:.5}}" }} />
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 11, flex: "none" }}>
         <span style={{ fontFamily: ARCHIVO, fontWeight: 800, fontSize: density.tiny ? 14 : 16, letterSpacing: "-0.01em", color: "#eef3ea" }}>🎁 OFERTAS DO GRUPO</span>
         {!density.tiny ? <span style={{ fontFamily: JB, fontSize: 10, letterSpacing: "0.1em", color: GOLD, border: `1px solid ${GOLD}55`, padding: "2px 8px", borderRadius: 999 }}>RB STORE</span> : null}
-        <span style={{ fontFamily: JB, fontSize: 10, color: DIM }}>{n} ofertas · gira sozinho</span>
+        <span style={{ fontFamily: JB, fontSize: 10, color: DIM }}>{n} ofertas · {pinned ? "fixada 📌" : "gira sozinho"}</span>
+        {/* Streamer controls: step + pin the deal being pitched. */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flex: "none" }}>
+          <Ctrl title="Oferta anterior" onClick={() => go(-1)}>◀</Ctrl>
+          <Ctrl title={pinned ? "Retomar rotação" : "Fixar esta oferta"} active={pinned} onClick={() => setPinned((v) => !v)}>{pinned ? "▶" : "⏸"}</Ctrl>
+          <Ctrl title="Próxima oferta" onClick={() => go(1)}>▶</Ctrl>
+        </div>
       </div>
 
       {/* Spotlight */}
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", gap: density.compact ? 9 : 12, borderRadius: 18, border: "1px solid rgba(200,255,45,0.14)", background: "linear-gradient(180deg, rgba(20,38,26,0.5), rgba(10,20,13,0.5))", padding: density.tiny ? 12 : 18 }}>
-        <Deal p={current} d={density} />
-        <AutoProgress key={safeIdx} speed={ROTATE_MS} paused={paused} onComplete={advance} />
+        {/* key=idx remounts on each rotation so the entrance animation replays. */}
+        <div key={safeIdx} style={{ flex: 1, minHeight: 0, display: "flex", animation: "bfDealIn .42s ease" }}>
+          <Deal p={current} d={density} />
+        </div>
+        <AutoProgress key={`p${safeIdx}`} speed={ROTATE_MS} paused={paused || pinned} onComplete={advance} />
       </div>
 
       {showStrip ? <Filmstrip items={items} idx={safeIdx} onPick={setIdx} compact={density.compact} /> : null}
