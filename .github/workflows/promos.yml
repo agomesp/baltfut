@@ -32,3 +32,9 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/telegram-pull.mjs
+      # Background-remove new deals' images → Supabase storage → promos.image_cutout.
+      # Isolated deps (own lockfile) so the ML libs never touch the app's audit/bundle.
+      # set_promos preserves cutouts across a pull, so only NEW deals are cut here.
+      - name: Cut new promo images
+        working-directory: scripts/promo-cutouts
+        run: npm ci --no-audit --no-fund && node index.mjs

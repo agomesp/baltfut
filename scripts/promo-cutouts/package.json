@@ -1,0 +1,13 @@
+{
+  "name": "baltfut-promo-cutouts",
+  "private": true,
+  "type": "module",
+  "description": "Isolated pipeline: background-remove RB Store promo images and host the cutouts in Supabase storage. Kept OUT of the app so its ML deps' transitive vulns never touch the client bundle or `npm audit`.",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@imgly/background-removal-node": "^1.4.5",
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}
