@@ -13,6 +13,7 @@ import "./globals.css";
 import { UpdateBanner } from "@/components/update-banner";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ModoStreamer } from "@/components/modo-streamer";
+import { PromoToggleButton } from "@/components/promo-toggle-button";
 import { PipView } from "@/components/pip-view";
 import { KickChatReactions } from "@/components/kick-chat-reactions";
 import { ChatEmotesToggle } from "@/components/chat-emotes-toggle";
@@ -119,6 +120,7 @@ export default function RootLayout({
               stays intact — emotes keep floating, PiP stays available. */}
           <span style={{ display: "none" }}><ChatEmotesToggle /></span>
           <span style={{ display: "none" }}><PipView /></span>
+          <PromoToggleButton />
           <ModoStreamer />
         </div>
       </body>
