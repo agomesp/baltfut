@@ -28,7 +28,7 @@ import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
 import { decideConcurrent } from "@/lib/concurrent-games";
 import { useIsNarrow } from "@/lib/use-is-narrow";
 import { subscribePromoDisplay, isPromoDisplay } from "@/lib/promo-display";
-import { LivePromosPanel } from "@/components/live/live-promos-panel";
+import { LivePromoView } from "@/components/live/live-promo-view";
 import type { MatchResult } from "@/lib/ranking";
 
 /** A match's display phase (pre / live / post). */
@@ -154,7 +154,7 @@ function PlacarStage({
         </div>
       )}
       {showPromos ? (
-        <LivePromosPanel />
+        <LivePromoView />
       ) : (
       <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 12, flex: 1, minHeight: 0 }}>
         <div style={{ flex: narrow ? "none" : 1.5, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
