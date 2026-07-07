@@ -38,7 +38,7 @@ describe("parsePromoFixture", () => {
     };
     const out = parsePromoFixture(json);
     expect(out).toHaveLength(1);
-    expect(out[0]).toEqual({ product: "RTX 5070", price: "R$ 3.846", link: "https://rbstore.net/s/x", image: "https://cdn/i.jpg", store: "Amazon", coupon: "RB10", discount: 20 });
+    expect(out[0]).toEqual({ product: "RTX 5070", price: "R$ 3.846", link: "https://rbstore.net/s/x", image: "https://cdn/i.jpg", store: "Amazon", coupon: "RB10", discount: 20, cutout: false });
   });
 
   it("defaults discount to null when absent or non-positive", () => {

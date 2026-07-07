@@ -11,6 +11,9 @@ export interface Promo {
   coupon: string | null;
   /** Discount percentage (e.g. 20 → "-20%"), or null when the deal has none. */
   discount?: number | null;
+  /** `image` is a background-removed transparent cutout → render it floating
+   *  (contain + glow) on the dark theme instead of a filled card. */
+  cutout?: boolean;
 }
 
 /** Columns selected from the Supabase `promos` table (kept in sync with the RLS grant). */
@@ -74,6 +77,7 @@ export function parsePromoFixture(json: unknown): Promo[] {
         store: str(i.store),
         coupon: str(i.coupon),
         discount: Number.isFinite(d) && d > 0 ? Math.round(d) : null,
+        cutout: i.cutout === true,
       };
     })
     .filter((p) => p.product && p.link);

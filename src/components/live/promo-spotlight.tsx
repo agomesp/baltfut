@@ -66,6 +66,7 @@ function AutoProgress({ speed, paused, onComplete }: { speed: number; paused: bo
 
 function Deal({ p, d }: { p: Promo; d: Density }) {
   const orig = originalPrice(p.price, p.discount);
+  const cut = !!p.cutout && !!p.image; // transparent product → float it, no filled card
   const nameFont = d.tiny ? "clamp(15px,1.6vw,20px)" : d.compact ? "clamp(17px,1.9vw,26px)" : "clamp(20px,2.4vw,34px)";
   const priceFont = d.tiny ? "clamp(24px,3vw,34px)" : d.compact ? "clamp(28px,3.4vw,44px)" : "clamp(32px,4vw,52px)";
   const qr = d.tiny ? 88 : d.compact ? 108 : 132;
@@ -75,10 +76,10 @@ function Deal({ p, d }: { p: Promo; d: Density }) {
   return (
     <div style={{ display: "flex", gap: rowGap, alignItems: "stretch", flex: 1, minHeight: 0, overflow: "hidden" }}>
       {/* Product image + burst + store chip */}
-      <div style={{ position: "relative", flex: "0 0 34%", borderRadius: 18, overflow: "hidden", background: p.image ? "#0e1b14" : STRIPE, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
+      <div style={{ position: "relative", flex: "0 0 34%", borderRadius: 18, overflow: "hidden", background: cut ? "radial-gradient(circle at 50% 44%, rgba(200,255,45,0.12), rgba(20,38,26,0.18) 52%, transparent 72%)" : p.image ? "#0e1b14" : STRIPE, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
         {p.image ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={p.image} alt="" referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={p.image} alt="" referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: cut ? "contain" : "cover", padding: cut ? "6%" : 0, filter: cut ? "drop-shadow(0 14px 20px rgba(0,0,0,0.55))" : "none" }} />
         ) : (
           <span aria-hidden style={{ fontSize: d.tiny ? 64 : 100 }}>🎁</span>
         )}
@@ -127,7 +128,7 @@ function Filmstrip({ items, idx, onPick, compact }: { items: Promo[]; idx: numbe
           <button key={i} type="button" onClick={() => onPick(i)} aria-label={p.product} style={{ position: "relative", flex: "none", width: s, height: s, borderRadius: 12, overflow: "hidden", cursor: "pointer", padding: 0, background: p.image ? "#0e1b14" : STRIPE, border: active ? `2px solid ${LIME}` : "1px solid rgba(255,255,255,0.09)", transition: "width .25s, height .25s", boxShadow: active ? `0 0 16px -3px ${LIME}aa` : "none" }}>
             {p.image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={p.image} alt="" referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: active ? 1 : 0.62 }} />
+              <img src={p.image} alt="" referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: p.cutout ? "contain" : "cover", padding: p.cutout ? "10%" : 0, opacity: active ? 1 : 0.62 }} />
             ) : (
               <span aria-hidden style={{ fontSize: active ? 30 : 24 }}>🎁</span>
             )}
