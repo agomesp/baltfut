@@ -111,7 +111,9 @@ export default function RootLayout({
             position: "fixed",
             bottom: 14,
             right: 14,
-            zIndex: 60,
+            // Above the bottom dock (zIndex 65) so the Mostrar Promos hover tooltip,
+            // which sits inside this container's stacking context, isn't clipped by it.
+            zIndex: 70,
             display: "flex",
             gap: 10,
             alignItems: "center",
