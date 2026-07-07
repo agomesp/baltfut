@@ -14,6 +14,7 @@ import { UpdateBanner } from "@/components/update-banner";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ModoStreamer } from "@/components/modo-streamer";
 import { PromoToggleButton } from "@/components/promo-toggle-button";
+import { PromoChatCommands } from "@/components/promo-chat-commands";
 import { PipView } from "@/components/pip-view";
 import { KickChatReactions } from "@/components/kick-chat-reactions";
 import { ChatEmotesToggle } from "@/components/chat-emotes-toggle";
@@ -122,6 +123,7 @@ export default function RootLayout({
           <span style={{ display: "none" }}><PipView /></span>
           <PromoToggleButton />
           <ModoStreamer />
+          <PromoChatCommands />
         </div>
       </body>
     </html>

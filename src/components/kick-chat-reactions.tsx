@@ -2,25 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { CHAT_EMOTES_EVENT, chatEmotesOn } from "@/components/chat-emotes-toggle";
+import { subscribeKickChat, KICK_CHATROOM_ID } from "@/lib/kick-chat";
 
 /**
  * Watch the streamer's Kick chat (public Pusher WebSocket) and float each emote
  * used in chat onto the page, reusing the baltfutFloat animation — so the chat's
  * emotes appear live on the captured page.
  *
- * Browser-only: no server, no auth (the chatroom channel is public), no CORS
- * (WebSockets aren't CORS-restricted). The chatroom id is the one config value,
- * static per channel — from https://kick.com/api/v2/channels/<slug> → chatroom.id.
- *
  * SECURITY: chat content is untrusted, but we only extract the NUMERIC emote id
  * (`\d+`) and build a fixed-template files.kick.com URL — no arbitrary URL/markup
  * can be injected. A per-second cap keeps a busy chat from flooding the screen.
  *
- * Caveat: unofficial — if Kick changes the Pusher key or the event name
- * (`App\Events\ChatMessageEvent`), this quietly stops (no errors, just no floats).
+ * The socket/connection lives in the shared kick-chat helper.
  */
-const PUSHER_WS = "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false";
-const CHATROOM_ID = 3360085; // locobaltar (static per channel)
+const CHATROOM_ID = KICK_CHATROOM_ID;
 const EMOTE_RE = /\[emote:(\d+):[^\]]*\]/g;
 const MAX_PER_SEC = 5; // drop excess floaters when chat is busy
 
@@ -50,11 +45,7 @@ export function KickChatReactions({ chatroomId = CHATROOM_ID, maxPerMsg = 4 }: {
   useEffect(() => {
     if (typeof window === "undefined" || !enabled) return; // off → no WS, no floats
 
-    let ws: WebSocket | null = null;
-    let stopped = false;
-    let retry: number | undefined;
     let recent: number[] = []; // timestamps for the per-second rate limit
-
     const float = (url: string) => {
       const now = Date.now();
       recent = recent.filter((t) => now - t < 1000);
@@ -65,31 +56,10 @@ export function KickChatReactions({ chatroomId = CHATROOM_ID, maxPerMsg = 4 }: {
       window.setTimeout(() => setFloaters((cur) => cur.filter((x) => x.id !== f.id)), f.dur + 150);
     };
 
-    const connect = () => {
-      ws = new WebSocket(PUSHER_WS);
-      ws.onmessage = (e) => {
-        let msg: { event?: string; data?: string };
-        try { msg = JSON.parse(e.data); } catch { return; }
-        if (msg.event === "pusher:connection_established") {
-          ws?.send(JSON.stringify({ event: "pusher:subscribe", data: { channel: `chatrooms.${chatroomId}.v2` } }));
-        }
-        if (msg.event === "App\\Events\\ChatMessageEvent") {
-          try {
-            const p = JSON.parse(msg.data ?? "{}") as { content?: string };
-            const ids = [...(p.content ?? "").matchAll(EMOTE_RE)].map((m) => m[1]).slice(0, maxPerMsg);
-            for (const id of ids) float(`https://files.kick.com/emotes/${id}/fullsize`);
-          } catch { /* ignore */ }
-        }
-      };
-      ws.onclose = () => { if (!stopped) retry = window.setTimeout(connect, 3000); };
-    };
-    connect();
-
-    return () => {
-      stopped = true;
-      window.clearTimeout(retry);
-      ws?.close();
-    };
+    return subscribeKickChat(chatroomId, (content) => {
+      const ids = [...content.matchAll(EMOTE_RE)].map((m) => m[1]).slice(0, maxPerMsg);
+      for (const id of ids) float(`https://files.kick.com/emotes/${id}/fullsize`);
+    });
   }, [chatroomId, maxPerMsg, enabled]);
 
   return (

@@ -5,16 +5,30 @@
 // PiP offers, surfaced so the streamer doesn't need the PiP open. Live-match only
 // (the live view gates on phase === "live"); harmless to leave on otherwise.
 import { useSyncExternalStore } from "react";
-import { Gift } from "lucide-react";
-import { togglePromoDisplay, isPromoDisplay, subscribePromoDisplay } from "@/lib/promo-display";
+import { Gift, Lock } from "lucide-react";
+import { togglePromoDisplay, setPromoDisplay, isPromoDisplay, isPromoLocked, subscribePromoDisplay } from "@/lib/promo-display";
+import { isStreamerMachine } from "@/lib/streamer-identity";
 
 export function PromoToggleButton() {
   const on = useSyncExternalStore(subscribePromoDisplay, isPromoDisplay, () => false);
+  const locked = useSyncExternalStore(subscribePromoDisplay, isPromoLocked, () => false);
+
+  // The streamer's click PINS promos on (locks chat's !palpites out) and, going
+  // back, releases the lock. A non-streamer's button is a plain local toggle.
+  const onClick = () => {
+    if (isStreamerMachine()) setPromoDisplay(!on, { lock: !on });
+    else togglePromoDisplay();
+  };
+
   return (
     <button
       type="button"
-      onClick={() => togglePromoDisplay()}
-      title={on ? "Voltar aos palpites" : "Mostrar as promoções da RB Store no lugar dos palpites (durante um jogo ao vivo)"}
+      onClick={onClick}
+      title={
+        on
+          ? (locked ? "Promos travadas (o chat não volta pra palpites). Toque para voltar aos palpites." : "Voltar aos palpites")
+          : "Mostrar as promoções da RB Store no lugar dos palpites (durante um jogo ao vivo)"
+      }
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -33,7 +47,7 @@ export function PromoToggleButton() {
         border: `1px solid rgba(255,206,58,${on ? 0.75 : 0.5})`,
       }}
     >
-      <Gift size={15} />
+      {locked ? <Lock size={13} /> : <Gift size={15} />}
       {on ? "◀ Palpites" : "Mostrar Promos"}
     </button>
   );
