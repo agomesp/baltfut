@@ -1,8 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { fillDemoDiscounts, padPromos, parsePromoFixture, safeUrl, SAMPLE_PROMOS, type Promo } from "@/lib/promos";
+import { fillDemoDiscounts, padPromos, parsePromoFixture, promosFromRows, safeUrl, SAMPLE_PROMOS, type Promo, type PromoRow } from "@/lib/promos";
 
 const p = (product: string): Promo => ({
   product, price: null, link: "https://x", image: null, store: null, coupon: null,
+});
+
+describe("promosFromRows", () => {
+  const row = (over: Partial<PromoRow> = {}): PromoRow => ({
+    product: "RTX 5060", price: "R$ 1.907", link: "https://rbstore.net/s/a", image: "https://cdn/i.jpg", store: "Shopee", coupon: "RB10", ...over,
+  });
+
+  it("prefers the cutout image and flags cutout when image_cutout is set", () => {
+    const out = promosFromRows([row({ image_cutout: "https://sb/storage/x.png" })]);
+    expect(out[0].image).toBe("https://sb/storage/x.png");
+    expect(out[0].cutout).toBe(true);
+  });
+
+  it("falls back to the original image (not a cutout) when image_cutout is absent", () => {
+    const out = promosFromRows([row({ image_cutout: null })]);
+    expect(out[0].image).toBe("https://cdn/i.jpg");
+    expect(out[0].cutout).toBe(false);
+  });
+
+  it("drops rows missing a product or link", () => {
+    const out = promosFromRows([row(), row({ product: "" }), row({ link: "" })]);
+    expect(out).toHaveLength(1);
+  });
+
+  it("handles null / undefined input", () => {
+    expect(promosFromRows(null)).toEqual([]);
+    expect(promosFromRows(undefined)).toEqual([]);
+  });
 });
 
 describe("padPromos", () => {

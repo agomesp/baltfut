@@ -17,7 +17,38 @@ export interface Promo {
 }
 
 /** Columns selected from the Supabase `promos` table (kept in sync with the RLS grant). */
-export const PROMOS_COLUMNS = "product,price,link,image,store,coupon";
+export const PROMOS_COLUMNS = "product,price,link,image,image_cutout,store,coupon";
+
+/** A raw row from the `promos` table select. */
+export interface PromoRow {
+  product: string;
+  price: string | null;
+  link: string;
+  image: string | null;
+  image_cutout?: string | null;
+  store: string | null;
+  coupon: string | null;
+}
+
+/**
+ * Map Supabase `promos` rows to `Promo`, preferring the stored cutout: when
+ * `image_cutout` is present it becomes the (transparent) image and flags `cutout`,
+ * so the client renders the product floating on the dark theme. Drops rows missing
+ * a product or link (unbuyable).
+ */
+export function promosFromRows(rows: PromoRow[] | null | undefined): Promo[] {
+  return (rows ?? [])
+    .map((r) => ({
+      product: r.product,
+      price: r.price ?? null,
+      link: r.link,
+      image: r.image_cutout ?? r.image ?? null,
+      store: r.store ?? null,
+      coupon: r.coupon ?? null,
+      cutout: !!r.image_cutout,
+    }))
+    .filter((p) => p.product && p.link);
+}
 
 /** How many slots the streamer's promo view fills — a full, scrollable list. */
 export const PROMOS_TARGET = 50;

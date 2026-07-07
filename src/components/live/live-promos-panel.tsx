@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Maximize2, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { fillDemoDiscounts, padPromos, parsePromoFixture, safeUrl, PROMOS_COLUMNS, PROMOS_FIXTURE, PROMOS_TARGET, type Promo } from "@/lib/promos";
+import { fillDemoDiscounts, padPromos, parsePromoFixture, promosFromRows, safeUrl, PROMOS_COLUMNS, PROMOS_FIXTURE, PROMOS_TARGET, type Promo, type PromoRow } from "@/lib/promos";
 import { ARCHIVO, BRIC, JB, LIME, SAIRA } from "@/components/live/bf-ui";
 
 const CHANNEL = "https://t.me/rbstorenet";
@@ -77,7 +77,7 @@ export function LivePromosPanel() {
         .select(PROMOS_COLUMNS)
         .order("position")
         .limit(PROMOS_TARGET);
-      if (alive && data) setFetched((data as Promo[]).filter((i) => i.product && i.link));
+      if (alive && data) setFetched(promosFromRows(data as PromoRow[]));
     };
     const loadFixture = async () => {
       try {

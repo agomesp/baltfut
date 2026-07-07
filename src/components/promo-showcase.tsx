@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Gift, ArrowRight } from "lucide-react";
 import { MONO } from "@/components/primitives";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { promosFromRows, PROMOS_COLUMNS, type Promo, type PromoRow } from "@/lib/promos";
 
 /**
  * Slim promo bar that sits on top of the live score. Latest deals from the public
@@ -18,15 +19,6 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 const CHANNEL = "https://t.me/rbstorenet";
 const POLL_MS = 4 * 60_000; // re-read the feed every 4 min (no deploy needed)
 
-interface Promo {
-  product: string;
-  price: string | null;
-  link: string;
-  image: string | null;
-  store: string | null;
-  coupon: string | null;
-}
-
 export function PromoShowcase({ height = 60 }: { height?: number }) {
   const [items, setItems] = useState<Promo[]>([]);
 
@@ -37,8 +29,8 @@ export function PromoShowcase({ height = 60 }: { height?: number }) {
     if (!client) return;
     let alive = true;
     const load = async () => {
-      const { data } = await client.from("promos").select("product,price,link,image,store,coupon").order("position");
-      if (alive && data) setItems((data as Promo[]).filter((i) => i.product && i.link));
+      const { data } = await client.from("promos").select(PROMOS_COLUMNS).order("position");
+      if (alive && data) setItems(promosFromRows(data as PromoRow[]));
     };
     void load();
     const id = window.setInterval(() => void load(), POLL_MS);

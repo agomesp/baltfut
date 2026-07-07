@@ -9,8 +9,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
-  fillDemoDiscounts, padPromos, parsePromoFixture, safeUrl,
-  PROMOS_COLUMNS, PROMOS_FIXTURE, PROMOS_TARGET, SAMPLE_PROMOS, type Promo,
+  fillDemoDiscounts, padPromos, parsePromoFixture, promosFromRows, safeUrl,
+  PROMOS_COLUMNS, PROMOS_FIXTURE, PROMOS_TARGET, SAMPLE_PROMOS, type Promo, type PromoRow,
 } from "@/lib/promos";
 import { ARCHIVO, BRIC, JB, SAIRA, LIME, GOLD, DIM, DIM_2 } from "@/components/live/bf-ui";
 
@@ -163,7 +163,7 @@ export function PromoSpotlight() {
     const loadSupabase = async () => {
       if (!client) return;
       const { data } = await client.from("promos").select(PROMOS_COLUMNS).order("position").limit(PROMOS_TARGET);
-      if (alive && data?.length) setFetched((data as Promo[]).filter((i) => i.product && i.link));
+      if (alive && data?.length) setFetched(promosFromRows(data as PromoRow[]));
     };
     const loadFixture = async () => {
       try {
