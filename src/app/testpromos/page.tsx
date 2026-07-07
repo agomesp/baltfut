@@ -5,6 +5,7 @@
 // what's next. The idea vs the current 50-card grid: readable at stream res,
 // self-playing (no clicking mid-match), and it foregrounds each affiliate link.
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { ChevronLeft, ChevronRight, Pause, Play, ExternalLink, Ticket } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -63,7 +64,7 @@ function Spotlight({ p }: { p: Promo }) {
   return (
     <div style={{ display: "flex", gap: 26, alignItems: "stretch", flex: 1, minHeight: 0 }}>
       {/* Product image + burst + store chip */}
-      <div style={{ position: "relative", flex: "0 0 44%", borderRadius: 22, overflow: "hidden", background: p.image ? "#0e1b14" : STRIPE, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
+      <div style={{ position: "relative", flex: "0 0 36%", borderRadius: 22, overflow: "hidden", background: p.image ? "#0e1b14" : STRIPE, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
         {p.image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={p.image} alt="" referrerPolicy="no-referrer" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -98,6 +99,13 @@ function Spotlight({ p }: { p: Promo }) {
           </a>
           <span style={{ fontFamily: JB, fontSize: 12.5, color: DIM }}>ou no grupo → <b style={{ color: "#cfe8c0" }}>t.me/rbstorenet</b></span>
         </div>
+      </div>
+
+      {/* Scan-to-buy: the deal's affiliate link as a QR — the only way a viewer
+          watching the stream can reach a long affiliate URL they can't type. */}
+      <div style={{ flex: "none", alignSelf: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 10, background: "#fff", borderRadius: 18, padding: "16px 16px 13px", boxShadow: "0 12px 34px -8px rgba(0,0,0,0.55)" }}>
+        <QRCodeSVG value={safeUrl(p.link)} size={150} bgColor="#ffffff" fgColor="#0a1a10" level="M" marginSize={2} />
+        <span style={{ fontFamily: JB, fontSize: 10, letterSpacing: "0.05em", color: "#16241b", textAlign: "center", lineHeight: 1.4 }}>📷 APONTE A CÂMERA<br />pra abrir a oferta</span>
       </div>
     </div>
   );
