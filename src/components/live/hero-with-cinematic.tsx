@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { HeroScoreboard, type HeroScoreboardProps } from "@/components/live/hero-scoreboard";
 import { GoalFoulCinematic, type CineMode } from "@/components/live/goal-foul-cinematic";
+import { GoalPromo } from "@/components/live/goal-promo";
 import { resolveCraquePair, CRAQUE_CLIPS, ANIMATED_SQUAD, SQUAD_CLIPS } from "@/data/craque-map";
 
 // Wraps the single-game AO VIVO hero with the goal/foul cinematic: it fires on a
@@ -71,6 +72,8 @@ export function HeroWithCinematic(props: HeroScoreboardProps) {
             aria-hidden
             style={{ position: "fixed", inset: 0, zIndex: 1, background: "rgba(7,22,12,0.5)", backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)", animation: "cineBackdrop 6s ease-out both", pointerEvents: "none" }}
           />
+          {/* On a GOAL (not cards), flash a sponsor deal on the lower/back area. */}
+          {cfg.mode === "goal" ? <GoalPromo runId={cfg.runId} /> : null}
         </>
       ) : null}
       <div style={{ opacity: active ? 0 : 1 }}>

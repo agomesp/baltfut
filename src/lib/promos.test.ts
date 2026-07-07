@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillDemoDiscounts, padPromos, parsePromoFixture, promosFromRows, safeUrl, SAMPLE_PROMOS, type Promo, type PromoRow } from "@/lib/promos";
+import { fillDemoDiscounts, padPromos, parsePromoFixture, pickGoalPromo, promosFromRows, safeUrl, SAMPLE_PROMOS, type Promo, type PromoRow } from "@/lib/promos";
 
 const p = (product: string): Promo => ({
   product, price: null, link: "https://x", image: null, store: null, coupon: null,
@@ -30,6 +30,33 @@ describe("promosFromRows", () => {
   it("handles null / undefined input", () => {
     expect(promosFromRows(null)).toEqual([]);
     expect(promosFromRows(undefined)).toEqual([]);
+  });
+});
+
+describe("pickGoalPromo", () => {
+  const d = (product: string, discount: number, image: string | null = "i"): Promo => ({
+    product, price: "R$ 1", link: "https://x/" + product, image, store: null, coupon: null, discount,
+  });
+
+  it("returns null for an empty feed", () => {
+    expect(pickGoalPromo([], 0)).toBeNull();
+  });
+
+  it("picks from the highest-discount deals", () => {
+    const promos = [d("lo", 5), d("hi", 50), d("mid", 30)];
+    expect(pickGoalPromo(promos, 0)?.product).toBe("hi");
+  });
+
+  it("varies by runId across the top set (stable, no repeat back-to-back)", () => {
+    const promos = [d("a", 50), d("b", 45), d("c", 40)];
+    const a = pickGoalPromo(promos, 0)?.product;
+    const b = pickGoalPromo(promos, 1)?.product;
+    expect(a).not.toBe(b);
+  });
+
+  it("prefers deals with an image when some have one", () => {
+    const promos = [d("noimg", 90, null), d("img", 10, "i")];
+    expect(pickGoalPromo(promos, 0)?.product).toBe("img");
   });
 });
 

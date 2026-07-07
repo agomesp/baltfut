@@ -136,6 +136,19 @@ export function fillDemoDiscounts(promos: Promo[]): Promo[] {
 }
 
 /**
+ * Pick one deal to flash during a goal cinematic: a high-discount deal (most
+ * compelling for the attention peak), preferring ones with an image, varied per goal
+ * via `runId` so consecutive goals don't show the same deal. Null when the feed is empty.
+ */
+export function pickGoalPromo(promos: Promo[], runId: number): Promo | null {
+  if (!promos.length) return null;
+  const withImg = promos.filter((p) => p.image);
+  const pool = withImg.length ? withImg : promos;
+  const top = [...pool].sort((a, b) => (b.discount ?? 0) - (a.discount ?? 0)).slice(0, Math.min(6, pool.length));
+  return top[((runId % top.length) + top.length) % top.length] ?? null;
+}
+
+/**
  * Exactly `count` promos: the real feed first, cycled to fill the list; the sample
  * deals stand in when the feed is empty. Keeps the streamer view a full, scrollable
  * set regardless of how many live deals exist.
