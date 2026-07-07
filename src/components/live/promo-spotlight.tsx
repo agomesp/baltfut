@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
-  fillDemoDiscounts, parsePromoFixture, safeUrl,
+  fillDemoDiscounts, padPromos, parsePromoFixture, safeUrl,
   PROMOS_COLUMNS, PROMOS_FIXTURE, PROMOS_TARGET, SAMPLE_PROMOS, type Promo,
 } from "@/lib/promos";
 import { ARCHIVO, BRIC, JB, SAIRA, LIME, GOLD, DIM, DIM_2 } from "@/components/live/bf-ui";
@@ -180,7 +180,9 @@ export function PromoSpotlight() {
     return () => { alive = false; };
   }, []);
 
-  const items = useMemo(() => fillDemoDiscounts(fetched.length ? fetched : SAMPLE_PROMOS), [fetched]);
+  // Fill to the same count as the Grade view (cycles the real feed), so the carousel
+  // reads as a full set rather than the handful of live deals.
+  const items = useMemo(() => padPromos(fillDemoDiscounts(fetched.length ? fetched : SAMPLE_PROMOS), PROMOS_TARGET), [fetched]);
   const n = items.length;
   const safeIdx = n ? idx % n : 0;
   const current = items[safeIdx];
