@@ -316,4 +316,22 @@ begin
   raise notice 'PASS P7: service_role can write bracket_palpites';
 end $$;
 
+-- Q) set_ai_palpites: only service_role may execute the ChatGPT bot-palpite upsert
+--    RPC. anon must not be able to inject bot palpites or otherwise write `votes`.
+do $$
+begin
+  set local role anon;
+  begin
+    perform public.set_ai_palpites('[]'::jsonb);
+    raise exception 'FAIL Q1: anon executed set_ai_palpites';
+  exception when insufficient_privilege then raise notice 'PASS Q1: anon set_ai_palpites execute denied';
+  end;
+end $$;
+do $$
+begin
+  set local role service_role;
+  perform public.set_ai_palpites('[]'::jsonb);          -- execute grant intact (must not raise)
+  raise notice 'PASS Q2: service_role can execute set_ai_palpites';
+end $$;
+
 select 'ALL RLS CHECKS PASSED' as result;
