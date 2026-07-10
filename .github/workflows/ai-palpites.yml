@@ -1,0 +1,36 @@
+name: Fill AI palpites
+
+# Run the deterministic strength model over ESPN's fixtures and record the
+# "ChatGPT" house-bot palpites into Supabase `votes` (via set_ai_palpites). Fills
+# every match with two decided teams — backfilling misses, pre-filling upcoming
+# games, and catching each knockout tie the moment its teams resolve. `on conflict
+# do nothing` makes every run idempotent. No git commit → NO Pages deploy → open
+# viewers don't reload; the ranking + AI tab pick it up on their next poll.
+#
+# Requires repo secrets:
+#   NEXT_PUBLIC_SUPABASE_URL      (already set)
+#   SUPABASE_SERVICE_ROLE_KEY     (same one the results/promos crons use)
+on:
+  schedule:
+    - cron: "17 */2 * * *" # every 2h — often enough to record a fixture before kickoff
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-palpites
+  cancel-in-progress: true
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/ai-palpite-pull.mjs
