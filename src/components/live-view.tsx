@@ -388,6 +388,8 @@ export function LiveView({
               secondEntries={partner ? allEntries.filter((e) => e.matchId === partner.id) : []}
               allEntries={allEntries}
               matches={matches}
+              results={matchResults}
+              brackets={brackets}
               groupByTeam={groupByTeam}
               releasedIds={releasedIds}
               palpiteOverrides={palpiteOverrides}

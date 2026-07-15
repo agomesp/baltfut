@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
+import type { BracketEntry } from "@/lib/bracket-votes";
+import type { MatchResult } from "@/lib/ranking";
 import { supabaseCastVote, type CastVoteTransport } from "@/lib/votes";
 import { teamNamePt } from "@/lib/team-names";
 import { fmtTime } from "@/lib/format";
@@ -16,6 +18,8 @@ import { isReservedName } from "@shared/name-claim";
 import { Countdown } from "@/components/countdown";
 import { RankingSubs } from "@/components/live/ranking-subs";
 import { IaVsVoce } from "@/components/live/ia-vs-voce";
+import { PromoSpotlight } from "@/components/live/promo-spotlight";
+import { subscribePromoDisplay, isPromoDisplay } from "@/lib/promo-display";
 import { CommunityBar } from "@/components/live/community-bar";
 import {
   PalpiteForm,
@@ -343,6 +347,11 @@ export interface PreMatchPanelProps {
   secondEntries: VoteEntry[];
   allEntries: VoteEntry[];
   matches: Match[];
+  /** Durable finished-match scores (match_results) — preferred over ESPN for
+   *  grading the ranking, so a dropped/changed ESPN result can't erase wins. */
+  results?: Record<string, MatchResult>;
+  /** Saved knockout brackets — 0.2 per correct winner folds into the ranking. */
+  brackets?: BracketEntry[];
   groupByTeam: Record<string, string>;
   /** Matches open for palpites (current + next kickoff group). */
   releasedIds: Set<string>;
@@ -352,7 +361,7 @@ export interface PreMatchPanelProps {
   transport?: CastVoteTransport;
 }
 
-export function PreMatchPanel({ match, pen = false, second, entries, secondEntries, allEntries, matches, groupByTeam, releasedIds, palpiteOverrides = {}, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
+export function PreMatchPanel({ match, pen = false, second, entries, secondEntries, allEntries, matches, results, brackets, groupByTeam, releasedIds, palpiteOverrides = {}, onVoted, transport = supabaseCastVote }: PreMatchPanelProps) {
   // A manual admin window for a match: its openUntil (ms) overrides the default
   // cutoff, and its mere presence releases the match's form (even if it would
   // otherwise be locked / past the grace).
@@ -377,12 +386,19 @@ export function PreMatchPanel({ match, pen = false, second, entries, secondEntri
   // (poll/realtime).
   const consensus = useMemo(() => communityConsensus(visibleEntries), [visibleEntries]);
 
+  // Streamer promo mode: swap the center/right cards for a big promo (see the promo
+  // branch below). alreadySent mirrors PalpiteForm's rule — this locked name already
+  // has a palpite here — so we can free its left slot for the moved "Começa em" card.
+  const promoOn = useSyncExternalStore(subscribePromoDisplay, isPromoDisplay, () => false);
+  const lowerMyName = myName?.trim().toLowerCase();
+  const alreadySent = !!lowerMyName && entries.some((e) => e.username.trim().toLowerCase() === lowerMyName);
+
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 11, flex: 1, minHeight: 0 }}>
       {!showDuo ? (
         (() => {
           const preHero = <PreHero match={match} groupByTeam={groupByTeam} consensus={consensus} />;
-          const ranking = <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: "100%" }} />;
+          const ranking = <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} variant="column" style={{ flex: "none", width: "100%" }} />;
           const formCard = pen ? (
             <PenForm match={match} />
           ) : (
@@ -445,7 +461,32 @@ export function PreMatchPanel({ match, pen = false, second, entries, secondEntri
           // up to the form's width, and the "chegando" feed to the hero's width
           // (minmax(0,…) lets a column shrink below its content so the form's
           // steppers don't widen its column out of sync with the row below).
-          return (
+          return promoOn ? (
+            // Streamer promo mode: "Começa em" moves to the left slot (or the form
+            // stays there if you haven't palpitado yet); Na copa + IA vs Você are
+            // hidden so a big promo card fills the center+right; the chat CTA,
+            // "chegando" feed and ranking keep the bottom row.
+            // BOUNDED rows (not auto): PromoSpotlight measures its own height
+            // (ResizeObserver) and expands as a flex child, so an `auto` row would feed
+            // back into itself — stalling its entrance animation and thrashing. Fixed-
+            // fraction rows give it a determined height and always leave room for row 2
+            // (chat CTA | chegando | ranking). Row 1 min 320px fits the form.
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr)", gridTemplateRows: "minmax(320px, 1.1fr) minmax(0, 1fr)", gap: 12, flex: 1, minHeight: 0 }}>
+              <div style={{ gridColumn: 1, gridRow: 1, minWidth: 0, minHeight: 0, display: "flex", overflowY: "auto" }}>{alreadySent ? preHero : cappedForm}</div>
+              <div style={{ gridColumn: "2 / 4", gridRow: 1, minWidth: 0, minHeight: 0, display: "flex" }}>
+                <PromoSpotlight />
+              </div>
+              <div style={{ gridColumn: 1, gridRow: 2, minWidth: 0, minHeight: 0 }}>
+                <ChatCta homeCode={homeCode} awayCode={awayCode} pen={pen} />
+              </div>
+              <div style={{ gridColumn: 2, gridRow: 2, minWidth: 0, minHeight: 0, display: "flex" }}>
+                <ChegandoFeed entries={visibleEntries} pen={pen} homeCode={homeCode} awayCode={awayCode} />
+              </div>
+              <div className="bf-scroll" style={{ gridColumn: 3, gridRow: 2, minWidth: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
+                {ranking}
+              </div>
+            </div>
+          ) : (
             <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.4fr) minmax(0,1fr)", gridTemplateRows: "auto minmax(0,1fr)", gap: 12, flex: 1, minHeight: 0 }}>
               {/* Row 1, cols 1-2: form | hero */}
               {cappedForm}
@@ -477,6 +518,8 @@ export function PreMatchPanel({ match, pen = false, second, entries, secondEntri
             secondEntries={secondEntries}
             allEntries={allEntries}
             matches={matches}
+            results={results}
+            brackets={brackets}
             groupByTeam={groupByTeam}
             released1={releasedOr(match)}
             released2={releasedOr(second!)}
@@ -653,13 +696,15 @@ export function DuoGameCard({ match, entries, groupByTeam, name, confirm, releas
   );
 }
 
-function PreMatchDuo({ match, second, entries, secondEntries, allEntries, matches, groupByTeam, released1, released2, openUntil1 = null, openUntil2 = null, onVoted, transport }: {
+function PreMatchDuo({ match, second, entries, secondEntries, allEntries, matches, results, brackets, groupByTeam, released1, released2, openUntil1 = null, openUntil2 = null, onVoted, transport }: {
   match: Match;
   second: Match;
   entries: VoteEntry[];
   secondEntries: VoteEntry[];
   allEntries: VoteEntry[];
   matches: Match[];
+  results?: Record<string, MatchResult>;
+  brackets?: BracketEntry[];
   groupByTeam: Record<string, string>;
   released1: boolean;
   released2: boolean;
@@ -688,7 +733,7 @@ function PreMatchDuo({ match, second, entries, secondEntries, allEntries, matche
         </div>
       </div>
       {/* Ranking dos Subs on the right (desktop) / below the cards (mobile). */}
-      <RankingSubs entries={allEntries} matches={matches} variant="column" style={{ flex: "none", width: narrow ? "100%" : 230 }} />
+      <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} variant="column" style={{ flex: "none", width: narrow ? "100%" : 230 }} />
     </div>
   );
 }
