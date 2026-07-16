@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { showpieceScenarios } from "@/lib/showpiece/dossiers";
+import type { VoteEntry } from "@/lib/votes";
+import { showpieceScenarios, MOCK_STATS, type Scenario } from "@/lib/showpiece/dossiers";
+import { chegandoPool, MOCK_RANKING } from "@/lib/showpiece/live-data";
 import { ShowpieceMatchV2 } from "@/components/showpiece/showpiece-match-v2";
 import { BRIC, JB } from "@/components/live/bf-ui";
 
@@ -124,6 +126,33 @@ function ViewPopover({ tab, onSelect }: { tab: TabKey; onSelect: (k: TabKey) => 
   );
 }
 
+/** Sandbox-only: reveal the mock palpite pool one entry at a time so the feed
+ *  visibly "chega ao vivo". Remounted per stage (keyed), so the reveal restarts. */
+function useLiveArrivals(pool: VoteEntry[], startCount: number, intervalMs: number): VoteEntry[] {
+  const [n, setN] = useState(startCount);
+  useEffect(() => {
+    if (n >= pool.length) return;
+    const id = setInterval(() => setN((v) => Math.min(pool.length, v + 1)), intervalMs);
+    return () => clearInterval(id);
+  }, [pool.length, intervalMs, n]);
+  return useMemo(() => pool.slice(0, n), [pool, n]);
+}
+
+function SandboxShowpiece({ scenario, narrow, nowMs }: { scenario: Scenario; narrow: boolean; nowMs: number }) {
+  const pool = useMemo(() => chegandoPool(scenario, nowMs), [scenario, nowMs]);
+  const entries = useLiveArrivals(pool, 6, 2600);
+  return (
+    <ShowpieceMatchV2
+      scenario={scenario}
+      narrow={narrow}
+      entries={entries}
+      ranks={MOCK_RANKING}
+      myName="agomesp"
+      stats={MOCK_STATS}
+    />
+  );
+}
+
 export default function FinaisV2Page() {
   const [now, setNow] = useState<number | null>(null);
   const [tab, setTab] = useState<TabKey>("final-pre");
@@ -156,7 +185,7 @@ export default function FinaisV2Page() {
       <div style={{ flex: 1, display: "flex", justifyContent: "center", minHeight: 0 }}>
         <div style={{ width: narrow ? 400 : "100%", maxWidth: narrow ? 400 : 1180, transition: "width .25s" }}>
           {scenario && now != null ? (
-            <ShowpieceMatchV2 key={`${tab}-${narrow}`} scenario={scenario} narrow={narrow} nowMs={now} />
+            <SandboxShowpiece key={`${tab}-${narrow}`} scenario={scenario} narrow={narrow} nowMs={now} />
           ) : (
             <div style={{ padding: 60, textAlign: "center", fontFamily: JB, color: "#6f8a78" }}>carregando palco…</div>
           )}

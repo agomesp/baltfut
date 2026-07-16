@@ -219,6 +219,15 @@ export interface Scenario {
   away: Dossier;
 }
 
+/** Fabricated head-to-head stats for the mock sandbox only. The real view omits
+ *  the panel — the ESPN scoreboard doesn't carry possession/shots. */
+export const MOCK_STATS = [
+  { label: "POSSE DE BOLA", h: 47, a: 53, unit: "%" },
+  { label: "FINALIZAÇÕES", h: 9, a: 12, unit: "" },
+  { label: "NO ALVO", h: 3, a: 5, unit: "" },
+  { label: "ESCANTEIOS", h: 4, a: 6, unit: "" },
+];
+
 /** The four preview scenarios, with kickoffs relative to `nowMs` so the pre-match
  *  countdown always reads sensibly. */
 export function showpieceScenarios(nowMs: number): Record<string, Scenario> {

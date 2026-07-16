@@ -27,6 +27,10 @@ import { PalpiteForm, PenVote, NameField, useNameLock, type PenOverride } from "
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
 import { decideConcurrent } from "@/lib/concurrent-games";
 import { useIsNarrow } from "@/lib/use-is-narrow";
+import { useMyName } from "@/lib/use-my-name";
+import { useSubRanks } from "@/lib/use-sub-ranks";
+import { scenarioFromMatch } from "@/lib/showpiece/from-match";
+import { ShowpieceMatchV2 } from "@/components/showpiece/showpiece-match-v2";
 import { subscribePromoDisplay, isPromoDisplay } from "@/lib/promo-display";
 import { LivePromoView } from "@/components/live/live-promo-view";
 import type { MatchResult } from "@/lib/ranking";
@@ -299,6 +303,13 @@ export function LiveView({
   const primary = decision?.primary ?? null;
   const partner = decision?.partner ?? null;
   const primaryPhase = primary ? matchPhase(primary) : undefined;
+  // The two marquee ties (the final and the 3rd-place match) get their own
+  // bespoke stage instead of the normal pre/live panels — recognised straight
+  // off ESPN's stage slug, so it lights up on its own when the tie comes round.
+  const showpiece = useMemo(() => (primary ? scenarioFromMatch(primary, matches) : null), [primary, matches]);
+  const showpieceNarrow = useIsNarrow();
+  const myName = useMyName();
+  const subRanks = useSubRanks(allEntries, matches, matchResults, brackets);
   // Palpites for the shown game: the fresh `entries` feed when it's the selected
   // chip, else filtered from the all-matches feed (e.g. after following a survivor).
   const primaryEntries =
@@ -380,7 +391,15 @@ export function LiveView({
         {masthead}
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          {primaryPhase === "pre" ? (
+          {showpiece ? (
+            <ShowpieceMatchV2
+              scenario={showpiece}
+              narrow={showpieceNarrow}
+              entries={primaryEntries}
+              ranks={subRanks}
+              myName={myName}
+            />
+          ) : primaryPhase === "pre" ? (
             <PreMatchPanel
               match={primary}
               second={partner}

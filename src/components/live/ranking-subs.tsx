@@ -1,9 +1,9 @@
 import { useMemo, type CSSProperties } from "react";
 import type { Match } from "@/lib/espn";
-import { buildKnockout } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import type { BracketEntry } from "@/lib/bracket-votes";
-import { rankSubs, worstPalpiteiro, bracketPointsByUser, type SubRank, type MatchResult } from "@/lib/ranking";
+import { worstPalpiteiro, type SubRank, type MatchResult } from "@/lib/ranking";
+import { useSubRanks } from "@/lib/use-sub-ranks";
 import { useMyName } from "@/lib/use-my-name";
 import { BRIC, JB, SAIRA, LIME_DEEP, GOLD, GOLD_DEEP, VoceTag, isMe, nameStyle } from "@/components/live/bf-ui";
 
@@ -52,26 +52,11 @@ export interface RankingSubsProps {
 
 export function RankingSubs({ entries, matches, results, brackets, variant = "column", style }: RankingSubsProps) {
   const myName = useMyName();
-  // Memoized so a bare parent re-render (the live stages tick every second) does
-  // NOT rebuild the map / re-rank / re-scan. Recomputes the moment its real inputs
-  // change: `matches` is replaced on every scoreboard update (a finished match or
-  // a score change → new array), and `entries` on every palpite poll/realtime
-  // nudge — so the ranking still updates live, just not on idle clock ticks.
-  const byId = useMemo(() => {
-    const m: Record<string, MatchResult> = {};
-    for (const x of matches) m[x.id] = x; // ESPN — live truth for in-progress/upcoming
-    // Durable snapshots WIN for finished matches (so ESPN dropping/changing an old
-    // result can't cost anyone their wins); ESPN still covers anything not snapshotted.
-    if (results) for (const id in results) m[id] = results[id];
-    return m;
-  }, [matches, results]);
-  // Bracket points (0.2 per correct knockout winner) graded against the real
-  // knockout, folded into the same table. Empty until brackets are saved.
-  const bracketPoints = useMemo(
-    () => bracketPointsByUser(brackets ?? [], buildKnockout(matches)),
-    [brackets, matches],
-  );
-  const ranks = useMemo(() => rankSubs(entries, byId, bracketPoints), [entries, byId, bracketPoints]);
+  // Assembled by the shared hook (ESPN + durable results + bracket points), and
+  // memoized inside it — so a bare parent re-render (the live stages tick every
+  // second) does NOT re-rank; it recomputes only when `entries`/`matches` really
+  // change, keeping the ranking live without idle-tick work.
+  const ranks = useSubRanks(entries, matches, results, brackets);
   const worst = useMemo(() => worstPalpiteiro(ranks), [ranks]);
   const leader = ranks[0] ?? null;
   const rest = ranks.slice(1);

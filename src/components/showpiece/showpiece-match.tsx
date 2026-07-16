@@ -4,7 +4,7 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { Countdown } from "@/components/countdown";
 import { flagFileBase } from "@/lib/team-names";
 import { ASSET_BASE, BRIC, SAIRA, JB, ARCHIVO } from "@/components/live/bf-ui";
-import type { Dossier, Scenario, ShowpieceTheme } from "@/lib/showpiece/dossiers";
+import { MOCK_STATS, type Dossier, type Scenario, type ShowpieceTheme } from "@/lib/showpiece/dossiers";
 
 /**
  * ShowpieceMatch — a fully-revamped, dramatic single-match view for the two
@@ -267,17 +267,20 @@ export function PalpiteDeck({ scenario, narrow }: { scenario: Scenario; narrow: 
   );
 }
 
-export function LiveDeck({ scenario, narrow }: { scenario: Scenario; narrow: boolean }) {
+/** A head-to-head match stat. The ESPN scoreboard doesn't carry these, so the
+ *  real view omits the panel rather than inventing numbers; the mock sandbox
+ *  passes its own. */
+export interface LiveStat {
+  label: string;
+  h: number;
+  a: number;
+  unit: string;
+}
+
+export function LiveDeck({ scenario, narrow, stats }: { scenario: Scenario; narrow: boolean; stats?: LiveStat[] }) {
   const { match, theme, home, away } = scenario;
   const color = (side: "home" | "away") => (side === "home" ? home.primary : away.primary);
   const pct = (clock: string) => `${Math.min(98, (parseInt(clock, 10) / 90) * 100)}%`;
-  // Deterministic mock match stats.
-  const stats = [
-    { label: "POSSE DE BOLA", h: 47, a: 53, unit: "%" },
-    { label: "FINALIZAÇÕES", h: 9, a: 12, unit: "" },
-    { label: "NO ALVO", h: 3, a: 5, unit: "" },
-    { label: "ESCANTEIOS", h: 4, a: 6, unit: "" },
-  ];
   return (
     <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 16, alignItems: "stretch" }}>
       {/* Goal timeline */}
@@ -302,7 +305,8 @@ export function LiveDeck({ scenario, narrow }: { scenario: Scenario; narrow: boo
         </div>
       </div>
 
-      {/* Stat bars */}
+      {/* Stat bars — only when the caller has real numbers to show. */}
+      {stats && stats.length > 0 && (
       <div style={{ flex: narrow ? "none" : "0 0 280px", display: "flex", flexDirection: "column", gap: 13, padding: 18, borderRadius: 16, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
         <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 15, color: "#fff" }}>NÚMEROS AO VIVO</span>
         {stats.map((s) => {
@@ -322,6 +326,7 @@ export function LiveDeck({ scenario, narrow }: { scenario: Scenario; narrow: boo
           );
         })}
       </div>
+      )}
     </div>
   );
 }
@@ -408,7 +413,7 @@ export function ShowpieceMatch({ scenario, narrow = false }: { scenario: Scenari
       <ShowpieceBanner theme={scenario.theme} narrow={narrow} />
       <ShowpieceArena scenario={scenario} narrow={narrow} />
       <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 16 }}>
-        {live ? <LiveDeck scenario={scenario} narrow={narrow} /> : <PalpiteDeck scenario={scenario} narrow={narrow} />}
+        {live ? <LiveDeck scenario={scenario} narrow={narrow} stats={MOCK_STATS} /> : <PalpiteDeck scenario={scenario} narrow={narrow} />}
         <PathDeck scenario={scenario} narrow={narrow} />
       </div>
     </ShowpieceFrame>

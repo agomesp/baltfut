@@ -1,4 +1,5 @@
 import type { VoteEntry } from "@/lib/votes";
+import type { SubRank } from "@/lib/ranking";
 import type { Scenario } from "@/lib/showpiece/dossiers";
 
 /**
@@ -43,18 +44,10 @@ export function chegandoPool(scenario: Scenario, nowMs: number): VoteEntry[] {
   return entries;
 }
 
-export interface MockSub {
-  username: string;
-  wins: number;
-  losses: number;
-  penWins: number;
-  penLosses: number;
-  you?: boolean;
-}
-
 /** A believable Ranking dos Subs snapshot (fractional totals = pen halves +
- *  bracket points), leader first. */
-export const MOCK_RANKING: MockSub[] = [
+ *  bracket points), leader first. Same shape rankSubs produces, so the panel is
+ *  identical whether it's fed this or the real ranking. */
+export const MOCK_RANKING: SubRank[] = [
   { username: "ChatGPT", wins: 15, losses: 86, penWins: 0, penLosses: 1 },
   { username: "LEMES", wins: 9, losses: 45, penWins: 0, penLosses: 2 },
   { username: "martineza", wins: 9, losses: 43, penWins: 0, penLosses: 2 },
@@ -64,7 +57,7 @@ export const MOCK_RANKING: MockSub[] = [
   { username: "Synced", wins: 6, losses: 40, penWins: 0, penLosses: 0 },
   { username: "mikeggabs", wins: 5, losses: 13, penWins: 0, penLosses: 0 },
   { username: "Picapau", wins: 5, losses: 37, penWins: 0, penLosses: 2 },
-  { username: "agomesp", wins: 4.4, losses: 61, penWins: 0, penLosses: 3, you: true },
+  { username: "agomesp", wins: 4.4, losses: 61, penWins: 0, penLosses: 3 },
   { username: "LilJam", wins: 4, losses: 38, penWins: 0, penLosses: 2 },
   { username: "drakad", wins: 3, losses: 38, penWins: 0, penLosses: 2 },
 ];
