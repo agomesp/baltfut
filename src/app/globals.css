@@ -98,6 +98,21 @@ body {
   color: var(--bf-text);
 }
 
+/* Marquee takeover: when the live view is showing the bespoke final / 3rd-place
+   stage, retune the shared design tokens so the WHOLE app (background, chip rail,
+   bottom dock, masthead accent — everything that uses the tokens) shifts into the
+   showpiece palette. Set on <html> alongside data-view; cleared off the live tab. */
+:root[data-showpiece="final"] {
+  --bf-bg: radial-gradient(1400px 900px at 50% -20%, #241a3d 0%, #120c26 42%, #060409 100%);
+  --bf-lime: #ffd76a;
+  --bf-lime-deep: #e8b53a;
+}
+:root[data-showpiece="third"] {
+  --bf-bg: radial-gradient(1400px 900px at 50% -20%, #2a1d16 0%, #1a1109 44%, #070503 100%);
+  --bf-lime: #e59b63;
+  --bf-lime-deep: #bd7040;
+}
+
 /* Horizontal scrollers (e.g. the chip carousel) hide their scrollbar. */
 .no-scrollbar::-webkit-scrollbar {
   display: none;

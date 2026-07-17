@@ -352,7 +352,7 @@ export function LiveView({
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 3, flex: "none" }}>
         <span style={{ fontFamily: "var(--font-bric)", fontWeight: 800, fontSize: 22, letterSpacing: "-0.02em", color: "#f1f7f0", lineHeight: 1 }}>BaltFut</span>
         <span style={{ fontFamily: JB, fontSize: 8, letterSpacing: "0.03em", color: "#7d9a86", lineHeight: 1.35, whiteSpace: "nowrap" }}>
-          COPA DO MUNDO <span style={{ color: "#c8ff2d" }}>26.</span>
+          COPA DO MUNDO <span style={{ color: "var(--bf-lime)" }}>26.</span>
         </span>
         <span style={{ fontFamily: JB, fontSize: 8, letterSpacing: "0.03em", color: "#7d9a86", lineHeight: 1.35, whiteSpace: "nowrap" }}>{wc.pct}% CONCLUÍDA</span>
       </div>
@@ -395,6 +395,7 @@ export function LiveView({
             <ShowpieceMatchV2
               scenario={showpiece}
               narrow={showpieceNarrow}
+              fill
               entries={primaryEntries}
               ranks={subRanks}
               myName={myName}

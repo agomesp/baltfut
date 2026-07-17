@@ -17,6 +17,7 @@ import {
 } from "@/lib/espn";
 import { startScoreboardWorker } from "@/lib/scoreboard-worker";
 import { subscribeScoreboard } from "@/lib/scoreboard-source";
+import { showpieceThemeFor } from "@/lib/showpiece/from-match";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -318,6 +319,18 @@ export default function Home() {
       : defaultChipId(chips);
   const activeMatch = chips.find((c) => c.match.id === activeId)?.match ?? null;
   const prevActive = useRef<{ id?: string; state?: string }>({});
+
+  // Marquee takeover: while the live tab is showing a final / 3rd-place tie, flag
+  // it on <html> so globals.css retunes the shared tokens (whole-app palette).
+  // Cleared on any other tab / match, so the app returns to pitch-green.
+  useEffect(() => {
+    const theme =
+      view === "live" && liveSubTab === "partidas" && activeMatch ? showpieceThemeFor(activeMatch) : null;
+    const root = document.documentElement;
+    if (theme) root.setAttribute("data-showpiece", theme.key);
+    else root.removeAttribute("data-showpiece");
+    return () => root.removeAttribute("data-showpiece");
+  }, [view, liveSubTab, activeMatch]);
 
   // ---- votes + lineups for the selected chip ------------------------------
   const loadEntries = useCallback(async (matchId: string) => {

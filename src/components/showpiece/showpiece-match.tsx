@@ -394,11 +394,17 @@ export function ShowpieceArena({ scenario, narrow }: { scenario: Scenario; narro
   );
 }
 
-/** The full-bleed showpiece frame (bg + styles + particles), so v1 and v2 share
- *  the exact same stage. */
-export function ShowpieceFrame({ theme, narrow, children }: { theme: ShowpieceTheme; narrow: boolean; children: ReactNode }) {
+/** The showpiece frame (bg + styles + particles), shared by v1 and v2.
+ *  `fill` = embedded in the real live view: fill the available height and scroll
+ *  internally (the dashboard doesn't page-scroll), transparent so the themed page
+ *  background shows through. Otherwise (the sandbox) it's a rounded card that
+ *  grows the page. */
+export function ShowpieceFrame({ theme, narrow, fill = false, children }: { theme: ShowpieceTheme; narrow: boolean; fill?: boolean; children: ReactNode }) {
+  const box: CSSProperties = fill
+    ? { height: "100%", overflowY: "auto", overflowX: "hidden", borderRadius: 0, background: "transparent" }
+    : { minHeight: "100%", overflow: "hidden", borderRadius: 18, background: theme.pageBg };
   return (
-    <div style={{ position: "relative", minHeight: "100%", background: theme.pageBg, borderRadius: 18, overflow: "hidden", padding: narrow ? "18px 14px 22px" : "24px 30px 30px" }}>
+    <div className="bf-scroll" style={{ position: "relative", padding: narrow ? "10px 10px 18px" : `${fill ? 6 : 24}px 30px 30px`, ...box }}>
       <ShowpieceStyles />
       <AmbientParticles theme={theme} />
       {children}

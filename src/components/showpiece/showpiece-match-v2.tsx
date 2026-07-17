@@ -193,6 +193,8 @@ export function RankingPanel({ ranks, theme, myName }: { ranks: SubRank[]; theme
 export interface ShowpieceMatchV2Props {
   scenario: Scenario;
   narrow?: boolean;
+  /** Fill + scroll inside the live view (vs a growing card in the sandbox). */
+  fill?: boolean;
   /** Palpites for THIS match — the "chegando" feed. */
   entries: VoteEntry[];
   /** Ranking rows, already computed (rankSubs output, or the sandbox's mock). */
@@ -203,13 +205,13 @@ export interface ShowpieceMatchV2Props {
   stats?: LiveStat[];
 }
 
-export function ShowpieceMatchV2({ scenario, narrow = false, entries, ranks, myName = null, stats }: ShowpieceMatchV2Props) {
+export function ShowpieceMatchV2({ scenario, narrow = false, fill = false, entries, ranks, myName = null, stats }: ShowpieceMatchV2Props) {
   const { theme, home, away, match } = scenario;
   const live = match.state === "in";
   const engagementCols = narrow ? "1fr" : live ? "1fr 1fr" : "1.5fr 1.1fr 1fr";
 
   return (
-    <ShowpieceFrame theme={theme} narrow={narrow}>
+    <ShowpieceFrame theme={theme} narrow={narrow} fill={fill}>
       <ShowpieceBanner theme={theme} narrow={narrow} />
       <ShowpieceArena scenario={scenario} narrow={narrow} />
 

@@ -98,7 +98,7 @@ const SURFACES: Record<Variant, Surface> = {
     gap: 5,
     pad: "9px 12px",
     inactive: "#cdd9cf",
-    activeBg: "#c8ff2d", // solid lime pill (matches CTA buttons)
+    activeBg: "var(--bf-lime)", // solid lime pill (matches CTA buttons)
     activeText: "#0f1f02", // dark ink on lime
     activeGlow: "0 0 20px -2px rgba(200,255,45,0.7)",
     indicator: false,
@@ -116,7 +116,7 @@ const SURFACES: Record<Variant, Surface> = {
     gap: 4,
     pad: "9px 11px",
     inactive: "#c2cfc4",
-    activeBg: "#c8ff2d", // solid lime pill
+    activeBg: "var(--bf-lime)", // solid lime pill
     activeText: "#0f1f02", // dark ink on lime
     activeGlow: "0 0 16px -2px rgba(200,255,45,0.55)",
     indicator: false,
@@ -147,7 +147,7 @@ export function BottomTabBar({ view, onView, variant = "v1", inline = false }: {
     >
       {/* v3 sport: neon hairline across the dock's top edge. */}
       {s.topStrip ? (
-        <span style={{ position: "absolute", top: 3, left: 16, right: 16, height: 2.5, borderRadius: 999, background: "linear-gradient(90deg, transparent, #c8ff2d, transparent)", boxShadow: "0 0 10px rgba(200,255,45,0.6)", pointerEvents: "none" }} />
+        <span style={{ position: "absolute", top: 3, left: 16, right: 16, height: 2.5, borderRadius: 999, background: "linear-gradient(90deg, transparent, var(--bf-lime), transparent)", boxShadow: "0 0 10px rgba(200,255,45,0.6)", pointerEvents: "none" }} />
       ) : null}
       {ITEMS.map((t) => {
         const active = t.key === view;
@@ -185,7 +185,7 @@ export function BottomTabBar({ view, onView, variant = "v1", inline = false }: {
           >
             {/* v2 "current mode" top indicator bar (sport v3 uses a dock top strip). */}
             {s.indicator && active ? (
-              <span style={{ position: "absolute", top: 0, left: "50%", transform: "translate(-50%,-1px)", width: 22, height: 3, borderRadius: 999, background: "#d7ff2f", boxShadow: "0 0 8px rgba(200,255,45,0.7)" }} />
+              <span style={{ position: "absolute", top: 0, left: "50%", transform: "translate(-50%,-1px)", width: 22, height: 3, borderRadius: 999, background: "var(--bf-lime)", boxShadow: "0 0 8px rgba(200,255,45,0.7)" }} />
             ) : null}
             <AnimatedTabIcon view={t.key} size={18} color={iconColor} animate={active} />
             <span style={isAI ? RAINBOW_DOCK : undefined}>{t.label}</span>
