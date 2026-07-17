@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { VoteEntry } from "@/lib/votes";
 import type { SubRank } from "@/lib/ranking";
 import { buildChegandoRows, detectChegandoChanges } from "@/lib/chegando";
@@ -62,6 +62,24 @@ function ChatCtaCard({ home, away, theme, compact }: { home: Dossier; away: Doss
         <span style={{ flex: "none", fontFamily: JB, fontSize: 10.5, color: "rgba(255,255,255,0.4)" }}>ENVIAR ↵</span>
       </div>
       {!compact && <span style={{ fontFamily: JB, fontSize: 11, color: theme.metal }}>✦ mandou de novo? troca o placar · vale até o apito inicial</span>}
+    </div>
+  );
+}
+
+/** Wraps the REAL palpite form (name + steppers + ENVIAR, passed in as a slot so
+ *  the live view owns its wiring/transport) in the showpiece card, with the chat
+ *  route kept as a note underneath. */
+function PalpiteCard({ home, away, theme, compact, children }: { home: Dossier; away: Dossier; theme: ShowpieceTheme; compact: boolean; children: ReactNode }) {
+  return (
+    <div style={{ ...card(theme, true), gap: compact ? 9 : 13, overflow: "hidden", justifyContent: "center" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: compact ? 16 : 18, color: theme.metal }}>CRAVE O PLACAR</span>
+        <span style={mono(9, "rgba(255,255,255,0.5)")}>vale ponto no ranking</span>
+      </div>
+      <div style={{ minWidth: 0 }}>{children}</div>
+      <span style={{ fontFamily: JB, fontSize: 10, color: "rgba(255,255,255,0.5)", textAlign: "center" }}>
+        ou digite <b style={{ color: theme.metal }}>{home.code} 2x1 {away.code}</b> no chat da Kick ▶
+      </span>
     </div>
   );
 }
@@ -203,9 +221,12 @@ export interface ShowpieceMatchV2Props {
   myName?: string | null;
   /** Head-to-head stats; omitted by the real view (ESPN has no such data). */
   stats?: LiveStat[];
+  /** The REAL palpite form (name + steppers + submit). When given, it replaces the
+   *  chat-only CTA so a viewer can actually enter a palpite; the sandbox omits it. */
+  palpiteSlot?: ReactNode;
 }
 
-export function ShowpieceMatchV2({ scenario, narrow = false, fill = false, entries, ranks, myName = null, stats }: ShowpieceMatchV2Props) {
+export function ShowpieceMatchV2({ scenario, narrow = false, fill = false, entries, ranks, myName = null, stats, palpiteSlot }: ShowpieceMatchV2Props) {
   const { theme, home, away, match } = scenario;
   const live = match.state === "in";
   const engagementCols = narrow ? "1fr" : live ? "1fr 1fr" : "1.5fr 1.1fr 1fr";
@@ -235,7 +256,9 @@ export function ShowpieceMatchV2({ scenario, narrow = false, fill = false, entri
         {live && <LiveDeck scenario={scenario} narrow={narrow} stats={stats} />}
 
         <div style={gridStyle}>
-          {!live && <ChatCtaCard home={home} away={away} theme={theme} compact={fill} />}
+          {!live && (palpiteSlot
+            ? <PalpiteCard home={home} away={away} theme={theme} compact={fill}>{palpiteSlot}</PalpiteCard>
+            : <ChatCtaCard home={home} away={away} theme={theme} compact={fill} />)}
           <ChegandoPanel entries={entries} home={home} away={away} theme={theme} myName={myName} fill={fill} />
           <RankingPanel ranks={ranks} theme={theme} myName={myName} fill={fill} />
         </div>

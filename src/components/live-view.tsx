@@ -399,6 +399,16 @@ export function LiveView({
               entries={primaryEntries}
               ranks={subRanks}
               myName={myName}
+              palpiteSlot={primaryPhase === "pre" ? (
+                <PalpiteForm
+                  match={primary}
+                  entries={primaryEntries}
+                  closesAt={effectiveDeadline(primary.startsAt, palpiteOverrides[primary.id] ?? null)}
+                  released={releasedIds.has(primary.id) || palpiteOverrides[primary.id] != null}
+                  onVoted={onVoted}
+                  hideCountdown
+                />
+              ) : undefined}
             />
           ) : primaryPhase === "pre" ? (
             <PreMatchPanel
