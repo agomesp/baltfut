@@ -41,27 +41,27 @@ const card = (theme: ShowpieceTheme, strong = false): CSSProperties => ({
 // Chat CTA — "DIGITE X×Y NO CHAT"
 // ---------------------------------------------------------------------------
 
-function ChatCtaCard({ home, away, theme }: { home: Dossier; away: Dossier; theme: ShowpieceTheme }) {
+function ChatCtaCard({ home, away, theme, compact }: { home: Dossier; away: Dossier; theme: ShowpieceTheme; compact: boolean }) {
   return (
-    <div style={{ ...card(theme, true), gap: 15, justifyContent: "center" }}>
-      <span style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 8, fontFamily: JB, fontSize: 11, letterSpacing: "0.08em", color: theme.key === "final" ? "#2a1c00" : "#241206", background: theme.metal, borderRadius: 999, padding: "5px 13px", fontWeight: 800 }}>
+    <div style={{ ...card(theme, true), gap: compact ? 9 : 15, justifyContent: "center", overflow: "hidden" }}>
+      <span style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 8, fontFamily: JB, fontSize: compact ? 9.5 : 11, letterSpacing: "0.08em", color: theme.key === "final" ? "#2a1c00" : "#241206", background: theme.metal, borderRadius: 999, padding: "5px 12px", fontWeight: 800 }}>
         ▶ PALPITE PELO CHAT DA KICK
       </span>
-      <h2 style={{ margin: 0, fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(26px,3.4vw,46px)", lineHeight: 0.98, letterSpacing: "-0.02em", color: "#fff" }}>
-        DIGITE <span style={{ color: theme.metal }}>2×1</span><br />NO CHAT
+      <h2 style={{ margin: 0, fontFamily: BRIC, fontWeight: 800, fontSize: compact ? "clamp(24px,2.4vw,34px)" : "clamp(26px,3.4vw,46px)", lineHeight: 0.98, letterSpacing: "-0.02em", color: "#fff" }}>
+        DIGITE <span style={{ color: theme.metal }}>2×1</span>{compact ? " " : <br />}NO CHAT
       </h2>
-      <div style={{ fontFamily: BRIC, fontSize: "clamp(12px,1.2vw,16px)", color: "rgba(255,255,255,0.72)", lineHeight: 1.45 }}>
-        Mande o placar no chat — <b style={{ color: "#fff" }}>1º número é o mandante</b> ({home.code}). Seu <b style={{ color: theme.metal }}>@nick</b> entra no Ranking dos Subs na hora.
+      <div style={{ fontFamily: BRIC, fontSize: compact ? 12.5 : "clamp(12px,1.2vw,16px)", color: "rgba(255,255,255,0.72)", lineHeight: 1.4 }}>
+        Mande o placar no chat — <b style={{ color: "#fff" }}>1º número é o mandante</b> ({home.code}). Seu <b style={{ color: theme.metal }}>@nick</b> entra no ranking na hora.
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "12px 15px", borderRadius: 12, background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.12)" }}>
-        <span style={{ flex: "none", width: 27, height: 27, borderRadius: 7, background: "#53fc18", color: "#0a0a0a", fontFamily: BRIC, fontWeight: 900, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center" }}>K</span>
-        <span style={{ flex: 1, minWidth: 0, fontFamily: BRIC, fontSize: 16, color: "rgba(255,255,255,0.5)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: compact ? "9px 13px" : "12px 15px", borderRadius: 12, background: "rgba(0,0,0,0.4)", border: "1px solid rgba(255,255,255,0.12)" }}>
+        <span style={{ flex: "none", width: 26, height: 26, borderRadius: 7, background: "#53fc18", color: "#0a0a0a", fontFamily: BRIC, fontWeight: 900, fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center" }}>K</span>
+        <span style={{ flex: 1, minWidth: 0, fontFamily: BRIC, fontSize: compact ? 15 : 16, color: "rgba(255,255,255,0.5)" }}>
           Mensagem… <span style={{ color: "#fff", fontWeight: 800 }}>{home.code} 2x1 {away.code}</span>
           <span style={{ display: "inline-block", width: 2, height: 18, background: theme.metal, marginLeft: 3, verticalAlign: "-3px", animation: "spBlink 1s step-end infinite" }} />
         </span>
         <span style={{ flex: "none", fontFamily: JB, fontSize: 10.5, color: "rgba(255,255,255,0.4)" }}>ENVIAR ↵</span>
       </div>
-      <span style={{ fontFamily: JB, fontSize: 11, color: theme.metal }}>✦ mandou de novo? troca o placar · vale até o apito inicial</span>
+      {!compact && <span style={{ fontFamily: JB, fontSize: 11, color: theme.metal }}>✦ mandou de novo? troca o placar · vale até o apito inicial</span>}
     </div>
   );
 }
@@ -86,7 +86,7 @@ function ChegandoRow({ nick, value, fresh, changed, theme, myName }: { nick: str
 
 /** The live feed of arriving palpites. `entries` is whatever the caller has —
  *  the REAL vote_entries for this match, or the sandbox's simulated stream. */
-export function ChegandoPanel({ entries, home, away, theme, myName }: { entries: VoteEntry[]; home: Dossier; away: Dossier; theme: ShowpieceTheme; myName: string | null }) {
+export function ChegandoPanel({ entries, home, away, theme, myName, fill = false }: { entries: VoteEntry[]; home: Dossier; away: Dossier; theme: ShowpieceTheme; myName: string | null; fill?: boolean }) {
   // The real feed already has ONE row per user (a DB constraint) and
   // buildChegandoRows keys by username; collapse defensively (latest wins) so a
   // repeated nick can never produce duplicate keys.
@@ -122,7 +122,7 @@ export function ChegandoPanel({ entries, home, away, theme, myName }: { entries:
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: theme.metal, boxShadow: `0 0 7px ${theme.metal}`, animation: "spLive 1.3s infinite" }} /> AO VIVO
         </span>
       </div>
-      <div className="bf-scroll" style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, maxHeight: 340, overflowY: "auto", overflowX: "hidden", paddingRight: 4 }}>
+      <div className="bf-scroll" style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0, maxHeight: fill ? undefined : 340, overflowY: "auto", overflowX: "hidden", paddingRight: 4 }}>
         {rows.length === 0 ? (
           <div style={{ fontFamily: BRIC, fontSize: 12.5, color: "rgba(255,255,255,0.45)", padding: "8px 2px" }}>Nenhum palpite ainda — manda no chat!</div>
         ) : (
@@ -159,7 +159,7 @@ function RankRow({ r, rank, theme, myName }: { r: SubRank; rank: number; theme: 
   );
 }
 
-export function RankingPanel({ ranks, theme, myName }: { ranks: SubRank[]; theme: ShowpieceTheme; myName: string | null }) {
+export function RankingPanel({ ranks, theme, myName, fill = false }: { ranks: SubRank[]; theme: ShowpieceTheme; myName: string | null; fill?: boolean }) {
   const leader = ranks[0] ?? null;
   const rest = ranks.slice(1);
   return (
@@ -179,7 +179,7 @@ export function RankingPanel({ ranks, theme, myName }: { ranks: SubRank[]; theme
       ) : (
         <div style={{ fontFamily: BRIC, fontSize: 12.5, color: "rgba(255,255,255,0.45)", padding: "8px 2px" }}>Sem palpites avaliados ainda.</div>
       )}
-      <div className="bf-scroll" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, maxHeight: 300, overflowY: "auto", overflowX: "hidden", paddingRight: 2 }}>
+      <div className="bf-scroll" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, maxHeight: fill ? undefined : 300, overflowY: "auto", overflowX: "hidden", paddingRight: 2 }}>
         {rest.map((r, i) => <RankRow key={r.username} r={r} rank={i + 2} theme={theme} myName={myName} />)}
       </div>
     </div>
@@ -210,21 +210,40 @@ export function ShowpieceMatchV2({ scenario, narrow = false, fill = false, entri
   const live = match.state === "in";
   const engagementCols = narrow ? "1fr" : live ? "1fr 1fr" : "1.5fr 1.1fr 1fr";
 
+  // Embedded (fill): a flex-1 region under the compact hero, so the engagement
+  // grid absorbs the leftover height and its lists scroll internally — the whole
+  // stage fits the dashboard without a page scroll.
+  const lowerStyle: CSSProperties = fill
+    ? { position: "relative", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }
+    : { position: "relative", display: "flex", flexDirection: "column", gap: 16 };
+  const gridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: engagementCols,
+    gap: 14,
+    alignItems: "stretch",
+    // Fill: the single row takes the leftover height so each panel gets a definite
+    // height and its list (chegando / ranking) scrolls inside instead of the page.
+    ...(fill ? { flex: 1, minHeight: 0, gridTemplateRows: "minmax(0, 1fr)" } : {}),
+  };
+
   return (
     <ShowpieceFrame theme={theme} narrow={narrow} fill={fill}>
-      <ShowpieceBanner theme={theme} narrow={narrow} />
-      <ShowpieceArena scenario={scenario} narrow={narrow} />
+      <ShowpieceBanner theme={theme} narrow={narrow} compact={fill} />
+      <ShowpieceArena scenario={scenario} narrow={narrow} compact={fill} />
 
-      <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={lowerStyle}>
         {live && <LiveDeck scenario={scenario} narrow={narrow} stats={stats} />}
 
-        <div style={{ display: "grid", gridTemplateColumns: engagementCols, gap: 14, alignItems: "stretch" }}>
-          {!live && <ChatCtaCard home={home} away={away} theme={theme} />}
-          <ChegandoPanel entries={entries} home={home} away={away} theme={theme} myName={myName} />
-          <RankingPanel ranks={ranks} theme={theme} myName={myName} />
+        <div style={gridStyle}>
+          {!live && <ChatCtaCard home={home} away={away} theme={theme} compact={fill} />}
+          <ChegandoPanel entries={entries} home={home} away={away} theme={theme} myName={myName} fill={fill} />
+          <RankingPanel ranks={ranks} theme={theme} myName={myName} fill={fill} />
         </div>
 
-        <PathDeck scenario={scenario} narrow={narrow} />
+        {/* The knockout caminho is a nice-to-have — shown in the roomy sandbox, but
+            dropped in the embedded one-screen view so the chegando/ranking feeds get
+            the height (the stat chips already convey each side's run). */}
+        {!fill && <PathDeck scenario={scenario} narrow={narrow} compact={fill} />}
       </div>
     </ShowpieceFrame>
   );

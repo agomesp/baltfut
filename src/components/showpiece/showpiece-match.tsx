@@ -85,43 +85,48 @@ function StatChip({ label, value, accent }: { label: string; value: ReactNode; a
 // Team half — a leaning national color field with crest + dossier.
 // ---------------------------------------------------------------------------
 
-function TeamHalf({ d, side, theme, narrow }: { d: Dossier; side: "home" | "away"; theme: ShowpieceTheme; narrow: boolean }) {
+function TeamHalf({ d, side, theme, narrow, compact }: { d: Dossier; side: "home" | "away"; theme: ShowpieceTheme; narrow: boolean; compact: boolean }) {
   const isHome = side === "home";
   const align = narrow ? "center" : isHome ? "flex-start" : "flex-end";
   const field = isHome
     ? `linear-gradient(105deg, ${d.primary}2e 0%, ${d.primary}12 46%, transparent 74%)`
     : `linear-gradient(255deg, ${d.primary}2e 0%, ${d.primary}12 46%, transparent 74%)`;
+  const crest = narrow ? 112 : compact ? 84 : 150;
+  const nameSize = narrow ? 38 : compact ? 30 : 56;
   return (
-    <div style={{ position: "relative", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: align, justifyContent: "center", gap: 16, padding: narrow ? "22px 18px" : "10px 30px", background: narrow ? "transparent" : field, animation: "spRise .6s ease both" }}>
-      <div aria-hidden style={{ position: "absolute", top: narrow ? 6 : "50%", [isHome ? "left" : "right"]: 6, transform: narrow ? "none" : "translateY(-50%)", fontFamily: ARCHIVO, fontWeight: 900, fontSize: narrow ? 92 : 190, lineHeight: 0.8, color: d.primary, opacity: 0.09, letterSpacing: "-0.04em", pointerEvents: "none", userSelect: "none" }}>{d.code}</div>
+    <div style={{ position: "relative", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: align, justifyContent: "center", gap: compact ? 8 : 16, padding: narrow ? "10px 14px" : compact ? "2px 26px" : "10px 30px", background: narrow ? "transparent" : field, animation: "spRise .6s ease both" }}>
+      <div aria-hidden style={{ position: "absolute", top: narrow ? 6 : "50%", [isHome ? "left" : "right"]: 6, transform: narrow ? "none" : "translateY(-50%)", fontFamily: ARCHIVO, fontWeight: 900, fontSize: narrow ? 92 : compact ? 130 : 190, lineHeight: 0.8, color: d.primary, opacity: 0.09, letterSpacing: "-0.04em", pointerEvents: "none", userSelect: "none" }}>{d.code}</div>
 
-      <BigCrest code={d.code} accent={d.primary} size={narrow ? 118 : 150} />
+      <BigCrest code={d.code} accent={d.primary} size={crest} />
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: align, gap: 3, position: "relative" }}>
-        <span style={mono(10, d.primary, "0.2em")}>{d.nickname}</span>
-        <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: narrow ? 40 : 56, lineHeight: 0.92, color: "#fff", letterSpacing: "-0.01em", textShadow: `0 3px 30px ${d.primary}66`, textAlign: isHome || narrow ? "left" : "right" }}>{d.name}</span>
-        <span style={{ ...mono(9.5, "rgba(255,255,255,0.55)"), display: "inline-flex", gap: 8 }}>
+        <span style={mono(compact ? 9 : 10, d.primary, "0.2em")}>{d.nickname}</span>
+        <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: nameSize, lineHeight: 0.92, color: "#fff", letterSpacing: "-0.01em", textShadow: `0 3px 30px ${d.primary}66`, textAlign: isHome || narrow ? "left" : "right" }}>{d.name}</span>
+        <span style={{ ...mono(9, "rgba(255,255,255,0.55)"), display: "inline-flex", gap: 8 }}>
           <span>FIFA #{d.fifaRank}</span><span style={{ color: d.primary }}>◆</span><span>TÉC. {d.coach}</span>
         </span>
       </div>
 
       {/* Star player */}
-      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "9px 14px", borderRadius: 13, background: `linear-gradient(100deg, ${d.primary}33, ${d.primary}0d)`, border: `1px solid ${d.primary}55`, boxShadow: `0 10px 30px -16px ${d.primary}` }}>
-        <span style={{ fontSize: 22, lineHeight: 1 }}>⭐</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: compact ? "6px 12px" : "9px 14px", borderRadius: 13, background: `linear-gradient(100deg, ${d.primary}33, ${d.primary}0d)`, border: `1px solid ${d.primary}55`, boxShadow: `0 10px 30px -16px ${d.primary}` }}>
+        <span style={{ fontSize: compact ? 17 : 22, lineHeight: 1 }}>⭐</span>
         <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <span style={mono(8, "rgba(255,255,255,0.55)", "0.16em")}>CRAQUE</span>
-          <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 17, color: "#fff", lineHeight: 1 }}>{d.star.name}</span>
+          <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: compact ? 15 : 17, color: "#fff", lineHeight: 1 }}>{d.star.name}</span>
           <span style={mono(8, d.primary, "0.1em")}>{d.star.pos}</span>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 9, flexWrap: "wrap", justifyContent: narrow ? "center" : isHome ? "flex-start" : "flex-end" }}>
+      <div style={{ display: "flex", gap: compact ? 7 : 9, flexWrap: "wrap", justifyContent: narrow ? "center" : isHome ? "flex-start" : "flex-end" }}>
         <StatChip label="GOLS (MATA)" value={d.koGoalsFor} accent={d.primary} />
         <StatChip label="SOFRIDOS" value={d.koGoalsAgainst} accent="#ff8a8a" />
         <StatChip label="SALDO" value={`+${d.koGoalsFor - d.koGoalsAgainst}`} accent={theme.metal} />
       </div>
 
-      <p style={{ margin: 0, fontFamily: BRIC, fontSize: 12.5, fontStyle: "italic", color: "rgba(255,255,255,0.62)", maxWidth: 260, textAlign: isHome || narrow ? "left" : "right" }}>&ldquo;{d.tagline}&rdquo;</p>
+      {/* Tagline — dropped in the compact (embedded) layout to save height. */}
+      {!compact && (
+        <p style={{ margin: 0, fontFamily: BRIC, fontSize: 12.5, fontStyle: "italic", color: "rgba(255,255,255,0.62)", maxWidth: 260, textAlign: isHome || narrow ? "left" : "right" }}>&ldquo;{d.tagline}&rdquo;</p>
+      )}
     </div>
   );
 }
@@ -139,9 +144,9 @@ function fmtCountdown(ms: number): string {
   return `${hh}:${mm}:${ss}`;
 }
 
-function MetalRing({ theme, children }: { theme: ShowpieceTheme; children: ReactNode }) {
+function MetalRing({ theme, size = 210, children }: { theme: ShowpieceTheme; size?: number; children: ReactNode }) {
   return (
-    <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: 210, height: 210 }}>
+    <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", width: size, height: size }}>
       <div aria-hidden style={{ position: "absolute", inset: 0, borderRadius: "50%", background: `radial-gradient(circle, ${theme.glow}, transparent 68%)`, animation: "spGlowPulse 3.4s ease-in-out infinite" }} />
       <div style={{ position: "absolute", inset: 14, borderRadius: "50%", border: `2px solid ${theme.metal}`, boxShadow: `0 0 30px -4px ${theme.glow}, inset 0 0 24px rgba(0,0,0,0.5)` }} />
       <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>{children}</div>
@@ -149,13 +154,14 @@ function MetalRing({ theme, children }: { theme: ShowpieceTheme; children: React
   );
 }
 
-function CenterColumn({ scenario, narrow }: { scenario: Scenario; narrow: boolean }) {
+function CenterColumn({ scenario, narrow, compact }: { scenario: Scenario; narrow: boolean; compact: boolean }) {
   const { match, theme, home, away } = scenario;
   const live = match.state === "in";
   const kickoffMs = new Date(match.startsAt).getTime();
+  const scoreSize = compact ? 54 : 78;
 
   return (
-    <div style={{ flex: narrow ? "none" : "0 0 250px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: "6px 4px", position: "relative" }}>
+    <div style={{ flex: narrow ? "none" : compact ? "0 0 210px" : "0 0 250px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: compact ? 9 : 14, padding: "6px 4px", position: "relative" }}>
       {/* vertical divider glow */}
       {!narrow && <div aria-hidden style={{ position: "absolute", top: 8, bottom: 8, left: "50%", width: 1, background: `linear-gradient(${theme.metal}00, ${theme.metal}66, ${theme.metal}00)` }} />}
 
@@ -166,27 +172,27 @@ function CenterColumn({ scenario, narrow }: { scenario: Scenario; narrow: boolea
             <span style={mono(11, "#ff9a9a", "0.12em")}>AO VIVO · {match.displayClock}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: narrow ? 14 : 10 }}>
-            <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 78, lineHeight: 1, color: home.primary, textShadow: `0 4px 34px ${home.primary}88` }}>{match.homeScore}</span>
-            <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 30, color: theme.metal, opacity: 0.8 }}>:</span>
-            <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 78, lineHeight: 1, color: away.primary, textShadow: `0 4px 34px ${away.primary}88` }}>{match.awayScore}</span>
+            <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: scoreSize, lineHeight: 1, color: home.primary, textShadow: `0 4px 34px ${home.primary}88` }}>{match.homeScore}</span>
+            <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: compact ? 22 : 30, color: theme.metal, opacity: 0.8 }}>:</span>
+            <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: scoreSize, lineHeight: 1, color: away.primary, textShadow: `0 4px 34px ${away.primary}88` }}>{match.awayScore}</span>
           </div>
           <span style={mono(9, "rgba(255,255,255,0.5)")}>{home.code} &nbsp;—&nbsp; {away.code}</span>
         </>
       ) : (
         <>
-          <span style={mono(10, theme.metal, "0.24em")}>COMEÇA EM</span>
-          <MetalRing theme={theme}>
-            <span style={{ fontSize: 26 }}>{theme.trophy}</span>
+          <span style={mono(compact ? 9 : 10, theme.metal, "0.24em")}>COMEÇA EM</span>
+          <MetalRing theme={theme} size={compact ? 138 : 210}>
+            <span style={{ fontSize: compact ? 18 : 26 }}>{theme.trophy}</span>
             <Countdown targetMs={kickoffMs} render={(ms) => (
-              <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 34, letterSpacing: "0.02em", color: "#fff", lineHeight: 1, textShadow: `0 0 22px ${theme.glow}` }}>{fmtCountdown(ms)}</span>
+              <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: compact ? 24 : 34, letterSpacing: "0.02em", color: "#fff", lineHeight: 1, textShadow: `0 0 22px ${theme.glow}` }}>{fmtCountdown(ms)}</span>
             )} />
-            <span style={mono(8, "rgba(255,255,255,0.55)")}>HORAS : MIN : SEG</span>
+            <span style={mono(compact ? 7 : 8, "rgba(255,255,255,0.55)")}>HORAS : MIN : SEG</span>
           </MetalRing>
-          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 20, color: theme.metal, letterSpacing: "0.12em" }}>VS</span>
+          <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: compact ? 16 : 20, color: theme.metal, letterSpacing: "0.12em" }}>VS</span>
         </>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, marginTop: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, marginTop: compact ? 0 : 4 }}>
         <span style={mono(8.5, "rgba(255,255,255,0.42)")}>📍 {match.venue}</span>
       </div>
     </div>
@@ -347,10 +353,10 @@ function PathColumn({ d, align }: { d: Dossier; align: "flex-start" | "flex-end"
   );
 }
 
-export function PathDeck({ scenario, narrow }: { scenario: Scenario; narrow: boolean }) {
+export function PathDeck({ scenario, narrow, compact = false }: { scenario: Scenario; narrow: boolean; compact?: boolean }) {
   const { home, away, theme } = scenario;
   return (
-    <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: narrow ? 16 : 30, padding: "16px 20px", borderRadius: 16, background: "rgba(0,0,0,0.22)", border: `1px solid ${theme.metal}22` }}>
+    <div style={{ flex: "none", display: "flex", flexDirection: narrow ? "column" : "row", gap: narrow ? 12 : 30, padding: compact ? "10px 18px" : "16px 20px", borderRadius: 16, background: "rgba(0,0,0,0.22)", border: `1px solid ${theme.metal}22` }}>
       <PathColumn d={home} align="flex-start" />
       {!narrow && <div aria-hidden style={{ width: 1, background: `linear-gradient(${theme.metal}00,${theme.metal}44,${theme.metal}00)` }} />}
       <PathColumn d={away} align={narrow ? "flex-start" : "flex-end"} />
@@ -372,39 +378,39 @@ export function AmbientParticles({ theme }: { theme: ShowpieceTheme }) {
   );
 }
 
-export function ShowpieceBanner({ theme, narrow }: { theme: ShowpieceTheme; narrow: boolean }) {
+export function ShowpieceBanner({ theme, narrow, compact = false }: { theme: ShowpieceTheme; narrow: boolean; compact?: boolean }) {
   return (
-    <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginBottom: narrow ? 14 : 18 }}>
-      <span style={mono(9.5, "rgba(255,255,255,0.5)", "0.2em")}>{theme.kicker}</span>
-      <h1 style={{ margin: 0, fontFamily: BRIC, fontWeight: 800, fontSize: narrow ? 34 : 52, letterSpacing: "0.02em", lineHeight: 1, backgroundImage: `linear-gradient(100deg, ${theme.metalDeep} 20%, #fff8e6 42%, ${theme.metal} 55%, ${theme.metalDeep} 78%)`, backgroundSize: "220% 100%", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "spTitleSheen 6s linear infinite", textAlign: "center" }}>
+    <div style={{ position: "relative", flex: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: compact ? 1 : 4, marginBottom: narrow ? 12 : compact ? 8 : 18 }}>
+      <span style={mono(compact ? 8.5 : 9.5, "rgba(255,255,255,0.5)", "0.2em")}>{theme.kicker}</span>
+      <h1 style={{ margin: 0, fontFamily: BRIC, fontWeight: 800, fontSize: narrow ? 32 : compact ? 32 : 52, letterSpacing: "0.02em", lineHeight: 1, backgroundImage: `linear-gradient(100deg, ${theme.metalDeep} 20%, #fff8e6 42%, ${theme.metal} 55%, ${theme.metalDeep} 78%)`, backgroundSize: "220% 100%", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", animation: "spTitleSheen 6s linear infinite", textAlign: "center" }}>
         {theme.trophy} {theme.title}
       </h1>
-      <span style={{ fontFamily: BRIC, fontSize: 13, fontStyle: "italic", color: "rgba(255,255,255,0.6)" }}>{theme.subtitle}</span>
+      {!compact && <span style={{ fontFamily: BRIC, fontSize: 13, fontStyle: "italic", color: "rgba(255,255,255,0.6)" }}>{theme.subtitle}</span>}
     </div>
   );
 }
 
-export function ShowpieceArena({ scenario, narrow }: { scenario: Scenario; narrow: boolean }) {
+export function ShowpieceArena({ scenario, narrow, compact = false }: { scenario: Scenario; narrow: boolean; compact?: boolean }) {
   return (
-    <div style={{ position: "relative", display: "flex", flexDirection: narrow ? "column" : "row", alignItems: "stretch", gap: narrow ? 6 : 0, marginBottom: 18 }}>
-      <TeamHalf d={scenario.home} side="home" theme={scenario.theme} narrow={narrow} />
-      <CenterColumn scenario={scenario} narrow={narrow} />
-      <TeamHalf d={scenario.away} side="away" theme={scenario.theme} narrow={narrow} />
+    <div style={{ position: "relative", flex: "none", display: "flex", flexDirection: narrow ? "column" : "row", alignItems: "stretch", gap: narrow ? 6 : 0, marginBottom: compact ? 12 : 18 }}>
+      <TeamHalf d={scenario.home} side="home" theme={scenario.theme} narrow={narrow} compact={compact} />
+      <CenterColumn scenario={scenario} narrow={narrow} compact={compact} />
+      <TeamHalf d={scenario.away} side="away" theme={scenario.theme} narrow={narrow} compact={compact} />
     </div>
   );
 }
 
 /** The showpiece frame (bg + styles + particles), shared by v1 and v2.
- *  `fill` = embedded in the real live view: fill the available height and scroll
- *  internally (the dashboard doesn't page-scroll), transparent so the themed page
- *  background shows through. Otherwise (the sandbox) it's a rounded card that
- *  grows the page. */
+ *  `fill` = embedded in the real live view: a non-scrolling flex column that FITS
+ *  the available dashboard height (compact hero + a flex-1 engagement region whose
+ *  lists scroll internally), transparent so the themed page background shows
+ *  through. Otherwise (the sandbox) it's a rounded card that grows the page. */
 export function ShowpieceFrame({ theme, narrow, fill = false, children }: { theme: ShowpieceTheme; narrow: boolean; fill?: boolean; children: ReactNode }) {
   const box: CSSProperties = fill
-    ? { height: "100%", overflowY: "auto", overflowX: "hidden", borderRadius: 0, background: "transparent" }
+    ? { height: "100%", minHeight: 0, overflow: "hidden", borderRadius: 0, background: "transparent", display: "flex", flexDirection: "column", gap: 8 }
     : { minHeight: "100%", overflow: "hidden", borderRadius: 18, background: theme.pageBg };
   return (
-    <div className="bf-scroll" style={{ position: "relative", padding: narrow ? "10px 10px 18px" : `${fill ? 6 : 24}px 30px 30px`, ...box }}>
+    <div style={{ position: "relative", padding: narrow ? "10px 10px 18px" : fill ? "6px 26px 8px" : "24px 30px 30px", ...box }}>
       <ShowpieceStyles />
       <AmbientParticles theme={theme} />
       {children}
