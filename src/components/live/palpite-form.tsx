@@ -19,7 +19,7 @@ import { penWindowClosed, penWindowHardClosed, penVoteVisible } from "@shared/de
 /** Manual pen-vote override broadcast by the admin (null = automatic). */
 export type PenOverride = "open" | "closed" | null;
 import { MY_NAME_EVENT, useMyName } from "@/lib/use-my-name";
-import { BRIC, FlagIcon, JB, LIME, SAIRA } from "@/components/live/bf-ui";
+import { BRIC, FlagIcon, JB, SAIRA } from "@/components/live/bf-ui";
 
 /** Knockout stages where a tie goes to penalties (so a pen-winner pick applies). */
 const KO_STAGES = new Set(["round-of-32", "round-of-16", "quarterfinal", "semifinal", "third-place", "final"]);
@@ -312,7 +312,8 @@ export function NameField({ name, setName, locked, onUnlock }: { name: string; s
 const submitBtnStyle = {
   cursor: "pointer",
   textAlign: "center" as const,
-  background: LIME,
+  // Token (defaults to the lime) so the showpiece takeover retints ENVIAR to gold.
+  background: "var(--bf-lime)",
   color: "#0f1f02",
   fontFamily: BRIC,
   fontWeight: 800,

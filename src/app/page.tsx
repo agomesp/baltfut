@@ -17,6 +17,9 @@ import {
 } from "@/lib/espn";
 import { startScoreboardWorker } from "@/lib/scoreboard-worker";
 import { subscribeScoreboard } from "@/lib/scoreboard-source";
+import { showpieceThemeFor } from "@/lib/showpiece/from-match";
+import { teamAccent } from "@/components/live/bf-ui";
+import { MarqueeEmbers } from "@/components/marquee-embers";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -319,6 +322,44 @@ export default function Home() {
   const activeMatch = chips.find((c) => c.match.id === activeId)?.match ?? null;
   const prevActive = useRef<{ id?: string; state?: string }>({});
 
+  // Marquee takeover: while the live tab is showing a final / 3rd-place tie, flag
+  // it on <html> so globals.css retunes the shared tokens (whole-app palette), and
+  // paint the page background in the TWO TEAMS' colours — each bleeding in from its
+  // own side over a dark base, so the middle stays dark enough to read panels on.
+  // `color-mix` keeps this valid whether teamAccent returns hex or hsl.
+  // Cleared on any other tab / match, so the app returns to pitch-green.
+  // Module-constant themes, so this is referentially stable across renders.
+  const marqueeTheme =
+    view === "live" && liveSubTab === "partidas" && activeMatch ? showpieceThemeFor(activeMatch) : null;
+
+  useEffect(() => {
+    const theme = marqueeTheme;
+    const root = document.documentElement;
+    if (theme && activeMatch) {
+      root.setAttribute("data-showpiece", theme.key);
+      const home = teamAccent(activeMatch.home.abbreviation);
+      const away = teamAccent(activeMatch.away.abbreviation);
+      root.style.setProperty(
+        "--bf-bg",
+        [
+          // Each side's colour blooms from its own edge across the full height…
+          `radial-gradient(1300px 1200px at -8% 30%, color-mix(in srgb, ${home} 62%, transparent), transparent 70%)`,
+          `radial-gradient(1300px 1200px at 108% 30%, color-mix(in srgb, ${away} 62%, transparent), transparent 70%)`,
+          // …over an edge-to-edge home→away wash that stays dark through the middle,
+          // where the panels sit, so text keeps its contrast.
+          `linear-gradient(100deg, color-mix(in srgb, ${home} 30%, #07060d) 0%, #07060d 44%, #07060d 56%, color-mix(in srgb, ${away} 30%, #07060d) 100%)`,
+        ].join(", "),
+      );
+    } else {
+      root.removeAttribute("data-showpiece");
+      root.style.removeProperty("--bf-bg");
+    }
+    return () => {
+      root.removeAttribute("data-showpiece");
+      root.style.removeProperty("--bf-bg");
+    };
+  }, [marqueeTheme, activeMatch]);
+
   // ---- votes + lineups for the selected chip ------------------------------
   const loadEntries = useCallback(async (matchId: string) => {
     const client = getSupabaseClient();
@@ -504,6 +545,8 @@ export default function Home() {
 
   return (
     <>
+      {/* Marquee ambience: embers drifting up behind the content. */}
+      {marqueeTheme ? <MarqueeEmbers metal={marqueeTheme.metal} /> : null}
       {/* The live screen mounts its own compact masthead (brand + notice) inline
           next to the match rail, so the global header is suppressed there to
           reclaim vertical height. Every other tab keeps the full header. */}

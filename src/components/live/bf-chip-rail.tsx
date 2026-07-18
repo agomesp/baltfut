@@ -13,7 +13,8 @@ function chipLabel(chip: ChipGame): string {
 
 // The app's primary lime (matches the masthead toggle, CTAs, live dot…) — was a
 // different emerald in the original handoff, which read as inconsistent.
-const GREEN = "#c8ff2d";
+// The live accent — a token so the marquee takeover (data-showpiece) can retune it.
+const GREEN = "var(--bf-lime)";
 const EDGE_MASK = "linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)";
 
 /** The centered, mask-faded match selector rail (v3 redesign). */

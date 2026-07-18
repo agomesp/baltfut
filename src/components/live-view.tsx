@@ -27,6 +27,8 @@ import { PalpiteForm, PenVote, NameField, useNameLock, type PenOverride } from "
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
 import { decideConcurrent } from "@/lib/concurrent-games";
 import { useIsNarrow } from "@/lib/use-is-narrow";
+import { showpieceThemeFor } from "@/lib/showpiece/from-match";
+import { ShowpieceBanner, ShowpieceStyles } from "@/components/showpiece/showpiece-match";
 import { subscribePromoDisplay, isPromoDisplay } from "@/lib/promo-display";
 import { LivePromoView } from "@/components/live/live-promo-view";
 import type { MatchResult } from "@/lib/ranking";
@@ -299,6 +301,13 @@ export function LiveView({
   const primary = decision?.primary ?? null;
   const partner = decision?.partner ?? null;
   const primaryPhase = primary ? matchPhase(primary) : undefined;
+  // The two marquee ties (the final and the 3rd-place match) get their own
+  // bespoke stage instead of the normal pre/live panels — recognised straight
+  // off ESPN's stage slug, so it lights up on its own when the tie comes round.
+  // Marquee tie (final / 3rd place): the normal panels keep rendering — we only
+  // add the showpiece STYLING (the metal title here; the whole-app palette comes
+  // from the data-showpiece tokens set in page.tsx).
+  const marquee = primary ? showpieceThemeFor(primary) : null;
   // Palpites for the shown game: the fresh `entries` feed when it's the selected
   // chip, else filtered from the all-matches feed (e.g. after following a survivor).
   const primaryEntries =
@@ -341,7 +350,7 @@ export function LiveView({
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 3, flex: "none" }}>
         <span style={{ fontFamily: "var(--font-bric)", fontWeight: 800, fontSize: 22, letterSpacing: "-0.02em", color: "#f1f7f0", lineHeight: 1 }}>BaltFut</span>
         <span style={{ fontFamily: JB, fontSize: 8, letterSpacing: "0.03em", color: "#7d9a86", lineHeight: 1.35, whiteSpace: "nowrap" }}>
-          COPA DO MUNDO <span style={{ color: "#c8ff2d" }}>26.</span>
+          COPA DO MUNDO <span style={{ color: "var(--bf-lime)" }}>26.</span>
         </span>
         <span style={{ fontFamily: JB, fontSize: 8, letterSpacing: "0.03em", color: "#7d9a86", lineHeight: 1.35, whiteSpace: "nowrap" }}>{wc.pct}% CONCLUÍDA</span>
       </div>
@@ -378,6 +387,14 @@ export function LiveView({
       <KickLiveChip />
       <div ref={fillRef} style={{ display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
         {masthead}
+
+        {/* Marquee styling only — a metal title above the untouched normal panels. */}
+        {marquee ? (
+          <>
+            <ShowpieceStyles />
+            <ShowpieceBanner theme={marquee} narrow compact />
+          </>
+        ) : null}
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
           {primaryPhase === "pre" ? (
