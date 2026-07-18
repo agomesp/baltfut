@@ -11,6 +11,7 @@ import {
   ShowpieceBanner,
   ShowpieceArena,
   LiveDeck,
+  GoalsPanel,
   PathDeck,
   mono,
   type LiveStat,
@@ -229,7 +230,10 @@ export interface ShowpieceMatchV2Props {
 export function ShowpieceMatchV2({ scenario, narrow = false, fill = false, entries, ranks, myName = null, stats, palpiteSlot }: ShowpieceMatchV2Props) {
   const { theme, home, away, match } = scenario;
   const live = match.state === "in";
-  const engagementCols = narrow ? "1fr" : live ? "1fr 1fr" : "1.5fr 1.1fr 1fr";
+  // Embedded live keeps the SAME three-column row as pre-match (goals | chegando |
+  // ranking) so everything stays on one screen; the roomy sandbox stacks the goals
+  // deck above a two-column row.
+  const engagementCols = narrow ? "1fr" : live ? (fill ? "1.25fr 1.1fr 1fr" : "1fr 1fr") : "1.5fr 1.1fr 1fr";
 
   // Embedded (fill): a flex-1 region under the compact hero, so the engagement
   // grid absorbs the leftover height and its lists scroll internally — the whole
@@ -253,12 +257,13 @@ export function ShowpieceMatchV2({ scenario, narrow = false, fill = false, entri
       <ShowpieceArena scenario={scenario} narrow={narrow} compact={fill} />
 
       <div style={lowerStyle}>
-        {live && <LiveDeck scenario={scenario} narrow={narrow} stats={stats} />}
+        {live && !fill && <LiveDeck scenario={scenario} narrow={narrow} stats={stats} />}
 
         <div style={gridStyle}>
           {!live && (palpiteSlot
             ? <PalpiteCard home={home} away={away} theme={theme} compact={fill}>{palpiteSlot}</PalpiteCard>
             : <ChatCtaCard home={home} away={away} theme={theme} compact={fill} />)}
+          {live && fill && <GoalsPanel scenario={scenario} compact />}
           <ChegandoPanel entries={entries} home={home} away={away} theme={theme} myName={myName} fill={fill} />
           <RankingPanel ranks={ranks} theme={theme} myName={myName} fill={fill} />
         </div>

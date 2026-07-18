@@ -283,33 +283,46 @@ export interface LiveStat {
   unit: string;
 }
 
-export function LiveDeck({ scenario, narrow, stats }: { scenario: Scenario; narrow: boolean; stats?: LiveStat[] }) {
+/** The goal timeline + scorer list as its OWN panel, so the embedded live view can
+ *  sit it in the engagement row (one screen, list scrolls inside) instead of
+ *  stacking it above and pushing the palpites/ranking off the bottom. */
+export function GoalsPanel({ scenario, compact = false }: { scenario: Scenario; compact?: boolean }) {
   const { match, theme, home, away } = scenario;
   const color = (side: "home" | "away") => (side === "home" ? home.primary : away.primary);
   const pct = (clock: string) => `${Math.min(98, (parseInt(clock, 10) / 90) * 100)}%`;
   return (
-    <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 16, alignItems: "stretch" }}>
-      {/* Goal timeline */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14, padding: 18, borderRadius: 16, background: "rgba(255,255,255,0.03)", border: `1px solid ${theme.metal}44` }}>
-        <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 15, color: theme.metal }}>⚽ GOLS DA PARTIDA</span>
-        <div style={{ position: "relative", height: 46, borderRadius: 10, background: "linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))", border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
-          <div aria-hidden style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgba(255,255,255,0.12)" }} />
-          {match.goals.map((g, i) => (
-            <div key={i} style={{ position: "absolute", left: pct(g.clock), top: g.side === "home" ? 4 : "auto", bottom: g.side === "away" ? 4 : "auto", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-              <span style={{ width: 12, height: 12, borderRadius: "50%", background: color(g.side), boxShadow: `0 0 8px ${color(g.side)}`, border: "2px solid rgba(0,0,0,0.4)" }} />
-            </div>
-          ))}
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-          {match.goals.map((g, i) => (
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: compact ? 10 : 14, padding: compact ? 14 : 18, borderRadius: 16, background: "rgba(255,255,255,0.03)", border: `1px solid ${theme.metal}44`, overflow: "hidden" }}>
+      <span style={{ flex: "none", fontFamily: BRIC, fontWeight: 800, fontSize: compact ? 14 : 15, color: theme.metal }}>⚽ GOLS DA PARTIDA</span>
+      <div style={{ flex: "none", position: "relative", height: compact ? 38 : 46, borderRadius: 10, background: "linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))", border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
+        <div aria-hidden style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgba(255,255,255,0.12)" }} />
+        {match.goals.map((g, i) => (
+          <div key={i} style={{ position: "absolute", left: pct(g.clock), top: g.side === "home" ? 4 : "auto", bottom: g.side === "away" ? 4 : "auto", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+            <span style={{ width: 12, height: 12, borderRadius: "50%", background: color(g.side), boxShadow: `0 0 8px ${color(g.side)}`, border: "2px solid rgba(0,0,0,0.4)" }} />
+          </div>
+        ))}
+      </div>
+      <div className="bf-scroll" style={{ display: "flex", flexDirection: "column", gap: 7, flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", paddingRight: 2 }}>
+        {match.goals.length === 0 ? (
+          <span style={{ fontFamily: BRIC, fontSize: 12.5, color: "rgba(255,255,255,0.45)" }}>Sem gols ainda.</span>
+        ) : (
+          match.goals.map((g, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: g.side === "away" ? "flex-end" : "flex-start" }}>
               {g.side === "home" && <span style={{ ...mono(11, color("home")), width: 34 }}>{g.clock}</span>}
               <span style={{ fontFamily: BRIC, fontWeight: 700, fontSize: 14, color: "#fff" }}>{g.side === "away" ? "" : "⚽ "}{g.scorer}{g.penalty ? " (P)" : ""}{g.side === "away" ? " ⚽" : ""}</span>
               {g.side === "away" && <span style={{ ...mono(11, color("away")), width: 34, textAlign: "right" }}>{g.clock}</span>}
             </div>
-          ))}
-        </div>
+          ))
+        )}
       </div>
+    </div>
+  );
+}
+
+export function LiveDeck({ scenario, narrow, stats }: { scenario: Scenario; narrow: boolean; stats?: LiveStat[] }) {
+  const { home, away } = scenario;
+  return (
+    <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", gap: 16, alignItems: "stretch" }}>
+      <GoalsPanel scenario={scenario} />
 
       {/* Stat bars — only when the caller has real numbers to show. */}
       {stats && stats.length > 0 && (
