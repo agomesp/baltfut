@@ -18,6 +18,7 @@ import {
 import { startScoreboardWorker } from "@/lib/scoreboard-worker";
 import { subscribeScoreboard } from "@/lib/scoreboard-source";
 import { showpieceThemeFor } from "@/lib/showpiece/from-match";
+import { teamAccent } from "@/components/live/bf-ui";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -321,15 +322,38 @@ export default function Home() {
   const prevActive = useRef<{ id?: string; state?: string }>({});
 
   // Marquee takeover: while the live tab is showing a final / 3rd-place tie, flag
-  // it on <html> so globals.css retunes the shared tokens (whole-app palette).
+  // it on <html> so globals.css retunes the shared tokens (whole-app palette), and
+  // paint the page background in the TWO TEAMS' colours — each bleeding in from its
+  // own side over a dark base, so the middle stays dark enough to read panels on.
+  // `color-mix` keeps this valid whether teamAccent returns hex or hsl.
   // Cleared on any other tab / match, so the app returns to pitch-green.
   useEffect(() => {
     const theme =
       view === "live" && liveSubTab === "partidas" && activeMatch ? showpieceThemeFor(activeMatch) : null;
     const root = document.documentElement;
-    if (theme) root.setAttribute("data-showpiece", theme.key);
-    else root.removeAttribute("data-showpiece");
-    return () => root.removeAttribute("data-showpiece");
+    if (theme && activeMatch) {
+      root.setAttribute("data-showpiece", theme.key);
+      const home = teamAccent(activeMatch.home.abbreviation);
+      const away = teamAccent(activeMatch.away.abbreviation);
+      root.style.setProperty(
+        "--bf-bg",
+        [
+          // Each side's colour blooms from its own edge across the full height…
+          `radial-gradient(1300px 1200px at -8% 30%, color-mix(in srgb, ${home} 62%, transparent), transparent 70%)`,
+          `radial-gradient(1300px 1200px at 108% 30%, color-mix(in srgb, ${away} 62%, transparent), transparent 70%)`,
+          // …over an edge-to-edge home→away wash that stays dark through the middle,
+          // where the panels sit, so text keeps its contrast.
+          `linear-gradient(100deg, color-mix(in srgb, ${home} 30%, #07060d) 0%, #07060d 44%, #07060d 56%, color-mix(in srgb, ${away} 30%, #07060d) 100%)`,
+        ].join(", "),
+      );
+    } else {
+      root.removeAttribute("data-showpiece");
+      root.style.removeProperty("--bf-bg");
+    }
+    return () => {
+      root.removeAttribute("data-showpiece");
+      root.style.removeProperty("--bf-bg");
+    };
   }, [view, liveSubTab, activeMatch]);
 
   // ---- votes + lineups for the selected chip ------------------------------
