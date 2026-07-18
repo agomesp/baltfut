@@ -102,6 +102,26 @@ body {
    stage, retune the shared design tokens so the WHOLE app (background, chip rail,
    bottom dock, masthead accent — everything that uses the tokens) shifts into the
    showpiece palette. Set on <html> alongside data-view; cleared off the live tab. */
+/* Marquee embers: dots drifting up like sparks off a fire. transform+opacity only
+   (compositable — no paint per frame), and the reduced-motion rule below stops
+   them outright. `--bf-dx` is the per-ember sideways drift. */
+@keyframes bfEmberRise {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.7);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate3d(var(--bf-dx, 0), -104vh, 0) scale(1.25);
+    opacity: 0;
+  }
+}
+
 :root[data-showpiece="final"] {
   --bf-bg: radial-gradient(1400px 900px at 50% -20%, #241a3d 0%, #120c26 42%, #060409 100%);
   --bf-lime: #ffd76a;
