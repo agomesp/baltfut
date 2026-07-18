@@ -27,10 +27,8 @@ import { PalpiteForm, PenVote, NameField, useNameLock, type PenOverride } from "
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
 import { decideConcurrent } from "@/lib/concurrent-games";
 import { useIsNarrow } from "@/lib/use-is-narrow";
-import { useMyName } from "@/lib/use-my-name";
-import { useSubRanks } from "@/lib/use-sub-ranks";
-import { scenarioFromMatch } from "@/lib/showpiece/from-match";
-import { ShowpieceMatchV2 } from "@/components/showpiece/showpiece-match-v2";
+import { showpieceThemeFor } from "@/lib/showpiece/from-match";
+import { ShowpieceBanner, ShowpieceStyles } from "@/components/showpiece/showpiece-match";
 import { subscribePromoDisplay, isPromoDisplay } from "@/lib/promo-display";
 import { LivePromoView } from "@/components/live/live-promo-view";
 import type { MatchResult } from "@/lib/ranking";
@@ -306,10 +304,10 @@ export function LiveView({
   // The two marquee ties (the final and the 3rd-place match) get their own
   // bespoke stage instead of the normal pre/live panels — recognised straight
   // off ESPN's stage slug, so it lights up on its own when the tie comes round.
-  const showpiece = useMemo(() => (primary ? scenarioFromMatch(primary, matches) : null), [primary, matches]);
-  const showpieceNarrow = useIsNarrow();
-  const myName = useMyName();
-  const subRanks = useSubRanks(allEntries, matches, matchResults, brackets);
+  // Marquee tie (final / 3rd place): the normal panels keep rendering — we only
+  // add the showpiece STYLING (the metal title here; the whole-app palette comes
+  // from the data-showpiece tokens set in page.tsx).
+  const marquee = primary ? showpieceThemeFor(primary) : null;
   // Palpites for the shown game: the fresh `entries` feed when it's the selected
   // chip, else filtered from the all-matches feed (e.g. after following a survivor).
   const primaryEntries =
@@ -390,27 +388,16 @@ export function LiveView({
       <div ref={fillRef} style={{ display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }}>
         {masthead}
 
+        {/* Marquee styling only — a metal title above the untouched normal panels. */}
+        {marquee ? (
+          <>
+            <ShowpieceStyles />
+            <ShowpieceBanner theme={marquee} narrow compact />
+          </>
+        ) : null}
+
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          {showpiece ? (
-            <ShowpieceMatchV2
-              scenario={showpiece}
-              narrow={showpieceNarrow}
-              fill
-              entries={primaryEntries}
-              ranks={subRanks}
-              myName={myName}
-              palpiteSlot={primaryPhase === "pre" ? (
-                <PalpiteForm
-                  match={primary}
-                  entries={primaryEntries}
-                  closesAt={effectiveDeadline(primary.startsAt, palpiteOverrides[primary.id] ?? null)}
-                  released={releasedIds.has(primary.id) || palpiteOverrides[primary.id] != null}
-                  onVoted={onVoted}
-                  hideCountdown
-                />
-              ) : undefined}
-            />
-          ) : primaryPhase === "pre" ? (
+          {primaryPhase === "pre" ? (
             <PreMatchPanel
               match={primary}
               second={partner}
