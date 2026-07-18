@@ -46,18 +46,23 @@ export function chegandoPool(scenario: Scenario, nowMs: number): VoteEntry[] {
 
 /** A believable Ranking dos Subs snapshot (fractional totals = pen halves +
  *  bracket points), leader first. Same shape rankSubs produces, so the panel is
- *  identical whether it's fed this or the real ranking. */
+ *  identical whether it's fed this or the real ranking.
+ *
+ *  Nicknames are INVENTED on purpose. These sandbox routes are publicly reachable
+ *  once deployed, and made-up win/loss records shown under real subs' nicknames
+ *  would read as a genuine standings table. Only the house bot is real, because
+ *  it's the app's own account rather than a person. */
 export const MOCK_RANKING: SubRank[] = [
   { username: "ChatGPT", wins: 15, losses: 86, penWins: 0, penLosses: 1 },
-  { username: "LEMES", wins: 9, losses: 45, penWins: 0, penLosses: 2 },
-  { username: "martineza", wins: 9, losses: 43, penWins: 0, penLosses: 2 },
-  { username: "Zinnecwb", wins: 7.5, losses: 57, penWins: 3, penLosses: 0 },
-  { username: "FlinTH", wins: 7, losses: 42, penWins: 0, penLosses: 1 },
-  { username: "jmello123", wins: 6.5, losses: 25, penWins: 1, penLosses: 0 },
-  { username: "Synced", wins: 6, losses: 40, penWins: 0, penLosses: 0 },
-  { username: "mikeggabs", wins: 5, losses: 13, penWins: 0, penLosses: 0 },
-  { username: "Picapau", wins: 5, losses: 37, penWins: 0, penLosses: 2 },
-  { username: "agomesp", wins: 4.4, losses: 61, penWins: 0, penLosses: 3 },
-  { username: "LilJam", wins: 4, losses: 38, penWins: 0, penLosses: 2 },
-  { username: "drakad", wins: 3, losses: 38, penWins: 0, penLosses: 2 },
+  { username: "cravador_geral", wins: 9, losses: 45, penWins: 0, penLosses: 2 },
+  { username: "tati_palpite", wins: 9, losses: 43, penWins: 0, penLosses: 2 },
+  { username: "boleiro_77", wins: 7.5, losses: 57, penWins: 3, penLosses: 0 },
+  { username: "zagueiro_zen", wins: 7, losses: 42, penWins: 0, penLosses: 1 },
+  { username: "resenha_fc", wins: 6.5, losses: 25, penWins: 1, penLosses: 0 },
+  { username: "meia_armador", wins: 6, losses: 40, penWins: 0, penLosses: 0 },
+  { username: "sub_do_dia", wins: 5, losses: 13, penWins: 0, penLosses: 0 },
+  { username: "camisa_10", wins: 5, losses: 37, penWins: 0, penLosses: 2 },
+  { username: "voce_aqui", wins: 4.4, losses: 61, penWins: 0, penLosses: 3 },
+  { username: "gols_e_cia", wins: 4, losses: 38, penWins: 0, penLosses: 2 },
+  { username: "neutro_fc", wins: 3, losses: 38, penWins: 0, penLosses: 2 },
 ];
