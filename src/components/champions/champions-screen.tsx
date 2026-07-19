@@ -390,7 +390,7 @@ export function ChampionsScreen({
         initial={{ opacity: 0, y: -70, scale: 0.85, rotateX: -40 }}
         animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
         transition={{ type: "spring", stiffness: 120, damping: 14, delay: 0.1 }}
-        style={{ display: "flex", justifyContent: "center", transformPerspective: 1000 }}
+        style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 14, transformPerspective: 1000 }}
       >
         <div className="bf-plaque" style={{ display: "flex", alignItems: "center", gap: 18, padding: "12px 34px", borderRadius: 16 }}>
           <span className="bf-trophy" style={{ fontSize: 40, lineHeight: 1 }}>🏆</span>
@@ -408,6 +408,42 @@ export function ChampionsScreen({
           </div>
           <span className="bf-trophy" style={{ fontSize: 40, lineHeight: 1 }}>🏆</span>
         </div>
+
+        {/* The human headline act, billed alongside the world champion — the sub
+            who won the tournament is the thing this room actually cares about. */}
+        {board.champion ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+              padding: "9px 18px",
+              borderRadius: 14,
+              background: `linear-gradient(135deg, color-mix(in srgb, ${GOLD} 20%, transparent), rgba(255,255,255,0.03))`,
+              border: `1px solid ${GOLD}`,
+              boxShadow: `0 14px 40px -18px ${GOLD}`,
+            }}
+          >
+            <span style={mono(8, GOLD, "0.24em")}>CAMPEÃO DOS SUBS</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 21, lineHeight: 1 }}>🥇</span>
+              <span
+                style={{
+                  fontFamily: BRIC,
+                  fontWeight: 800,
+                  fontSize: 27,
+                  lineHeight: 1.05,
+                  ...nameStyle(board.champion.username, "#fff8e2"),
+                }}
+              >
+                {board.champion.username}
+              </span>
+            </span>
+            <span style={mono(8.5, "rgba(255,255,255,0.6)", "0.1em")}>
+              {fmt(board.champion.wins)} pontos
+            </span>
+          </div>
+        ) : null}
       </Reveal>
       </motion.div>
 

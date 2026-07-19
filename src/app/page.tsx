@@ -406,6 +406,16 @@ export default function Home() {
     }
   }, []);
 
+  // Opening the ceremony pulls the freshest palpites first. The final's own
+  // result is already guaranteed graded — the same finished match that triggers
+  // the screen is what grades it — but ENTRIES only auto-refresh on the live tab,
+  // and the admin can reopen a match's palpite window, so a late palpite could
+  // otherwise miss the one ranking that is meant to be final.
+  const openChampions = useCallback(() => {
+    setChampOpen(true);
+    void loadAllEntries();
+  }, [loadAllEntries, setChampOpen]);
+
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (view !== "live" || !activeId) return;
@@ -563,7 +573,7 @@ export default function Home() {
         brackets={brackets}
         simulatedWinner={simWinner}
         open={champOpen}
-        onOpen={() => setChampOpen(true)}
+        onOpen={openChampions}
         onClose={() => {
           setChampOpen(false);
           setSimWinner(null);
@@ -613,7 +623,7 @@ export default function Home() {
                   <ChampionsButtons
                     matches={matches}
                     canOpen={finalDone}
-                    onOpen={() => setChampOpen(true)}
+                    onOpen={openChampions}
                     onSimulate={(w) => {
                       setSimWinner(w);
                       setChampOpen(true);
