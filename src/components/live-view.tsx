@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
 import type { Match, MatchLineups } from "@/lib/espn";
 import { matchShootout } from "@/lib/espn";
 import { supabaseCastVote, type VoteEntry } from "@/lib/votes";
@@ -270,6 +270,8 @@ export interface LiveViewProps {
   penOverride?: PenOverride;
   /** Manual per-match palpite windows from the admin: match_id → openUntil (ms). */
   palpiteOverrides?: Record<string, number>;
+  /** Slot under the brand block — used for the champions entry point. */
+  topSlot?: ReactNode;
 }
 
 export function LiveView({
@@ -290,6 +292,7 @@ export function LiveView({
   releasedIds,
   penOverride = null,
   palpiteOverrides = {},
+  topSlot,
 }: LiveViewProps) {
   const now = useNow(15_000);
   const wc = wcProgress(now);
@@ -353,6 +356,7 @@ export function LiveView({
           COPA DO MUNDO <span style={{ color: "var(--bf-lime)" }}>26.</span>
         </span>
         <span style={{ fontFamily: JB, fontSize: 8, letterSpacing: "0.03em", color: "#7d9a86", lineHeight: 1.35, whiteSpace: "nowrap" }}>{wc.pct}% CONCLUÍDA</span>
+        {topSlot ? <div style={{ marginTop: 5 }}>{topSlot}</div> : null}
       </div>
       <div style={{ flex: "1 1 360px", minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>

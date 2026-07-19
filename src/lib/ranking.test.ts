@@ -59,6 +59,43 @@ describe("rankSubs", () => {
     ]);
   });
 
+  it("breaks a tie on exact scorelines called, not alphabetically", () => {
+    const ms: Record<string, Match> = {
+      a: match("a", "post", 1, 0),
+      b: match("b", "post", 2, 0),
+    };
+    // Both land on 2.0, by different routes: zoe called two exact scores, abe
+    // called one and topped up with a bracket point. Alphabetical order would
+    // have put abe first; calling more finals scores is the better showing.
+    const ranked = rankSubs(
+      [entry("zoe", "a", 1, 0), entry("zoe", "b", 2, 0), entry("abe", "a", 1, 0)],
+      ms,
+      { abe: 1 },
+    );
+    expect(ranked.map((r) => r.username)).toEqual(["zoe", "abe"]);
+    expect(ranked.map((r) => r.wins)).toEqual([2, 2]);
+  });
+
+  it("a bracket-only sub loses a tie to one who actually called a score", () => {
+    // abe's point is purely bracket, so he has no exact scorelines to show.
+    const ranked = rankSubs([entry("zoe", "m1", 2, 1)], matchesById, { abe: 1 });
+    expect(ranked.map((r) => r.username)).toEqual(["zoe", "abe"]);
+  });
+
+  it("still lets a wrong palpite cost nothing — volume never breaks a tie against you", () => {
+    const ms: Record<string, Match> = {
+      a: match("a", "post", 1, 0),
+      b: match("b", "post", 2, 0),
+    };
+    // Same single exact hit each; zoe also missed once. The miss must not demote
+    // her below abe, so the tie falls through to name.
+    const ranked = rankSubs(
+      [entry("abe", "a", 1, 0), entry("zoe", "a", 1, 0), entry("zoe", "b", 9, 9)],
+      ms,
+    );
+    expect(ranked.map((r) => r.username)).toEqual(["abe", "zoe"]);
+  });
+
   it("orders by correct palpites only — wrong palpites don't change the order", () => {
     const ms: Record<string, Match> = {
       a: match("a", "post", 1, 0),

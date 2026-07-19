@@ -52,8 +52,9 @@ export interface SubRank {
  * decided on penalties and the sub called a winner, a correct call adds +0.5 (a
  * wrong one only bumps the pen-loss breakdown). Every palpite on a finished match
  * counts (the kickoff+5min form lock already prevents late ones). Sorted by wins
- * (correct palpites, incl. the pen halves) desc, then name — losses are tallied
- * for display but never affect the order, so a wrong palpite costs nothing in rank.
+ * (correct palpites, incl. the pen halves) desc, then by exact scorelines called,
+ * then name — losses are tallied for display but never affect the order, so a
+ * wrong palpite costs nothing in rank.
  *
  * `bracketPoints` (username → 0.2-per-correct-winner from {@link bracketPointsByUser})
  * folds into the SAME table: added to a sub's wins, and surfacing a bracket-only
@@ -65,6 +66,10 @@ export function rankSubs(
   bracketPoints: Record<string, number> = {},
 ): SubRank[] {
   const tally = new Map<string, { wins: number; losses: number; penWins: number; penLosses: number }>();
+  // Exact-score hits, kept alongside the tally purely to break ties. Not folded
+  // into SubRank: nothing renders it, and an unused field is one more thing to
+  // keep in sync.
+  const shots = new Map<string, { hits: number }>();
 
   for (const e of entries) {
     const m = matchesById[e.matchId];
@@ -72,8 +77,12 @@ export function rankSubs(
       continue;
     }
     const t = tally.get(e.username) ?? { wins: 0, losses: 0, penWins: 0, penLosses: 0 };
-    if (e.predHome === m.homeScore && e.predAway === m.awayScore) t.wins += 1;
-    else t.losses += 1;
+    if (e.predHome === m.homeScore && e.predAway === m.awayScore) {
+      t.wins += 1;
+      const s = shots.get(e.username) ?? { hits: 0 };
+      s.hits += 1;
+      shots.set(e.username, s);
+    } else t.losses += 1;
     // Penalty bonus: only when the tie actually went to pens AND they called a
     // winner. Correct → half a point (and a pen-win); wrong → just a pen-loss.
     const so = matchShootout(m);
@@ -97,9 +106,24 @@ export function rankSubs(
     tally.set(username, t);
   }
 
+  // Tie-break: whoever nailed more EXACT scorelines. The same total can be reached
+  // by different routes — a 0.2 bracket point and a 0.5 pen call both count toward
+  // `wins` — so two subs level on points rarely did the same thing, and the one who
+  // called more finals scores is the better palpiteiro.
+  //
+  // Deliberately NOT hit rate: with tied points that reduces to fewest-losses-first,
+  // which would make a wrong palpite cost you and give a sub a reason to sit out the
+  // matches they're unsure about. Counting hits keeps volume free — palpitando more
+  // can only ever add to this number.
+  const hits = (username: string) => shots.get(username)?.hits ?? 0;
   return [...tally.entries()]
     .map(([username, v]) => ({ username, ...v }))
-    .sort((a, b) => b.wins - a.wins || a.username.localeCompare(b.username));
+    .sort(
+      (a, b) =>
+        b.wins - a.wins ||
+        hits(b.username) - hits(a.username) ||
+        a.username.localeCompare(b.username),
+    );
 }
 
 /** A one-vs-one duel between two nicknames (e.g. the house bot "ChatGPT" vs the
