@@ -429,7 +429,7 @@ export function PreMatchPanel({ match, pen = false, second, entries, secondEntri
       {!showDuo ? (
         (() => {
           const preHero = <PreHero match={match} groupByTeam={groupByTeam} consensus={consensus} />;
-          const ranking = <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} variant="column" style={{ flex: "none", width: "100%" }} />;
+          const ranking = <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} locked variant="column" style={{ flex: "none", width: "100%" }} />;
           const formCard = pen ? (
             <PenForm match={match} />
           ) : (
@@ -764,7 +764,7 @@ function PreMatchDuo({ match, second, entries, secondEntries, allEntries, matche
         </div>
       </div>
       {/* Ranking dos Subs on the right (desktop) / below the cards (mobile). */}
-      <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} variant="column" style={{ flex: "none", width: narrow ? "100%" : 230 }} />
+      <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} locked variant="column" style={{ flex: "none", width: narrow ? "100%" : 230 }} />
     </div>
   );
 }

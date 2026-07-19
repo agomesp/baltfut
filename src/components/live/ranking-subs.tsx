@@ -57,10 +57,77 @@ export interface RankingSubsProps {
   brackets?: BracketEntry[];
   /** "grid" = the wide PLACAR 2-col list; "column" = a single fading column. */
   variant?: "grid" | "column";
+  /** Frost the standings over until the whistle, so the result lands as a
+   *  reveal instead of being readable all match. */
+  locked?: boolean;
   style?: CSSProperties;
 }
 
-export function RankingSubs({ entries, matches, results, brackets, variant = "column", style }: RankingSubsProps) {
+/** An eye with a line through it — "this is deliberately hidden". */
+function EyeOff({ size = 26, colour }: { size?: number; colour: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={colour} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2 12s3.6-7 10-7c2.1 0 3.9.76 5.4 1.8" />
+      <path d="M22 12s-3.6 7-10 7c-2.1 0-3.9-.76-5.4-1.8" />
+      <circle cx="12" cy="12" r="3.2" />
+      <line x1="3" y1="21" x2="21" y2="3" />
+    </svg>
+  );
+}
+
+/**
+ * The frosted cover. The standings stay mounted underneath — same rows, same
+ * height — so nothing reflows when the whistle goes and the cover lifts; only
+ * this layer disappears.
+ *
+ * The message is STICKY rather than centred in the cover. On the pre-match column
+ * this panel sits inside a scroll container and runs to ~6900px against a ~300px
+ * viewport, so centring buried the text thousands of pixels below the fold — the
+ * cover worked and the explanation was invisible. Sticky pins it to whatever part
+ * of the panel you're actually looking at; where the panel isn't scrolled (the
+ * wide grid variant) it simply sits at the top.
+ */
+function LockedOverlay() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 2,
+        borderRadius: 12,
+        background: "rgba(9,12,10,0.62)",
+        backdropFilter: "blur(9px)",
+        WebkitBackdropFilter: "blur(9px)",
+      }}
+    >
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          minHeight: 210,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 9,
+          padding: "16px 18px",
+          textAlign: "center",
+        }}
+      >
+        <EyeOff colour={GOLD} />
+        <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14.5, lineHeight: 1.2, color: GOLD, maxWidth: 230 }}>
+          QUEM VENCERÁ O PALPITE DOS SUBS?
+        </span>
+        <span style={{ fontFamily: JB, fontSize: 9, lineHeight: 1.6, letterSpacing: "0.04em", color: "#9bb6a6", maxWidth: 250 }}>
+          O ranking fica escondido até o apito final. Ninguém vê quem está na
+          frente — o resultado sai de uma vez só, no fim da partida.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function RankingSubs({ entries, matches, results, brackets, variant = "column", locked = false, style }: RankingSubsProps) {
   const myName = useMyName();
   // Assembled by the shared hook (ESPN + durable results + bracket points), and
   // memoized inside it — so a bare parent re-render (the live stages tick every
@@ -72,7 +139,8 @@ export function RankingSubs({ entries, matches, results, brackets, variant = "co
   const rest = ranks.slice(1);
 
   return (
-    <div style={{ borderRadius: 12, border: "1px solid rgba(255,179,71,0.2)", background: "rgba(255,255,255,0.02)", padding: 13, display: "flex", flexDirection: "column", minHeight: 0, ...style }}>
+    <div style={{ position: "relative", borderRadius: 12, border: "1px solid rgba(255,179,71,0.2)", background: "rgba(255,255,255,0.02)", padding: 13, display: "flex", flexDirection: "column", minHeight: 0, ...style }}>
+      {locked ? <LockedOverlay /> : null}
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
         <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: GOLD }}>Ranking dos Subs</span>
         <span style={{ display: "inline-flex", alignItems: "baseline", gap: 7, fontFamily: JB, fontSize: 9, flex: "none" }}>
