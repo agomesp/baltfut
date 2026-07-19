@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import type { Consensus } from "@/lib/consensus";
 import { JB, SAIRA, SectionLabel } from "@/components/live/bf-ui";
-import { RollingNumber } from "@/components/live/fx";
+import { RollingNumber, Sheen } from "@/components/live/fx";
 
 /** "A Comunidade Palpita" — home/draw/away split + segmented bar. */
 export function CommunityBar({
@@ -60,11 +60,14 @@ export function CommunityBar({
           {cell(drawPct, "EMP", "#c6d4cb")}
           {cell(awayPct, awayCode, awayAccent)}
         </div>
-        <div style={{ display: "flex", height: barH, borderRadius: 5, overflow: "hidden", gap: 2 }}>
-          {seg(homePct, homeAccent)}
-          {seg(drawPct, "#3a4a40")}
-          {seg(awayPct, awayAccent)}
-        </div>
+        {/* Light runs along the split, so the bar reads as live rather than printed. */}
+        <Sheen seconds={3.4} radius={5} tint="rgba(255,255,255,0.35)">
+          <div style={{ display: "flex", height: barH, borderRadius: 5, overflow: "hidden", gap: 2 }}>
+            {seg(homePct, homeAccent)}
+            {seg(drawPct, "#3a4a40")}
+            {seg(awayPct, awayAccent)}
+          </div>
+        </Sheen>
       </>
     );
 
