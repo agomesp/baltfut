@@ -96,15 +96,15 @@ export interface AccuracyRow {
 }
 
 /**
- * The wall of shame: worst hit RATE, not worst raw error count — so 9 misses out
- * of 10 (10%) ranks below 9 out of 20 (55%), and volume only breaks ties. Subs
- * below `minPalpites` are excluded so one unlucky guess can't top the board.
+ * Exact-score hit rate per sub, with anyone under `minPalpites` dropped so a tiny
+ * sample can't top either board — one unlucky guess isn't "the worst", and one
+ * lucky guess isn't "the best". Shared by both aproveitamento boards, which
+ * differ only in which end of the list they read from.
  */
-export function worstAccuracyRanking(
+function accuracyRows(
   entries: VoteEntry[],
   byId: Record<string, MatchResult>,
-  minPalpites = 10,
-  cap = 5,
+  minPalpites: number,
 ): AccuracyRow[] {
   const tally = new Map<string, { hits: number; palpites: number }>();
   for (const { entry, home, away } of graded(entries, byId)) {
@@ -115,8 +115,39 @@ export function worstAccuracyRanking(
   }
   return [...tally.entries()]
     .filter(([, r]) => r.palpites >= minPalpites)
-    .map(([username, r]) => ({ username, hits: r.hits, palpites: r.palpites, pct: r.hits / r.palpites }))
+    .map(([username, r]) => ({ username, hits: r.hits, palpites: r.palpites, pct: r.hits / r.palpites }));
+}
+
+/**
+ * The wall of shame: worst hit RATE, not worst raw error count — so 9 misses out
+ * of 10 (10%) ranks below 9 out of 20 (55%). Ties go to the bigger sample: being
+ * that cold across more palpites is the worse showing.
+ */
+export function worstAccuracyRanking(
+  entries: VoteEntry[],
+  byId: Record<string, MatchResult>,
+  minPalpites = 10,
+  cap = 5,
+): AccuracyRow[] {
+  return accuracyRows(entries, byId, minPalpites)
     .sort((a, b) => a.pct - b.pct || b.palpites - a.palpites || byName(a, b))
+    .slice(0, cap);
+}
+
+/**
+ * The mirror image: best hit RATE. Ties go to the bigger sample here too, for the
+ * same reason read the other way — sustaining a rate over more palpites is the
+ * better showing. The floor is lower than the shame board's (6 vs 10): being
+ * accurate is rarer than being wrong, so demanding 10 would empty the board.
+ */
+export function bestAccuracyRanking(
+  entries: VoteEntry[],
+  byId: Record<string, MatchResult>,
+  minPalpites = 6,
+  cap = 5,
+): AccuracyRow[] {
+  return accuracyRows(entries, byId, minPalpites)
+    .sort((a, b) => b.pct - a.pct || b.palpites - a.palpites || byName(a, b))
     .slice(0, cap);
 }
 

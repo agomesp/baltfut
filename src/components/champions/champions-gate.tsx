@@ -8,6 +8,7 @@ import type { BracketEntry } from "@/lib/bracket-votes";
 import type { MatchResult } from "@/lib/ranking";
 import { buildResultMap, useSubRanks } from "@/lib/use-sub-ranks";
 import {
+  bestAccuracyRanking,
   championsBoard,
   halfPointRanking,
   mostPalpitesRanking,
@@ -29,6 +30,10 @@ import { JB } from "@/components/live/bf-ui";
 /** Minimum palpites to qualify for the worst-accuracy board, so one unlucky
  *  guess can't top it. */
 const MIN_PALPITES = 10;
+
+/** Lower floor for the best-accuracy board: hitting exact scores is rare, so a
+ *  10-palpite gate would leave it empty. Still enough to keep a lone 1-of-1 out. */
+const MIN_BEST = 6;
 
 /** Shootout-aware winner of a finished tie, else null. */
 export function finishedWinner(m: Match | null): string | null {
@@ -75,6 +80,7 @@ export function ChampionsGate({
     () => worstAccuracyRanking(allEntries, byId, MIN_PALPITES, 5),
     [allEntries, byId],
   );
+  const best = useMemo(() => bestAccuracyRanking(allEntries, byId, MIN_BEST, 5), [allEntries, byId]);
 
   // Fire only when the final CROSSES into finished during this session.
   const seenFinished = useRef<boolean | null>(null);
@@ -96,7 +102,9 @@ export function ChampionsGate({
       half={half}
       volume={volume}
       accuracy={accuracy}
+      best={best}
       minPalpites={MIN_PALPITES}
+      minBest={MIN_BEST}
       onBack={onClose}
     />
   );

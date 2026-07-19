@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { SubRank } from "@/lib/ranking";
 import type { AccuracyRow, ChampionsBoard, HalfPointRow, VolumeRow } from "@/lib/champions/rankings";
+import { pointerBias } from "@/lib/champions/pointer";
 import { BRIC, SAIRA, JB, teamAccent, nameStyle } from "@/components/live/bf-ui";
 import { flagFileBase, teamNamePt } from "@/lib/team-names";
 import { ASSET_BASE } from "@/components/live/bf-ui";
@@ -112,6 +113,37 @@ function Panel({
   );
 }
 
+/**
+ * Pointer-driven 3D: everything on screen leans away from the cursor, nearer
+ * layers further than far ones, so the board reads as depth rather than a flat
+ * page.
+ *
+ * Motion values are written straight to the DOM by framer-motion, so tracking the
+ * pointer never re-renders React — otherwise every mousemove would re-render all
+ * four boards. No new dependency for this: the tilt packages on npm cost 71–165KB
+ * for what `useSpring` already does, and framer-motion is here anyway for the
+ * entrances.
+ *
+ * Strictly decorative — this only ever writes transforms, never opacity. A frozen
+ * rAF (the occluded-tab case {@link Row} guards against) leaves the content
+ * exactly where it was instead of hiding it.
+ */
+function usePointer3D(enabled: boolean) {
+  const raw = { x: useMotionValue(0), y: useMotionValue(0) };
+  useEffect(() => {
+    if (!enabled) return;
+    const onMove = (e: PointerEvent) => {
+      const bias = pointerBias(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
+      raw.x.set(bias.x);
+      raw.y.set(bias.y);
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, [enabled, raw.x, raw.y]);
+  const cfg = { stiffness: 55, damping: 20, mass: 0.7 };
+  return { x: useSpring(raw.x, cfg), y: useSpring(raw.y, cfg) };
+}
+
 const SEATED = { opacity: 1, y: 0, scale: 1, rotateX: 0 } as const;
 
 /** Animates in, but drops to a plain node once the ceremony's clock is up — see
@@ -200,11 +232,23 @@ export interface ChampionsScreenProps {
   half: HalfPointRow[];
   volume: VolumeRow[];
   accuracy: AccuracyRow[];
+  best: AccuracyRow[];
   minPalpites: number;
+  minBest: number;
   onBack: () => void;
 }
 
-export function ChampionsScreen({ winnerCode, board, half, volume, accuracy, minPalpites, onBack }: ChampionsScreenProps) {
+export function ChampionsScreen({
+  winnerCode,
+  board,
+  half,
+  volume,
+  accuracy,
+  best,
+  minPalpites,
+  minBest,
+  onBack,
+}: ChampionsScreenProps) {
   const reduced = useReducedMotion();
   const [stage, setStage] = useState(reduced ? 4 : 0);
   const firedRef = useRef(false);
@@ -240,6 +284,19 @@ export function ChampionsScreen({ winnerCode, board, half, volume, accuracy, min
     return () => clearTimeout(id);
   }, [stage, reduced, board.champion, podium.length, accent]);
 
+  // Depth layers: the plaque sits nearest the viewer and swings hardest, the
+  // outer columns next, the middle column least — the same cue a camera gives.
+  const p3 = usePointer3D(!reduced);
+  const plaqueRotY = useTransform(p3.x, [-1, 1], [13, -13]);
+  const plaqueRotX = useTransform(p3.y, [-1, 1], [-9, 9]);
+  const plaqueX = useTransform(p3.x, [-1, 1], [-16, 16]);
+  const nearX = useTransform(p3.x, [-1, 1], [-13, 13]);
+  const nearY = useTransform(p3.y, [-1, 1], [-9, 9]);
+  const farX = useTransform(p3.x, [-1, 1], [-6, 6]);
+  const farY = useTransform(p3.y, [-1, 1], [-4, 4]);
+  const spotX = useTransform(p3.x, [-1, 1], [-430, 430]);
+  const spotY = useTransform(p3.y, [-1, 1], [-300, 300]);
+
   const bg = useMemo(
     () =>
       [
@@ -267,6 +324,29 @@ export function ChampionsScreen({ winnerCode, board, half, volume, accuracy, min
     >
       <ChampionsStyles />
 
+      {/* A pool of light that trails the cursor. Moved by transform (not by
+          repainting a gradient position), sits behind everything, never
+          intercepts clicks. */}
+      {reduced ? null : (
+        <motion.div
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            width: 900,
+            height: 720,
+            marginLeft: -450,
+            marginTop: -360,
+            zIndex: 0,
+            pointerEvents: "none",
+            x: spotX,
+            y: spotY,
+            background: `radial-gradient(closest-side, color-mix(in srgb, ${GOLD} 15%, transparent), transparent 72%)`,
+          }}
+        />
+      )}
+
       {/* back */}
       <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 12 }}>
         <button
@@ -291,13 +371,26 @@ export function ChampionsScreen({ winnerCode, board, half, volume, accuracy, min
         </button>
       </div>
 
-      {/* golden plaque */}
+      {/* golden plaque — the pointer tilt lives on an OUTER layer that is never
+          swapped out, so it survives the entrance settling underneath it. */}
+      <motion.div
+        style={{
+          flex: "none",
+          display: "flex",
+          justifyContent: "center",
+          zIndex: 1,
+          rotateX: plaqueRotX,
+          rotateY: plaqueRotY,
+          x: plaqueX,
+          transformPerspective: 1100,
+        }}
+      >
       <Reveal
         settled={settled}
         initial={{ opacity: 0, y: -70, scale: 0.85, rotateX: -40 }}
         animate={{ opacity: 1, y: 0, scale: 1, rotateX: 0 }}
         transition={{ type: "spring", stiffness: 120, damping: 14, delay: 0.1 }}
-        style={{ flex: "none", display: "flex", justifyContent: "center", transformPerspective: 1000 }}
+        style={{ display: "flex", justifyContent: "center", transformPerspective: 1000 }}
       >
         <div className="bf-plaque" style={{ display: "flex", alignItems: "center", gap: 18, padding: "12px 34px", borderRadius: 16 }}>
           <span className="bf-trophy" style={{ fontSize: 40, lineHeight: 1 }}>🏆</span>
@@ -316,6 +409,7 @@ export function ChampionsScreen({ winnerCode, board, half, volume, accuracy, min
           <span className="bf-trophy" style={{ fontSize: 40, lineHeight: 1 }}>🏆</span>
         </div>
       </Reveal>
+      </motion.div>
 
       {/* boards */}
       <div
@@ -325,10 +419,12 @@ export function ChampionsScreen({ winnerCode, board, half, volume, accuracy, min
           display: "grid",
           gridTemplateColumns: "1.35fr 1fr 1fr",
           gap: 12,
+          zIndex: 1,
         }}
       >
         {/* ---- podium ---- */}
-        <Panel title="🏅 TOP 10 · RANKING DOS SUBS" sub="classificação final do campeonato" accent={GOLD} delay={0} show settled={settled}>
+        <motion.div style={{ display: "flex", flexDirection: "column", minHeight: 0, x: nearX, y: nearY }}>
+        <Panel title="🏅 TOP 10 · RANKING DOS SUBS" sub="classificação final do campeonato" accent={GOLD} delay={0} show settled={settled} style={{ flex: 1 }}>
           {board.bot ? (
             <Reveal
               settled={settled}
@@ -365,8 +461,10 @@ export function ChampionsScreen({ winnerCode, board, half, volume, accuracy, min
           ))}
           {podium.length === 0 ? <Empty>Sem palpites avaliados.</Empty> : null}
         </Panel>
+        </motion.div>
 
-        {/* ---- half points ---- */}
+        {/* ---- half points + best accuracy ---- */}
+        <motion.div style={{ display: "grid", gridTemplateRows: "1.55fr 1fr", gap: 12, minHeight: 0, x: farX, y: farY }}>
         <Panel
           title="🎯 RANKING 0,5"
           sub="meio ponto para cada time com os gols exatos"
@@ -389,8 +487,31 @@ export function ChampionsScreen({ winnerCode, board, half, volume, accuracy, min
           {half.length === 0 ? <Empty>Sem palpites avaliados.</Empty> : null}
         </Panel>
 
-        {/* ---- volume + accuracy ---- */}
-        <div style={{ display: "grid", gridTemplateRows: "1fr 1fr", gap: 12, minHeight: 0 }}>
+        <Panel
+          title="🎯 TOP 5 · MAIOR APROVEITAMENTO"
+          sub={`quem mais cravou o placar — mín. ${minBest} palpites`}
+          accent="#c8ff2d"
+          delay={0}
+          show={stage >= 3}
+          settled={settled}
+        >
+          {best.map((r, i) => (
+            <Row key={r.username} delay={stage >= 3 ? 0.15 + i * 0.1 : 0} show={stage >= 3} settled={settled}>
+              <ScoreRow
+                rank={i + 1}
+                name={r.username}
+                value={pct(r.pct)}
+                meta={`${r.hits} de ${r.palpites}`}
+                accent="#c8ff2d"
+              />
+            </Row>
+          ))}
+          {best.length === 0 ? <Empty>Ninguém com palpites suficientes.</Empty> : null}
+        </Panel>
+        </motion.div>
+
+        {/* ---- volume + worst accuracy ---- */}
+        <motion.div style={{ display: "grid", gridTemplateRows: "1fr 1fr", gap: 12, minHeight: 0, x: nearX, y: nearY }}>
           <Panel title="🔥 TOP 5 · MAIS PALPITARAM" sub="quem mais apareceu no campeonato" accent="#ffa24d" delay={0} show={stage >= 3} settled={settled}>
             {volume.map((r, i) => (
               <Row key={r.username} delay={stage >= 3 ? i * 0.1 : 0} show={stage >= 3} settled={settled}>
@@ -421,7 +542,7 @@ export function ChampionsScreen({ winnerCode, board, half, volume, accuracy, min
             ))}
             {accuracy.length === 0 ? <Empty>Ninguém com palpites suficientes.</Empty> : null}
           </Panel>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

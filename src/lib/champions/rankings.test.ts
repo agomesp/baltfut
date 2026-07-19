@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { VoteEntry } from "@/lib/votes";
 import type { MatchResult, SubRank } from "@/lib/ranking";
 import {
+  bestAccuracyRanking,
   championsBoard,
   halfPointRanking,
   mostPalpitesRanking,
@@ -110,6 +111,46 @@ describe("worstAccuracyRanking", () => {
   it("breaks ties on volume — more palpites at the same rate ranks worse", () => {
     const rows = worstAccuracyRanking([...picks("few", 10, 1), ...picks("many", 20, 2)], byId, 10, 5);
     expect(rows.map((r) => r.username)).toEqual(["many", "few"]);
+  });
+});
+
+describe("bestAccuracyRanking", () => {
+  const byId: Record<string, MatchResult> = Object.fromEntries(
+    Array.from({ length: 30 }, (_, i) => [`m${i}`, post(1, 0)]),
+  );
+  const picks = (username: string, total: number, hits: number) =>
+    Array.from({ length: total }, (_, i) => e(username, `m${i}`, i < hits ? 1 : 9, i < hits ? 0 : 9));
+
+  it("ranks by hit rate descending, so 5/10 beats 6/30", () => {
+    const rows = bestAccuracyRanking([...picks("ana", 10, 5), ...picks("bob", 30, 6)], byId, 6, 5);
+    expect(rows.map((r) => r.username)).toEqual(["ana", "bob"]);
+    expect(rows[0]).toEqual({ username: "ana", hits: 5, palpites: 10, pct: 0.5 });
+    expect(rows[1].pct).toBeCloseTo(0.2);
+  });
+
+  it("gates out small samples so 1-of-1 at 100% can't top it", () => {
+    const rows = bestAccuracyRanking([...picks("lucky", 1, 1), ...picks("ana", 10, 5)], byId, 6, 5);
+    expect(rows.map((r) => r.username)).toEqual(["ana"]);
+  });
+
+  it("admits a sub on exactly the minimum, but not one below it", () => {
+    const rows = bestAccuracyRanking([...picks("six", 6, 3), ...picks("five", 5, 3)], byId, 6, 5);
+    expect(rows.map((r) => r.username)).toEqual(["six"]);
+  });
+
+  it("breaks ties on volume — sustaining the same rate for longer ranks better", () => {
+    const rows = bestAccuracyRanking([...picks("few", 10, 5), ...picks("many", 20, 10)], byId, 6, 5);
+    expect(rows.map((r) => r.username)).toEqual(["many", "few"]);
+  });
+
+  it("drops the house bot and caps the board", () => {
+    const rows = bestAccuracyRanking(
+      [...picks("ChatGPT", 30, 30), ...picks("ana", 10, 5), ...picks("bob", 10, 4)],
+      byId,
+      6,
+      1,
+    );
+    expect(rows.map((r) => r.username)).toEqual(["ana"]);
   });
 });
 
