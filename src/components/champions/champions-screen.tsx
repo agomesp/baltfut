@@ -5,7 +5,7 @@ import { motion, useReducedMotion, useTransform } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { SubRank } from "@/lib/ranking";
 import type { AccuracyRow, ChampionsBoard, HalfPointRow, VolumeRow } from "@/lib/champions/rankings";
-import { AccuracyBadge, usePointer3D } from "@/components/live/fx";
+import { AccuracyBadge, hoverLift, Sheen, usePointer3D } from "@/components/live/fx";
 import { BRIC, SAIRA, JB, teamAccent, nameStyle } from "@/components/live/bf-ui";
 import { flagFileBase, teamNamePt } from "@/lib/team-names";
 import { ASSET_BASE } from "@/components/live/bf-ui";
@@ -76,7 +76,10 @@ function Panel({
   children: ReactNode;
   style?: CSSProperties;
 }) {
-  const Box = settled ? "section" : motion.section;
+  // Stays a motion element even once settled, but with NO entrance to stall —
+  // that keeps the frozen-rAF guarantee while still allowing hover, which is
+  // event-driven and can only fire when someone is actually there to hover.
+  const Box = motion.section;
   const anim = settled
     ? {}
     : {
@@ -87,6 +90,7 @@ function Panel({
   return (
     <Box
       {...anim}
+      {...hoverLift}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -176,7 +180,14 @@ function Row({
   // by then, so the library sees no new target and a stalled animation would just
   // stay stalled. A plain node has no driver to stall.
   if (settled) {
-    return <div className={champion ? "bf-champ-row" : undefined}>{children}</div>;
+    return champion ? (
+      // Light keeps moving across the winner's row for as long as the board is up.
+      <Sheen seconds={3.2} radius={12} tint="rgba(255,231,168,0.5)">
+        <div className="bf-champ-row">{children}</div>
+      </Sheen>
+    ) : (
+      <div>{children}</div>
+    );
   }
   return (
     <motion.div
