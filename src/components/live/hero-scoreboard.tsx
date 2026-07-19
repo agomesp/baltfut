@@ -1,4 +1,4 @@
-import { SlamOnChange } from "@/components/live/fx";
+import { Breathe, Parallax, SlamOnChange, usePointer3D } from "@/components/live/fx";
 import type { Match, MatchSub } from "@/lib/espn";
 import { matchShootout } from "@/lib/espn";
 import { SwitchingCrest } from "@/components/live/switching-crest";
@@ -87,20 +87,28 @@ export function HeroScoreboard({ match, pre = false, compact = false, subs = [],
   const scoreFont = compact ? "clamp(34px,4.5vw,56px)" : "clamp(46px,6.5vw,84px)";
   // If both teams map to the same craque color, one switches to its alternate.
   const craquePair = resolveCraquePair(match.home.abbreviation, match.away.abbreviation);
+  const p3 = usePointer3D();
 
   return (
     <div style={{ position: "relative", flex: "none", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(200,255,45,0.12)", background: "linear-gradient(180deg, rgba(200,255,45,0.04), transparent)", padding: compact ? "16px 18px 10px" : "22px 22px 12px" }}>
       <style>{"@keyframes heroTeamL{0%{opacity:0;transform:translateX(-46px)}100%{opacity:1;transform:translateX(0)}}@keyframes heroTeamR{0%{opacity:0;transform:translateX(46px)}100%{opacity:1;transform:translateX(0)}}.hero-tin-l{animation:heroTeamL .6s 1.25s ease-out both}.hero-tin-r{animation:heroTeamR .6s 1.25s ease-out both}"}</style>
       <SquadWall base={craquePair.home} side="home" delayBase={0} />
       <SquadWall base={craquePair.away} side="away" delayBase={0.6} />
-      <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(12px,2.2vw,24px)" }}>
+      {/* The whole crest/score row leans away from the pointer. Transform-only, so
+          the hero's fixed height is untouched; the tilt stays small because this
+          block sits inside an overflow:hidden card. */}
+      <Parallax p3={p3} depth={0.7} tilt={3} style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(12px,2.2vw,24px)" }}>
         <TeamBlock code={match.home.abbreviation} accent={homeAccent} crestSize={crestSize} enter="l" craque={craquePair.home} />
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, flex: "none" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: JB, fontSize: 11.5, fontWeight: 600, color: LIME, background: "rgba(200,255,45,0.12)", border: "1px solid rgba(200,255,45,0.38)", borderRadius: 999, padding: "4px 11px", whiteSpace: "nowrap" }}>
-            <BfPulse />
-            {matchClockLabel(match)}
-          </span>
+          {/* The live pill breathes — the one element whose whole job is saying
+              "this is happening right now". */}
+          <Breathe scale={1.05} seconds={2.6}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: JB, fontSize: 11.5, fontWeight: 600, color: LIME, background: "rgba(200,255,45,0.12)", border: "1px solid rgba(200,255,45,0.38)", borderRadius: 999, padding: "4px 11px", whiteSpace: "nowrap" }}>
+              <BfPulse />
+              {matchClockLabel(match)}
+            </span>
+          </Breathe>
           {pre ? (
             <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: "clamp(24px,3.5vw,40px)", color: "#fff", lineHeight: 0.9 }}>VS</div>
           ) : (
@@ -127,7 +135,7 @@ export function HeroScoreboard({ match, pre = false, compact = false, subs = [],
         </div>
 
         <TeamBlock code={match.away.abbreviation} accent={awayAccent} crestSize={crestSize} enter="r" craque={craquePair.away} />
-      </div>
+      </Parallax>
 
       {showTimeline ? (
         // Full section width so the event chips lay out across the whole row (fewer

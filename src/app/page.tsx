@@ -20,6 +20,7 @@ import { subscribeScoreboard } from "@/lib/scoreboard-source";
 import { showpieceThemeFor } from "@/lib/showpiece/from-match";
 import { teamAccent } from "@/components/live/bf-ui";
 import { MarqueeEmbers } from "@/components/marquee-embers";
+import { StompBeat } from "@/components/live/fx";
 import { ChampionsGate, ChampionsButtons, finishedWinner } from "@/components/champions/champions-gate";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
@@ -582,6 +583,15 @@ export default function Home() {
       {/* Marquee ambience: embers drifting up behind the content. Dropped while the
           ceremony is up — it covers the screen, so they'd only steal frames. */}
       {marqueeTheme && !champOpen ? <MarqueeEmbers metal={marqueeTheme.metal} /> : null}
+      {/* The crowd as light: each team's colour punching in the We Will Rock You
+          rhythm on its own side. Live tab only, and never under the ceremony —
+          that screen has its own choreography and the beat would fight it. */}
+      {view === "live" && liveSubTab === "partidas" && activeMatch && !champOpen ? (
+        <StompBeat
+          homeAccent={teamAccent(activeMatch.home.abbreviation)}
+          awayAccent={teamAccent(activeMatch.away.abbreviation)}
+        />
+      ) : null}
       {/* The ceremony gets its OWN boundary. The app-wide one in layout.tsx would
           replace the entire page with a reload card, and this screen opens by
           itself at the final whistle — the single worst moment to blank a live

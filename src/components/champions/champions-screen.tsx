@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
+import { motion, useReducedMotion, useTransform } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { SubRank } from "@/lib/ranking";
 import type { AccuracyRow, ChampionsBoard, HalfPointRow, VolumeRow } from "@/lib/champions/rankings";
-import { pointerBias } from "@/lib/champions/pointer";
+import { usePointer3D } from "@/components/live/fx";
 import { BRIC, SAIRA, JB, teamAccent, nameStyle } from "@/components/live/bf-ui";
 import { flagFileBase, teamNamePt } from "@/lib/team-names";
 import { ASSET_BASE } from "@/components/live/bf-ui";
@@ -111,37 +111,6 @@ function Panel({
       </div>
     </Box>
   );
-}
-
-/**
- * Pointer-driven 3D: everything on screen leans away from the cursor, nearer
- * layers further than far ones, so the board reads as depth rather than a flat
- * page.
- *
- * Motion values are written straight to the DOM by framer-motion, so tracking the
- * pointer never re-renders React — otherwise every mousemove would re-render all
- * four boards. No new dependency for this: the tilt packages on npm cost 71–165KB
- * for what `useSpring` already does, and framer-motion is here anyway for the
- * entrances.
- *
- * Strictly decorative — this only ever writes transforms, never opacity. A frozen
- * rAF (the occluded-tab case {@link Row} guards against) leaves the content
- * exactly where it was instead of hiding it.
- */
-function usePointer3D(enabled: boolean) {
-  const raw = { x: useMotionValue(0), y: useMotionValue(0) };
-  useEffect(() => {
-    if (!enabled) return;
-    const onMove = (e: PointerEvent) => {
-      const bias = pointerBias(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
-      raw.x.set(bias.x);
-      raw.y.set(bias.y);
-    };
-    window.addEventListener("pointermove", onMove, { passive: true });
-    return () => window.removeEventListener("pointermove", onMove);
-  }, [enabled, raw.x, raw.y]);
-  const cfg = { stiffness: 55, damping: 20, mass: 0.7 };
-  return { x: useSpring(raw.x, cfg), y: useSpring(raw.y, cfg) };
 }
 
 const SEATED = { opacity: 1, y: 0, scale: 1, rotateX: 0 } as const;
@@ -286,7 +255,7 @@ export function ChampionsScreen({
 
   // Depth layers: the plaque sits nearest the viewer and swings hardest, the
   // outer columns next, the middle column least — the same cue a camera gives.
-  const p3 = usePointer3D(!reduced);
+  const p3 = usePointer3D();
   const plaqueRotY = useTransform(p3.x, [-1, 1], [13, -13]);
   const plaqueRotX = useTransform(p3.y, [-1, 1], [-9, 9]);
   const plaqueX = useTransform(p3.x, [-1, 1], [-16, 16]);
