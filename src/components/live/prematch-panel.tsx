@@ -17,7 +17,7 @@ import { useNow } from "@/lib/use-now";
 import { isReservedName } from "@shared/name-claim";
 import { Countdown } from "@/components/countdown";
 import { motion } from "framer-motion";
-import { RollingNumber, IdleFloat, Parallax, usePointer3D } from "@/components/live/fx";
+import { RollingNumber, IdleFloat, Parallax, PopIn, usePointer3D } from "@/components/live/fx";
 import { userAccuracy } from "@/lib/champions/rankings";
 import { buildResultMap } from "@/lib/use-sub-ranks";
 import { RankingSubs } from "@/components/live/ranking-subs";
@@ -74,7 +74,7 @@ function KickoffClock({ startsAt }: { startsAt: string }) {
         return (
           <motion.span
             style={{ ...CLOCK_STYLE, display: "inline-block", transformOrigin: "center" }}
-            animate={urgent ? { scale: [1, 1.07, 1] } : { scale: 1 }}
+            animate={urgent ? { scale: [1, 1.07, 1], color: ["#fff", "#ffd76a", "#fff"] } : { scale: 1, color: "#fff" }}
             transition={urgent ? { duration: 1, repeat: Infinity, ease: "easeInOut" } : { duration: 0.25 }}
           >
             {parts.map((p, i) => (
@@ -319,7 +319,11 @@ function ChegandoFeed({ entries, pen = false, homeCode = "", awayCode = "" }: { 
         {rows.length === 0 ? (
           <div style={{ fontFamily: BRIC, fontSize: 12, color: "#6f8a78" }}>Nenhum palpite ainda — manda no chat!</div>
         ) : (
-          rows.map((r, i) => <ChegandoRow key={r.key} nick={r.nick} value={r.value} fresh={i === 0 && !r.changed} changed={r.changed} pen={pen} />)
+          rows.map((r, i) => (
+            <PopIn key={r.key} index={i}>
+              <ChegandoRow nick={r.nick} value={r.value} fresh={i === 0 && !r.changed} changed={r.changed} pen={pen} />
+            </PopIn>
+          ))
         )}
       </div>
     </div>

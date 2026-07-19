@@ -5,7 +5,7 @@ import { motion, useReducedMotion, useTransform } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { SubRank } from "@/lib/ranking";
 import type { AccuracyRow, ChampionsBoard, HalfPointRow, VolumeRow } from "@/lib/champions/rankings";
-import { AccuracyBadge, usePointer3D } from "@/components/live/fx";
+import { AccuracyBadge, hoverLift, Sheen, usePointer3D } from "@/components/live/fx";
 import { BRIC, SAIRA, JB, teamAccent, nameStyle } from "@/components/live/bf-ui";
 import { flagFileBase, teamNamePt } from "@/lib/team-names";
 import { ASSET_BASE } from "@/components/live/bf-ui";
@@ -76,7 +76,10 @@ function Panel({
   children: ReactNode;
   style?: CSSProperties;
 }) {
-  const Box = settled ? "section" : motion.section;
+  // Stays a motion element even once settled, but with NO entrance to stall —
+  // that keeps the frozen-rAF guarantee while still allowing hover, which is
+  // event-driven and can only fire when someone is actually there to hover.
+  const Box = motion.section;
   const anim = settled
     ? {}
     : {
@@ -87,6 +90,7 @@ function Panel({
   return (
     <Box
       {...anim}
+      {...hoverLift}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -110,6 +114,26 @@ function Panel({
         {children}
       </div>
     </Box>
+  );
+}
+
+/**
+ * Holds the winner's billing card. It stays in the layout the whole time so the
+ * plaque never shifts, but is invisible until the podium has actually named the
+ * champion — printing the name up here first gave the ending away before the
+ * reveal reached it.
+ */
+function ChampBilling({ shown, settled, children }: { shown: boolean; settled: boolean; children: ReactNode }) {
+  if (settled) return <div style={{ flex: "none" }}>{children}</div>;
+  return (
+    <motion.div
+      initial={false}
+      animate={shown ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.85 }}
+      transition={{ type: "spring", stiffness: 260, damping: 18 }}
+      style={{ flex: "none" }}
+    >
+      {children}
+    </motion.div>
   );
 }
 
@@ -176,7 +200,14 @@ function Row({
   // by then, so the library sees no new target and a stalled animation would just
   // stay stalled. A plain node has no driver to stall.
   if (settled) {
-    return <div className={champion ? "bf-champ-row" : undefined}>{children}</div>;
+    return champion ? (
+      // Light keeps moving across the winner's row for as long as the board is up.
+      <Sheen seconds={3.2} radius={12} tint="rgba(255,231,168,0.5)">
+        <div className="bf-champ-row">{children}</div>
+      </Sheen>
+    ) : (
+      <div>{children}</div>
+    );
   }
   return (
     <motion.div
@@ -223,6 +254,9 @@ export function ChampionsScreen({
 }: ChampionsScreenProps) {
   const reduced = useReducedMotion();
   const [stage, setStage] = useState(reduced ? 4 : 0);
+  // The winner's name must not exist anywhere on screen before the podium says
+  // it. This flips on the same beat the champion's row lands.
+  const [champNamed, setChampNamed] = useState(!!reduced);
   const firedRef = useRef(false);
   const accent = teamAccent(winnerCode);
   const winnerName = teamNamePt(winnerCode, winnerCode);
@@ -244,6 +278,13 @@ export function ChampionsScreen({
     ];
     return () => t.forEach(clearTimeout);
   }, [reduced]);
+
+  useEffect(() => {
+    if (reduced) return;
+    const at = T_PODIUM + Math.max(0, podium.length - 1) * ROW_STEP;
+    const id = setTimeout(() => setChampNamed(true), at);
+    return () => clearTimeout(id);
+  }, [reduced, podium.length]);
 
   // Confetti the moment the champion's row lands.
   useEffect(() => {
@@ -387,6 +428,7 @@ export function ChampionsScreen({
         {/* The human headline act, billed alongside the world champion — the sub
             who won the tournament is the thing this room actually cares about. */}
         {board.champion ? (
+          <ChampBilling shown={settled || champNamed} settled={settled}>
           <div
             style={{
               display: "flex",
@@ -418,6 +460,7 @@ export function ChampionsScreen({
               {fmt(board.champion.wins)} pontos
             </span>
           </div>
+          </ChampBilling>
         ) : null}
       </Reveal>
       </motion.div>

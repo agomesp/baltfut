@@ -276,6 +276,64 @@ export function Sheen({
   );
 }
 
+/** Lifts toward the viewer on hover. Spread onto any motion element. */
+export const hoverLift = {
+  whileHover: { y: -3, scale: 1.014 },
+  transition: { type: "spring" as const, stiffness: 420, damping: 26 },
+};
+
+/**
+ * A ring that punches outward from the middle of its parent when `trigger`
+ * changes — the visual thump of a goal. Needs a positioned parent; renders
+ * nothing until the first change, so it can't flash on mount.
+ */
+export function Shockwave({ trigger, colour, size = 150 }: { trigger: unknown; colour: string; size?: number }) {
+  const ok = useMotionOk();
+  const token = useChangeToken(trigger);
+  if (!ok || token === 0) return null;
+  return (
+    <motion.span
+      key={token}
+      aria-hidden
+      initial={{ opacity: 0.8, scale: 0.15 }}
+      animate={{ opacity: 0, scale: 1 }}
+      transition={{ duration: 0.95, ease: "easeOut" }}
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        width: size,
+        height: size,
+        marginLeft: -size / 2,
+        marginTop: -size / 2,
+        borderRadius: "50%",
+        border: `2px solid ${colour}`,
+        boxShadow: `0 0 26px ${colour}`,
+        pointerEvents: "none",
+      }}
+    />
+  );
+}
+
+/**
+ * Rows arriving in a list — springs up with a stagger by index. The delay is
+ * capped so a long feed doesn't leave the last row waiting seconds to appear.
+ */
+export function PopIn({ index = 0, children, style }: { index?: number; children: ReactNode; style?: CSSProperties }) {
+  const ok = useMotionOk();
+  if (!ok) return <div style={style}>{children}</div>;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay: Math.min(index, 8) * 0.05, type: "spring", stiffness: 340, damping: 26 }}
+      style={style}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 /** Presses in when tapped. Pure feedback on controls that already exist. */
 export const tapProps = {
   whileTap: { scale: 0.9 },

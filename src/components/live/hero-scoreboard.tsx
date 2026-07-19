@@ -1,4 +1,4 @@
-import { Breathe, Parallax, SlamOnChange, usePointer3D } from "@/components/live/fx";
+import { Breathe, Parallax, Shockwave, SlamOnChange, usePointer3D } from "@/components/live/fx";
 import type { Match, MatchSub } from "@/lib/espn";
 import { matchShootout } from "@/lib/espn";
 import { SwitchingCrest } from "@/components/live/switching-crest";
@@ -114,7 +114,9 @@ export function HeroScoreboard({ match, pre = false, compact = false, subs = [],
           ) : (
             // A goal is the loudest thing that happens all match; the digit that
             // changed slams in while the other holds still.
-            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 11 }}>
+              {/* The thump of a goal, punching out from between the numbers. */}
+              <Shockwave trigger={`${match.homeScore ?? 0}-${match.awayScore ?? 0}`} colour={LIME} size={170} />
               <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: scoreFont, lineHeight: 0.74, color: "#fff" }}>
                 <SlamOnChange trigger={match.homeScore ?? 0} scale={1.55}>{match.homeScore ?? 0}</SlamOnChange>
               </span>
