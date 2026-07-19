@@ -644,7 +644,12 @@ function ChampionsStyles() {
     el.textContent = `
 @keyframes bfPlaqueShine { 0% { background-position: -220% 0 } 100% { background-position: 220% 0 } }
 @keyframes bfTrophyBob { 0%,100% { transform: translateY(0) rotate(-6deg) } 50% { transform: translateY(-6px) rotate(6deg) } }
-@keyframes bfChampGlow { 0%,100% { opacity: 1 } 50% { opacity: .82 } }
+/* Pulses BRIGHTNESS, not opacity, and that is load-bearing: a running CSS
+   animation outranks an inline style, so an opacity keyframe here would override
+   the opacity:0 framer-motion holds the champion at during the reveal — the row
+   would sit there fully lit while the other nine were still hidden, spoiling the
+   one moment the whole screen is built around. Nothing else animates filter. */
+@keyframes bfChampGlow { 0%,100% { filter: brightness(1) } 50% { filter: brightness(1.14) } }
 .bf-plaque {
   background-image: linear-gradient(100deg, #b98a22 0%, #ffe9a8 18%, #ffd76a 32%, #b98a22 52%, #ffe9a8 72%, #d9a83a 100%);
   background-size: 220% 100%;
