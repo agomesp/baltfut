@@ -22,9 +22,14 @@ import { JB } from "@/components/live/bf-ui";
  * board off the same graded data the live ranking uses, and flips the screen on
  * the moment the final ends.
  *
- * Auto-opens only on the TRANSITION to finished — landing on an already-finished
- * tournament shouldn't trap you behind the overlay; the "ver ganhador" button is
- * the way back in.
+ * Once the final is over the ceremony IS the front page: it opens on the
+ * transition for anyone watching live, AND on a cold load for anyone arriving
+ * afterwards. It mounts fresh each time, so the whole reveal — podium climbing,
+ * confetti, boards landing — replays on every visit rather than only for whoever
+ * happened to be there at the whistle.
+ *
+ * "Ver partidas anteriores" dismisses it to the normal views and that sticks for
+ * the rest of the page load; "ver ganhador" brings it back.
  */
 
 /** Minimum palpites to qualify for the worst-accuracy board, so one unlucky
@@ -82,16 +87,15 @@ export function ChampionsGate({
   );
   const best = useMemo(() => bestAccuracyRanking(allEntries, byId, MIN_BEST, 5), [allEntries, byId]);
 
-  // Fire only when the final CROSSES into finished during this session.
-  const seenFinished = useRef<boolean | null>(null);
+  // Open as soon as the final is finished — both for the room watching it end and
+  // for someone loading the page hours later, who came to see who won rather than
+  // a fixture list. Exactly ONCE per page load: dismissing it has to stick, or the
+  // back button would be undone by the next data refresh.
+  const opened = useRef(false);
   useEffect(() => {
-    const done = realWinner != null;
-    if (seenFinished.current === null) {
-      seenFinished.current = done; // first observation — don't auto-open
-      return;
-    }
-    if (done && !seenFinished.current) onOpen();
-    seenFinished.current = done;
+    if (opened.current || realWinner == null) return;
+    opened.current = true;
+    onOpen();
   }, [realWinner, onOpen]);
 
   if (!open || !winner) return null;

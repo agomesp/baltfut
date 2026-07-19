@@ -16,6 +16,8 @@ import { useIsNarrow } from "@/lib/use-is-narrow";
 import { useNow } from "@/lib/use-now";
 import { isReservedName } from "@shared/name-claim";
 import { Countdown } from "@/components/countdown";
+import { motion } from "framer-motion";
+import { RollingNumber, IdleFloat } from "@/components/live/fx";
 import { RankingSubs } from "@/components/live/ranking-subs";
 import { IaVsVoce } from "@/components/live/ia-vs-voce";
 import { PromoSpotlight } from "@/components/live/promo-spotlight";
@@ -55,22 +57,40 @@ function pickLine(e: VoteEntry, homeCode: string, awayCode: string): string {
 }
 
 /** Big MM:SS / H:MM:SS countdown to kickoff with a lime colon accent. */
+const CLOCK_STYLE = { fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: "#fff", lineHeight: 0.78, letterSpacing: "0.02em" } as const;
+
 function KickoffClock({ startsAt }: { startsAt: string }) {
   return (
     <Countdown
       targetMs={Date.parse(startsAt)}
       render={(ms) => {
-        if (ms <= 0) return <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: "#fff", lineHeight: 0.78 }}>00:00</span>;
+        if (ms <= 0) return <span style={CLOCK_STYLE}>00:00</span>;
         const parts = formatCountdownLong(ms).split(":");
+        // Inside the last minute the clock breathes and the separator strobes —
+        // the point where a room watching a stream starts counting out loud.
+        const urgent = ms < 60_000;
         return (
-          <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: "#fff", lineHeight: 0.78, letterSpacing: "0.02em" }}>
+          <motion.span
+            style={{ ...CLOCK_STYLE, display: "inline-block", transformOrigin: "center" }}
+            animate={urgent ? { scale: [1, 1.07, 1] } : { scale: 1 }}
+            transition={urgent ? { duration: 1, repeat: Infinity, ease: "easeInOut" } : { duration: 0.25 }}
+          >
             {parts.map((p, i) => (
               <span key={i}>
-                {i > 0 ? <span style={{ color: LIME }}>:</span> : null}
-                {p}
+                {i > 0 ? (
+                  <motion.span
+                    style={{ color: LIME, display: "inline-block" }}
+                    animate={urgent ? { opacity: [1, 0.25, 1] } : { opacity: 1 }}
+                    transition={urgent ? { duration: 1, repeat: Infinity, ease: "easeInOut" } : { duration: 0.25 }}
+                  >
+                    :
+                  </motion.span>
+                ) : null}
+                {/* Only the digits that actually tick over move. */}
+                <RollingNumber value={p} />
               </span>
             ))}
-          </span>
+          </motion.span>
         );
       }}
     />
@@ -156,7 +176,8 @@ function PreHero({ match, groupByTeam, consensus }: { match: Match; groupByTeam:
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(12px,3vw,30px)" }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(18px,2.2vw,26px)", letterSpacing: "-0.02em", color: homeAccent, whiteSpace: "nowrap" }}>{match.home.abbreviation}</span>
-          <FlagCrest code={match.home.abbreviation} accent={homeAccent} size={50} />
+          {/* The two crests bob out of phase, so the hero never sits perfectly still. */}
+          <IdleFloat amount={4} seconds={5.2}><FlagCrest code={match.home.abbreviation} accent={homeAccent} size={50} /></IdleFloat>
         </div>
         <div style={{ flex: "none", textAlign: "center" }}>
           <div style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.2em", color: GOLD, marginBottom: 6 }}>COMEÇA EM</div>
@@ -168,7 +189,7 @@ function PreHero({ match, groupByTeam, consensus }: { match: Match; groupByTeam:
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(18px,2.2vw,26px)", letterSpacing: "-0.02em", color: awayAccent, whiteSpace: "nowrap" }}>{match.away.abbreviation}</span>
-          <FlagCrest code={match.away.abbreviation} accent={awayAccent} size={50} />
+          <IdleFloat amount={4} seconds={5.2} delay={1.3}><FlagCrest code={match.away.abbreviation} accent={awayAccent} size={50} /></IdleFloat>
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: 14 }}>

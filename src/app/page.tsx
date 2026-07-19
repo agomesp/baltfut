@@ -61,8 +61,23 @@ const ENTRIES_REFRESH_MS = 12_000;
 // for a real kickoff. Guarded by NODE_ENV so it's a no-op in the production build.
 function withMockLive(matches: Match[]): Match[] {
   if (process.env.NODE_ENV === "production") return matches;
-  if (typeof window === "undefined" || !new URLSearchParams(window.location.search).has("mocklive")) return matches;
-  const i = matches.findIndex((m) => m.state === "pre");
+  if (typeof window === "undefined") return matches;
+  const q = new URLSearchParams(window.location.search);
+  // `?ended` finishes the FINAL, which is how you meet the closing ceremony the
+  // way a late visitor does: land on the page and have it already be over.
+  if (q.has("ended")) {
+    const f = matches.findIndex((m) => m.stage === "final");
+    if (f < 0) return matches;
+    const done: Match = { ...matches[f], state: "post", isLive: false, statusDetail: "Encerrado", displayClock: null, homeScore: 2, awayScore: 1 };
+    return matches.map((x, k) => (k === f ? done : x));
+  }
+  // `?live` aims at the FINAL specifically — that's the tie the live view is
+  // dressed up for, and waiting for a real kickoff to look at it isn't an option.
+  // `?mocklive` keeps its older, broader meaning of "whatever is up next".
+  const wantsFinal = q.has("live");
+  if (!wantsFinal && !q.has("mocklive")) return matches;
+  const final = wantsFinal ? matches.findIndex((m) => m.stage === "final" && m.state === "pre") : -1;
+  const i = final >= 0 ? final : matches.findIndex((m) => m.state === "pre");
   if (i < 0) return matches;
   const kickoff = new Date(Date.now() - 2 * 60_000).toISOString(); // 2' ago → live + palpites still open
   const mock: Match = { ...matches[i], state: "in", isLive: true, statusDetail: "1º tempo", displayClock: "2'", startsAt: kickoff, homeScore: 0, awayScore: 0 };
