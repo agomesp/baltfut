@@ -1,5 +1,7 @@
+import { motion } from "framer-motion";
 import type { Consensus } from "@/lib/consensus";
 import { JB, SAIRA, SectionLabel } from "@/components/live/bf-ui";
+import { RollingNumber } from "@/components/live/fx";
 
 /** "A Comunidade Palpita" — home/draw/away split + segmented bar. */
 export function CommunityBar({
@@ -29,9 +31,24 @@ export function CommunityBar({
   const gap = bare ? 5 : 7;
   const cell = (pct: number, lbl: string, color: string) => (
     <span style={{ color }}>
-      <b style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: pctFont }}>{pct}%</b>{" "}
+      {/* The split shifts every time a palpite lands — roll the digit rather
+          than swapping it, so the movement itself reads as "someone just voted". */}
+      <b style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: pctFont }}>
+        <RollingNumber value={pct} />%
+      </b>{" "}
       <span style={{ fontFamily: JB, fontSize: 8.5, color: "#9bb6a6" }}>{lbl}</span>
     </span>
+  );
+  // Segments glide to their new share instead of snapping. Width (not scaleX):
+  // three segments share one flex row, and scaling would distort the colours'
+  // edges against each other.
+  const seg = (pct: number, background: string) => (
+    <motion.div
+      animate={{ width: `${pct}%` }}
+      initial={false}
+      transition={{ type: "spring", stiffness: 120, damping: 22, mass: 0.8 }}
+      style={{ background }}
+    />
   );
   const bars =
     total === 0 ? (
@@ -44,9 +61,9 @@ export function CommunityBar({
           {cell(awayPct, awayCode, awayAccent)}
         </div>
         <div style={{ display: "flex", height: barH, borderRadius: 5, overflow: "hidden", gap: 2 }}>
-          <div style={{ width: `${homePct}%`, background: homeAccent }} />
-          <div style={{ width: `${drawPct}%`, background: "#3a4a40" }} />
-          <div style={{ width: `${awayPct}%`, background: awayAccent }} />
+          {seg(homePct, homeAccent)}
+          {seg(drawPct, "#3a4a40")}
+          {seg(awayPct, awayAccent)}
         </div>
       </>
     );

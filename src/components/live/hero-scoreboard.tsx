@@ -1,3 +1,4 @@
+import { SlamOnChange } from "@/components/live/fx";
 import type { Match, MatchSub } from "@/lib/espn";
 import { matchShootout } from "@/lib/espn";
 import { SwitchingCrest } from "@/components/live/switching-crest";
@@ -103,10 +104,16 @@ export function HeroScoreboard({ match, pre = false, compact = false, subs = [],
           {pre ? (
             <div style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: "clamp(24px,3.5vw,40px)", color: "#fff", lineHeight: 0.9 }}>VS</div>
           ) : (
+            // A goal is the loudest thing that happens all match; the digit that
+            // changed slams in while the other holds still.
             <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-              <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: scoreFont, lineHeight: 0.74, color: "#fff" }}>{match.homeScore ?? 0}</span>
+              <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: scoreFont, lineHeight: 0.74, color: "#fff" }}>
+                <SlamOnChange trigger={match.homeScore ?? 0} scale={1.55}>{match.homeScore ?? 0}</SlamOnChange>
+              </span>
               <span style={{ width: 22, height: 5, borderRadius: 4, background: LIME, boxShadow: "0 0 14px rgba(200,255,45,0.5)", flex: "0 0 auto" }} />
-              <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: scoreFont, lineHeight: 0.74, color: "#fff" }}>{match.awayScore ?? 0}</span>
+              <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: scoreFont, lineHeight: 0.74, color: "#fff" }}>
+                <SlamOnChange trigger={match.awayScore ?? 0} scale={1.55}>{match.awayScore ?? 0}</SlamOnChange>
+              </span>
             </div>
           )}
           {(() => {

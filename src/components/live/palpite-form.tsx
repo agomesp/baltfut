@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
+import { motion } from "framer-motion";
+import { RollingNumber, Sheen, tapProps } from "@/components/live/fx";
 import type { Match, Side } from "@/lib/espn";
 import { useNow } from "@/lib/use-now";
 import {
@@ -211,9 +213,21 @@ export function Stepper({ label, accent, value, onChange, disabled = false, read
     <div style={{ textAlign: "center" }}>
       <div style={{ fontFamily: BRIC, fontWeight: 800, fontSize: 14, color: accent, marginBottom: 6 }}>{label}</div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-        {readOnly ? null : <button type="button" disabled={disabled} aria-label={`Menos ${label}`} style={btn} onClick={() => onChange(clampScore(value - 1))}>−</button>}
-        <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: disabled && !readOnly ? "#6f8a78" : "#fff", width: 42, textAlign: "center", lineHeight: 0.8 }}>{value}</span>
-        {readOnly ? null : <button type="button" disabled={disabled} aria-label={`Mais ${label}`} style={btn} onClick={() => onChange(clampScore(value + 1))}>+</button>}
+        {readOnly ? null : (
+          <motion.button type="button" disabled={disabled} aria-label={`Menos ${label}`} style={btn} onClick={() => onChange(clampScore(value - 1))} {...(disabled ? {} : tapProps)}>
+            −
+          </motion.button>
+        )}
+        {/* The score rolls as you dial it in — the one control the whole pre-match
+            screen is built around, so it should feel like a machine. */}
+        <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 36, color: disabled && !readOnly ? "#6f8a78" : "#fff", width: 42, textAlign: "center", lineHeight: 0.8 }}>
+          <RollingNumber value={value} style={{ justifyContent: "center" }} />
+        </span>
+        {readOnly ? null : (
+          <motion.button type="button" disabled={disabled} aria-label={`Mais ${label}`} style={btn} onClick={() => onChange(clampScore(value + 1))} {...(disabled ? {} : tapProps)}>
+            +
+          </motion.button>
+        )}
       </div>
     </div>
   );
@@ -480,9 +494,13 @@ export function PalpiteForm({ match, entries, closesAt, released = true, hideCou
         <span style={{ fontFamily: SAIRA, fontWeight: 500, fontSize: 22, color: "#42565b", paddingTop: 22 }}>×</span>
         <Stepper label={awayAccentCode} accent="var(--bf-text)" value={showAway} onChange={setAway} disabled={alreadySent} readOnly={alreadySent} />
       </div>
+      {/* Light sweeps the button only while it can actually be pressed — once the
+          palpite is in, the button goes quiet rather than nagging. */}
+      <Sheen seconds={2.8} radius={10} tint={btnDisabled ? "transparent" : "rgba(255,255,255,0.5)"}>
       <button type="button" onClick={onSubmit} disabled={btnDisabled} style={{ ...submitBtnStyle, ...(alreadySent ? { background: "rgba(255,255,255,0.05)", color: "#7d9a86", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "none", cursor: "not-allowed" } : blocked ? { opacity: 0.4, cursor: "not-allowed", boxShadow: "none" } : { opacity: submitting ? 0.7 : 1 }) }}>
         {submitting ? "ENVIANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : "ENVIAR PALPITE →"}
       </button>
+      </Sheen>
       <div style={{ fontFamily: JB, fontSize: 9, color: blocked ? "#caa94a" : "#6f8a78", textAlign: "center", letterSpacing: "0.04em" }}>
         {alreadySent
           ? "Você já palpitou esta partida · toque em Trocar para usar outro nome"
