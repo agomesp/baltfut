@@ -17,7 +17,7 @@ import { useNow } from "@/lib/use-now";
 import { isReservedName } from "@shared/name-claim";
 import { Countdown } from "@/components/countdown";
 import { motion } from "framer-motion";
-import { RollingNumber, IdleFloat } from "@/components/live/fx";
+import { RollingNumber, IdleFloat, Parallax, usePointer3D } from "@/components/live/fx";
 import { RankingSubs } from "@/components/live/ranking-subs";
 import { IaVsVoce } from "@/components/live/ia-vs-voce";
 import { PromoSpotlight } from "@/components/live/promo-spotlight";
@@ -171,27 +171,29 @@ function HistoryColumn({ code, accent, games }: { code: string; accent: string; 
 function PreHero({ match, groupByTeam, consensus }: { match: Match; groupByTeam: Record<string, string>; consensus: Consensus }) {
   const homeAccent = teamAccent(match.home.abbreviation);
   const awayAccent = teamAccent(match.away.abbreviation);
+  const p3 = usePointer3D();
   return (
     <div style={{ position: "relative", height: "100%", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,179,71,0.16)", background: "linear-gradient(180deg, rgba(255,179,71,0.06), transparent)", padding: "14px 22px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(12px,3vw,30px)" }}>
+      <Parallax p3={p3} depth={0.55} tilt={3.5} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "clamp(12px,3vw,30px)" }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(18px,2.2vw,26px)", letterSpacing: "-0.02em", color: homeAccent, whiteSpace: "nowrap" }}>{match.home.abbreviation}</span>
           {/* The two crests bob out of phase, so the hero never sits perfectly still. */}
           <IdleFloat amount={4} seconds={5.2}><FlagCrest code={match.home.abbreviation} accent={homeAccent} size={50} /></IdleFloat>
         </div>
-        <div style={{ flex: "none", textAlign: "center" }}>
+        {/* Countdown sits nearest the viewer, so it swings hardest. */}
+        <Parallax p3={p3} depth={1.5} style={{ flex: "none", textAlign: "center" }}>
           <div style={{ fontFamily: JB, fontSize: 9, letterSpacing: "0.2em", color: GOLD, marginBottom: 6 }}>COMEÇA EM</div>
           <KickoffClock startsAt={match.startsAt} />
           {/* Exact kickoff time leads the meta line beneath the countdown. */}
           <div style={{ fontFamily: JB, fontSize: 9, color: "#6f8a78", marginTop: 9, letterSpacing: "0.05em" }}>
             <span style={{ color: "#8fae99" }}>{fmtTime(match.startsAt)}</span> · {groupVenue(match, groupByTeam) || "COPA DO MUNDO"}
           </div>
-        </div>
+        </Parallax>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(18px,2.2vw,26px)", letterSpacing: "-0.02em", color: awayAccent, whiteSpace: "nowrap" }}>{match.away.abbreviation}</span>
           <IdleFloat amount={4} seconds={5.2} delay={1.3}><FlagCrest code={match.away.abbreviation} accent={awayAccent} size={50} /></IdleFloat>
         </div>
-      </div>
+      </Parallax>
       <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: 14 }}>
         {/* The palpite deadline is folded into the open-palpites pill itself. */}
         <div style={{ display: "flex", justifyContent: "center" }}>

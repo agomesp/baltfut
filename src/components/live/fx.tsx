@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+  type MotionValue,
+} from "framer-motion";
+import { pointerBias } from "@/lib/champions/pointer";
 
 /**
  * Motion primitives for the final.
@@ -272,3 +281,199 @@ export const tapProps = {
   whileHover: { scale: 1.06 },
   transition: { type: "spring" as const, stiffness: 600, damping: 20 },
 };
+
+/** Swells and settles, forever — a card that looks like it's alive rather than
+ *  printed. Transform/opacity only. */
+export function Breathe({
+  children,
+  scale = 1.012,
+  seconds = 5,
+  delay = 0,
+  style,
+}: {
+  children: ReactNode;
+  scale?: number;
+  seconds?: number;
+  delay?: number;
+  style?: CSSProperties;
+}) {
+  const ok = useMotionOk();
+  if (!ok) return <div style={style}>{children}</div>;
+  return (
+    <motion.div
+      animate={{ scale: [1, scale, 1] }}
+      transition={{ duration: seconds, delay, repeat: Infinity, ease: "easeInOut" }}
+      style={{ willChange: "transform", ...style }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pointer-driven 3D
+// ---------------------------------------------------------------------------
+
+/**
+ * Pointer position → a springy -1..1 bias per axis, for leaning the page away
+ * from the cursor.
+ *
+ * Motion values are written straight to the DOM, so tracking the pointer never
+ * re-renders React — otherwise every mousemove would re-render the whole
+ * dashboard. Returns nulls when motion isn't safe, so callers can skip wiring.
+ */
+export function usePointer3D(): { x: MotionValue<number>; y: MotionValue<number>; ok: boolean } {
+  const ok = useMotionOk();
+  const rawX = useMotionValue(0);
+  const rawY = useMotionValue(0);
+  useEffect(() => {
+    if (!ok) {
+      rawX.set(0);
+      rawY.set(0);
+      return;
+    }
+    const onMove = (e: PointerEvent) => {
+      const b = pointerBias(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
+      rawX.set(b.x);
+      rawY.set(b.y);
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onMove);
+  }, [ok, rawX, rawY]);
+  const cfg = { stiffness: 55, damping: 20, mass: 0.7 };
+  return { x: useSpring(rawX, cfg), y: useSpring(rawY, cfg), ok };
+}
+
+/**
+ * Leans its children away from the cursor. `depth` scales the whole effect, so
+ * nearer layers can be given a bigger number and the page reads as having
+ * actual depth rather than everything sliding together.
+ *
+ * Transform-only and layout-neutral: nothing here changes a measured box, so a
+ * tilted panel can't push the one-screen dashboard into scrolling.
+ */
+export function Parallax({
+  p3,
+  depth = 1,
+  tilt = 0,
+  children,
+  style,
+}: {
+  p3: { x: MotionValue<number>; y: MotionValue<number>; ok: boolean };
+  depth?: number;
+  /** Degrees of 3D rotation at full deflection. 0 = drift only. */
+  tilt?: number;
+  children: ReactNode;
+  style?: CSSProperties;
+}) {
+  const dx = useTransform(p3.x, [-1, 1], [-7 * depth, 7 * depth]);
+  const dy = useTransform(p3.y, [-1, 1], [-5 * depth, 5 * depth]);
+  const ry = useTransform(p3.x, [-1, 1], [tilt, -tilt]);
+  const rx = useTransform(p3.y, [-1, 1], [-tilt, tilt]);
+  if (!p3.ok) return <div style={style}>{children}</div>;
+  return (
+    <motion.div
+      style={{
+        x: dx,
+        y: dy,
+        rotateX: tilt ? rx : undefined,
+        rotateY: tilt ? ry : undefined,
+        transformPerspective: tilt ? 1200 : undefined,
+        willChange: "transform",
+        ...style,
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The stomp
+// ---------------------------------------------------------------------------
+
+/** "We Will Rock You" is 81 BPM in 4/4 — one bar is stomp, stomp, clap, rest. */
+const BPM = 81;
+export const BAR_SECONDS = (60 / BPM) * 4;
+/** Beat positions within the bar, as a fraction: stomps on 1 and 2, clap on 3. */
+export const STOMP_1 = 0;
+export const STOMP_2 = 0.25;
+export const CLAP = 0.5;
+
+/**
+ * Turn hit positions into a keyframe track that punches instead of pulsing: the
+ * value sits low, jumps on the beat (over ~35ms, which reads as percussive), then
+ * decays. Ramping into the peak instead would feel like a sine wave, not a stomp.
+ */
+export function beatTrack(hits: number[], base: number, peak: number) {
+  const times: number[] = [];
+  const values: number[] = [];
+  for (const h of hits) {
+    if (h > 0.012) {
+      times.push(h - 0.012);
+      values.push(base);
+    }
+    times.push(h);
+    values.push(peak);
+    times.push(Math.min(0.999, h + 0.15));
+    values.push(base);
+  }
+  if (times[0] > 0) {
+    times.unshift(0);
+    values.unshift(base);
+  }
+  times.push(1);
+  values.push(base);
+  return { times, values };
+}
+
+/**
+ * The crowd, rendered as light: a slab of each team's colour on its own side of
+ * the screen, punching in the We Will Rock You rhythm — left on the first stomp,
+ * right on the second, both together on the clap, then a bar's rest.
+ *
+ * Cost is two elements animating OPACITY only, which the compositor handles
+ * without repainting anything, and the whole thing unmounts when the tab is
+ * hidden — so the streamer's occluded window pays nothing for it.
+ */
+export function StompBeat({
+  homeAccent,
+  awayAccent,
+  intensity = 1,
+}: {
+  homeAccent: string;
+  awayAccent: string;
+  /** 0 disables; 1 is the tuned default. */
+  intensity?: number;
+}) {
+  const ok = useMotionOk();
+  if (!ok || intensity <= 0) return null;
+  const base = 0.05 * intensity;
+  const peak = 0.42 * intensity;
+  const left = beatTrack([STOMP_1, CLAP], base, peak);
+  const right = beatTrack([STOMP_2, CLAP], base, peak);
+  const side = (accent: string, from: "left" | "right", track: { times: number[]; values: number[] }) => (
+    <motion.div
+      style={{
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        [from]: 0,
+        width: "30vw",
+        background: `linear-gradient(${from === "left" ? 90 : 270}deg, ${accent} 0%, transparent 72%)`,
+        willChange: "opacity",
+      }}
+      // Explicit resting opacity, so a frame that never arrives leaves a faint
+      // wash rather than a full-strength slab of colour across the screen.
+      initial={{ opacity: base }}
+      animate={{ opacity: track.values }}
+      transition={{ duration: BAR_SECONDS, times: track.times, repeat: Infinity, ease: "linear" }}
+    />
+  );
+  return (
+    <div aria-hidden style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}>
+      {side(homeAccent, "left", left)}
+      {side(awayAccent, "right", right)}
+    </div>
+  );
+}
