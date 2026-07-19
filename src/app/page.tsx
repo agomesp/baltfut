@@ -21,6 +21,7 @@ import { showpieceThemeFor } from "@/lib/showpiece/from-match";
 import { teamAccent } from "@/components/live/bf-ui";
 import { MarqueeEmbers } from "@/components/marquee-embers";
 import { ChampionsGate, ChampionsButtons, finishedWinner } from "@/components/champions/champions-gate";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -566,19 +567,26 @@ export default function Home() {
       {/* Marquee ambience: embers drifting up behind the content. Dropped while the
           ceremony is up — it covers the screen, so they'd only steal frames. */}
       {marqueeTheme && !champOpen ? <MarqueeEmbers metal={marqueeTheme.metal} /> : null}
-      <ChampionsGate
-        matches={matches}
-        allEntries={allEntries}
-        matchResults={matchResults}
-        brackets={brackets}
-        simulatedWinner={simWinner}
-        open={champOpen}
-        onOpen={openChampions}
-        onClose={() => {
-          setChampOpen(false);
-          setSimWinner(null);
-        }}
-      />
+      {/* The ceremony gets its OWN boundary. The app-wide one in layout.tsx would
+          replace the entire page with a reload card, and this screen opens by
+          itself at the final whistle — the single worst moment to blank a live
+          broadcast (it has happened before). Failing here costs the ceremony and
+          leaves the match on screen. */}
+      <ErrorBoundary fallback={<></>}>
+        <ChampionsGate
+          matches={matches}
+          allEntries={allEntries}
+          matchResults={matchResults}
+          brackets={brackets}
+          simulatedWinner={simWinner}
+          open={champOpen}
+          onOpen={openChampions}
+          onClose={() => {
+            setChampOpen(false);
+            setSimWinner(null);
+          }}
+        />
+      </ErrorBoundary>
       {/* The live screen mounts its own compact masthead (brand + notice) inline
           next to the match rail, so the global header is suppressed there to
           reclaim vertical height. Every other tab keeps the full header. */}

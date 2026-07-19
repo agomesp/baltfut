@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Match } from "@/lib/espn";
 import { matchShootout } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
@@ -139,7 +139,22 @@ export function ChampionsButtons({
   onSimulate: (winner: string) => void;
 }) {
   const finalMatch = useMemo(() => matches.find((m) => m.stage === "final") ?? null, [matches]);
-  const isDev = process.env.NODE_ENV === "development";
+
+  // The "simulate the final" trigger is hidden behind `?simfinal` so it isn't
+  // sitting in the masthead during normal local work — add the param to the URL to
+  // bring it back when changing the ceremony. Same idea as `?mocklive` in page.tsx.
+  // Read in an effect rather than during render, so the prerendered markup and the
+  // hydrated client agree on the first paint.
+  //
+  // The NODE_ENV half is compared INLINE in the JSX below rather than folded in
+  // here: the bundler substitutes it at build time, so an inline comparison makes
+  // the whole branch statically dead and the button vanishes from the production
+  // bundle. Behind a state variable it stays false at runtime but the markup ships.
+  const [simfinalParam, setSimfinalParam] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSimfinalParam(new URLSearchParams(window.location.search).has("simfinal"));
+  }, []);
 
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
@@ -148,7 +163,7 @@ export function ChampionsButtons({
           🏆 VER GANHADOR
         </button>
       ) : null}
-      {isDev ? (
+      {process.env.NODE_ENV === "development" && simfinalParam ? (
         <button
           type="button"
           title="Dev: simula o fim da final com um campeão aleatório"
