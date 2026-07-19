@@ -20,6 +20,7 @@ import { subscribeScoreboard } from "@/lib/scoreboard-source";
 import { showpieceThemeFor } from "@/lib/showpiece/from-match";
 import { teamAccent } from "@/components/live/bf-ui";
 import { MarqueeEmbers } from "@/components/marquee-embers";
+import { ChampionsGate, ChampionsButtons, finishedWinner } from "@/components/champions/champions-gate";
 import { subscribeHeartbeat } from "@/lib/heartbeat";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -322,6 +323,13 @@ export default function Home() {
   const activeMatch = chips.find((c) => c.match.id === activeId)?.match ?? null;
   const prevActive = useRef<{ id?: string; state?: string }>({});
 
+  // Closing ceremony: opens itself the moment the final ends, and stays reachable
+  // afterwards. `simWinner` is the dev-only "pretend it just ended" path.
+  const [champOpen, setChampOpen] = useState(false);
+  const [simWinner, setSimWinner] = useState<string | null>(null);
+  const finalDone =
+    simWinner != null || finishedWinner(matches.find((m) => m.stage === "final") ?? null) != null;
+
   // Marquee takeover: while the live tab is showing a final / 3rd-place tie, flag
   // it on <html> so globals.css retunes the shared tokens (whole-app palette), and
   // paint the page background in the TWO TEAMS' colours — each bleeding in from its
@@ -545,8 +553,22 @@ export default function Home() {
 
   return (
     <>
-      {/* Marquee ambience: embers drifting up behind the content. */}
-      {marqueeTheme ? <MarqueeEmbers metal={marqueeTheme.metal} /> : null}
+      {/* Marquee ambience: embers drifting up behind the content. Dropped while the
+          ceremony is up — it covers the screen, so they'd only steal frames. */}
+      {marqueeTheme && !champOpen ? <MarqueeEmbers metal={marqueeTheme.metal} /> : null}
+      <ChampionsGate
+        matches={matches}
+        allEntries={allEntries}
+        matchResults={matchResults}
+        brackets={brackets}
+        simulatedWinner={simWinner}
+        open={champOpen}
+        onOpen={() => setChampOpen(true)}
+        onClose={() => {
+          setChampOpen(false);
+          setSimWinner(null);
+        }}
+      />
       {/* The live screen mounts its own compact masthead (brand + notice) inline
           next to the match rail, so the global header is suppressed there to
           reclaim vertical height. Every other tab keeps the full header. */}
@@ -587,6 +609,17 @@ export default function Home() {
                 releasedIds={releasedIds}
                 penOverride={(activeId && penOverrides[activeId]) || null}
                 palpiteOverrides={palpiteOverrides}
+                topSlot={
+                  <ChampionsButtons
+                    matches={matches}
+                    canOpen={finalDone}
+                    onOpen={() => setChampOpen(true)}
+                    onSimulate={(w) => {
+                      setSimWinner(w);
+                      setChampOpen(true);
+                    }}
+                  />
+                }
               />
             ) : (
               <BracketPalpiteView matches={matches} brackets={brackets} onSaved={loadAllEntries} />

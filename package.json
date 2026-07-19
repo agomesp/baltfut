@@ -16,8 +16,11 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@supabase/supabase-js": "^2.108.2",
+    "@types/canvas-confetti": "^1.9.0",
+    "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "framer-motion": "^12.42.2",
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
     "qrcode.react": "^4.2.0",
