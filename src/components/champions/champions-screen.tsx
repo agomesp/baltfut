@@ -117,6 +117,26 @@ function Panel({
   );
 }
 
+/**
+ * Holds the winner's billing card. It stays in the layout the whole time so the
+ * plaque never shifts, but is invisible until the podium has actually named the
+ * champion — printing the name up here first gave the ending away before the
+ * reveal reached it.
+ */
+function ChampBilling({ shown, settled, children }: { shown: boolean; settled: boolean; children: ReactNode }) {
+  if (settled) return <div style={{ flex: "none" }}>{children}</div>;
+  return (
+    <motion.div
+      initial={false}
+      animate={shown ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.85 }}
+      transition={{ type: "spring", stiffness: 260, damping: 18 }}
+      style={{ flex: "none" }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 const SEATED = { opacity: 1, y: 0, scale: 1, rotateX: 0 } as const;
 
 /** Animates in, but drops to a plain node once the ceremony's clock is up — see
@@ -234,6 +254,9 @@ export function ChampionsScreen({
 }: ChampionsScreenProps) {
   const reduced = useReducedMotion();
   const [stage, setStage] = useState(reduced ? 4 : 0);
+  // The winner's name must not exist anywhere on screen before the podium says
+  // it. This flips on the same beat the champion's row lands.
+  const [champNamed, setChampNamed] = useState(!!reduced);
   const firedRef = useRef(false);
   const accent = teamAccent(winnerCode);
   const winnerName = teamNamePt(winnerCode, winnerCode);
@@ -255,6 +278,13 @@ export function ChampionsScreen({
     ];
     return () => t.forEach(clearTimeout);
   }, [reduced]);
+
+  useEffect(() => {
+    if (reduced) return;
+    const at = T_PODIUM + Math.max(0, podium.length - 1) * ROW_STEP;
+    const id = setTimeout(() => setChampNamed(true), at);
+    return () => clearTimeout(id);
+  }, [reduced, podium.length]);
 
   // Confetti the moment the champion's row lands.
   useEffect(() => {
@@ -398,6 +428,7 @@ export function ChampionsScreen({
         {/* The human headline act, billed alongside the world champion — the sub
             who won the tournament is the thing this room actually cares about. */}
         {board.champion ? (
+          <ChampBilling shown={settled || champNamed} settled={settled}>
           <div
             style={{
               display: "flex",
@@ -429,6 +460,7 @@ export function ChampionsScreen({
               {fmt(board.champion.wins)} pontos
             </span>
           </div>
+          </ChampBilling>
         ) : null}
       </Reveal>
       </motion.div>
