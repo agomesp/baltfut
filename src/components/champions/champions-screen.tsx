@@ -5,7 +5,7 @@ import { motion, useReducedMotion, useTransform } from "framer-motion";
 import confetti from "canvas-confetti";
 import type { SubRank } from "@/lib/ranking";
 import type { AccuracyRow, ChampionsBoard, HalfPointRow, VolumeRow } from "@/lib/champions/rankings";
-import { usePointer3D } from "@/components/live/fx";
+import { AccuracyBadge, usePointer3D } from "@/components/live/fx";
 import { BRIC, SAIRA, JB, teamAccent, nameStyle } from "@/components/live/bf-ui";
 import { flagFileBase, teamNamePt } from "@/lib/team-names";
 import { ASSET_BASE } from "@/components/live/bf-ui";
@@ -202,6 +202,8 @@ export interface ChampionsScreenProps {
   volume: VolumeRow[];
   accuracy: AccuracyRow[];
   best: AccuracyRow[];
+  /** The viewer's own hit rate, or null if they never claimed a nickname. */
+  mine: AccuracyRow | null;
   minPalpites: number;
   minBest: number;
   onBack: () => void;
@@ -214,6 +216,7 @@ export function ChampionsScreen({
   volume,
   accuracy,
   best,
+  mine,
   minPalpites,
   minBest,
   onBack,
@@ -361,6 +364,9 @@ export function ChampionsScreen({
         transition={{ type: "spring", stiffness: 120, damping: 14, delay: 0.1 }}
         style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 14, transformPerspective: 1000 }}
       >
+        {/* The viewer's own season, billed opposite the champion. */}
+        <AccuracyBadge row={mine} accent={GOLD} align="start" style={{ padding: "9px 16px", borderRadius: 14 }} />
+
         <div className="bf-plaque" style={{ display: "flex", alignItems: "center", gap: 18, padding: "12px 34px", borderRadius: 16 }}>
           <span className="bf-trophy" style={{ fontSize: 40, lineHeight: 1 }}>🏆</span>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>

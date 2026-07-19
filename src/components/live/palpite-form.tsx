@@ -2,7 +2,8 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { motion } from "framer-motion";
-import { RollingNumber, Sheen, tapProps } from "@/components/live/fx";
+import { AccuracyBadge, RollingNumber, Sheen, tapProps } from "@/components/live/fx";
+import type { AccuracyRow } from "@/lib/champions/rankings";
 import type { Match, Side } from "@/lib/espn";
 import { useNow } from "@/lib/use-now";
 import {
@@ -371,6 +372,10 @@ export interface PalpiteFormProps {
   closesAt: number;
   /** False when the match is beyond the current+next kickoff-group window (locked). */
   released?: boolean;
+  /** The viewer's own hit rate, shown beside the send button. Null (the default)
+   *  when nobody has claimed a nickname on this browser — a visitor with no
+   *  history shouldn't be shown a hollow 0%. */
+  accuracy?: AccuracyRow | null;
   /** Hide the "Fecha em …" countdown (the pre-match hero shows it beside the pill). */
   hideCountdown?: boolean;
   onVoted: () => void;
@@ -378,7 +383,7 @@ export interface PalpiteFormProps {
 }
 
 /** Full single-match pre-match form: name + two steppers + ENVIAR. */
-export function PalpiteForm({ match, entries, closesAt, released = true, hideCountdown = false, onVoted, transport = supabaseCastVote }: PalpiteFormProps) {
+export function PalpiteForm({ match, entries, closesAt, released = true, hideCountdown = false, accuracy = null, onVoted, transport = supabaseCastVote }: PalpiteFormProps) {
   const { name, setName, locked, confirm, unlock } = useNameLock();
   const [home, setHome] = useState(0);
   const [away, setAway] = useState(0);
@@ -496,11 +501,16 @@ export function PalpiteForm({ match, entries, closesAt, released = true, hideCou
       </div>
       {/* Light sweeps the button only while it can actually be pressed — once the
           palpite is in, the button goes quiet rather than nagging. */}
-      <Sheen seconds={2.8} radius={10} tint={btnDisabled ? "transparent" : "rgba(255,255,255,0.5)"}>
+      {/* Send button, with the viewer's own hit rate alongside it — a running
+          scoreline for the person about to add to it. */}
+      <div style={{ display: "flex", alignItems: "stretch", gap: 9 }}>
+      <Sheen seconds={2.8} radius={10} tint={btnDisabled ? "transparent" : "rgba(255,255,255,0.5)"} style={{ flex: 1, minWidth: 0 }}>
       <button type="button" onClick={onSubmit} disabled={btnDisabled} style={{ ...submitBtnStyle, ...(alreadySent ? { background: "rgba(255,255,255,0.05)", color: "#7d9a86", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "none", cursor: "not-allowed" } : blocked ? { opacity: 0.4, cursor: "not-allowed", boxShadow: "none" } : { opacity: submitting ? 0.7 : 1 }) }}>
         {submitting ? "ENVIANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : "ENVIAR PALPITE →"}
       </button>
       </Sheen>
+      <AccuracyBadge row={accuracy} accent="var(--bf-lime)" />
+      </div>
       <div style={{ fontFamily: JB, fontSize: 9, color: blocked ? "#caa94a" : "#6f8a78", textAlign: "center", letterSpacing: "0.04em" }}>
         {alreadySent
           ? "Você já palpitou esta partida · toque em Trocar para usar outro nome"

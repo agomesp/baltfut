@@ -12,8 +12,10 @@ import {
   championsBoard,
   halfPointRanking,
   mostPalpitesRanking,
+  userAccuracy,
   worstAccuracyRanking,
 } from "@/lib/champions/rankings";
+import { useMyName } from "@/lib/use-my-name";
 import { ChampionsScreen } from "@/components/champions/champions-screen";
 import { JB } from "@/components/live/bf-ui";
 
@@ -86,6 +88,10 @@ export function ChampionsGate({
     [allEntries, byId],
   );
   const best = useMemo(() => bestAccuracyRanking(allEntries, byId, MIN_BEST, 5), [allEntries, byId]);
+  // The viewer's own hit rate, billed on the other side of the champion. Null
+  // without a claimed nickname on this browser — a passer-by gets no badge.
+  const myName = useMyName();
+  const mine = useMemo(() => userAccuracy(allEntries, byId, myName), [allEntries, byId, myName]);
 
   // Open as soon as the final is finished — both for the room watching it end and
   // for someone loading the page hours later, who came to see who won rather than
@@ -107,6 +113,7 @@ export function ChampionsGate({
       volume={volume}
       accuracy={accuracy}
       best={best}
+      mine={mine}
       minPalpites={MIN_PALPITES}
       minBest={MIN_BEST}
       onBack={onClose}

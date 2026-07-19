@@ -18,6 +18,8 @@ import { isReservedName } from "@shared/name-claim";
 import { Countdown } from "@/components/countdown";
 import { motion } from "framer-motion";
 import { RollingNumber, IdleFloat, Parallax, usePointer3D } from "@/components/live/fx";
+import { userAccuracy } from "@/lib/champions/rankings";
+import { buildResultMap } from "@/lib/use-sub-ranks";
 import { RankingSubs } from "@/components/live/ranking-subs";
 import { IaVsVoce } from "@/components/live/ia-vs-voce";
 import { PromoSpotlight } from "@/components/live/promo-spotlight";
@@ -392,6 +394,12 @@ export function PreMatchPanel({ match, pen = false, second, entries, secondEntri
   const releasedOr = (m: Match) => releasedIds.has(m.id) || ovr(m) != null;
   const { name } = useNameLock();
   const myName = name || null;
+  // The viewer's running hit rate, graded off the same map the ranking uses.
+  // Null without a claimed nickname, so the badge simply doesn't appear.
+  const myAccuracy = useMemo(
+    () => userAccuracy(allEntries, buildResultMap(matches, results), myName),
+    [allEntries, matches, results, myName],
+  );
   const narrow = useIsNarrow();
   const homeCode = match.home.abbreviation;
   const awayCode = match.away.abbreviation;
@@ -426,7 +434,7 @@ export function PreMatchPanel({ match, pen = false, second, entries, secondEntri
             <PenForm match={match} />
           ) : (
             <div style={{ ...cardWrap, flex: "none", minWidth: 0, border: "1px solid rgba(200,255,45,0.16)", padding: "13px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-              <PalpiteForm match={match} entries={entries} closesAt={effectiveDeadline(match.startsAt, ovr(match))} released={releasedOr(match)} hideCountdown onVoted={onVoted} transport={transport} />
+              <PalpiteForm match={match} entries={entries} closesAt={effectiveDeadline(match.startsAt, ovr(match))} released={releasedOr(match)} hideCountdown accuracy={myAccuracy} onVoted={onVoted} transport={transport} />
             </div>
           );
           // The two teams' last cup games — moved out of the form card to sit in its
@@ -469,7 +477,7 @@ export function PreMatchPanel({ match, pen = false, second, entries, secondEntri
             <PenForm match={match} />
           ) : (
             <div style={{ ...cardWrap, flex: 1, minWidth: 0, border: "1px solid rgba(200,255,45,0.16)", padding: "13px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-              <PalpiteForm match={match} entries={entries} closesAt={effectiveDeadline(match.startsAt, ovr(match))} released={releasedOr(match)} hideCountdown onVoted={onVoted} transport={transport} />
+              <PalpiteForm match={match} entries={entries} closesAt={effectiveDeadline(match.startsAt, ovr(match))} released={releasedOr(match)} hideCountdown accuracy={myAccuracy} onVoted={onVoted} transport={transport} />
             </div>
           );
           // NA COPA (the teams' last games) — short, content-height card at the top

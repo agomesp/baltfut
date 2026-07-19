@@ -11,6 +11,7 @@ import {
   type MotionValue,
 } from "framer-motion";
 import { pointerBias } from "@/lib/champions/pointer";
+import { JB, SAIRA } from "@/components/live/bf-ui";
 
 /**
  * Motion primitives for the final.
@@ -310,6 +311,57 @@ export function Breathe({
   );
 }
 
+/**
+ * "Sua % de acerto" — the viewer's own hit rate.
+ *
+ * Renders nothing without a row, and callers pass null whenever the visitor has
+ * no claimed nickname, so someone who has never palpitado is never shown a
+ * hollow 0%.
+ */
+export function AccuracyBadge({
+  row,
+  accent,
+  align = "center",
+  style,
+}: {
+  row: { hits: number; palpites: number; pct: number } | null;
+  accent: string;
+  align?: "center" | "start";
+  style?: CSSProperties;
+}) {
+  if (!row) return null;
+  return (
+    <div
+      title={`${row.hits} placares exatos em ${row.palpites} palpites`}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: align === "center" ? "center" : "flex-start",
+        gap: 1,
+        padding: "5px 11px",
+        borderRadius: 10,
+        border: `1px solid ${accent}`,
+        background: `color-mix(in srgb, ${accent} 14%, transparent)`,
+        flex: "none",
+        lineHeight: 1.05,
+        ...style,
+      }}
+    >
+      <span style={{ fontFamily: JB, fontSize: 7.5, letterSpacing: "0.14em", color: "rgba(255,255,255,0.62)", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+        sua % de acerto
+      </span>
+      <span style={{ display: "inline-flex", alignItems: "baseline", gap: 5 }}>
+        <span style={{ fontFamily: SAIRA, fontWeight: 800, fontSize: 19, color: accent }}>
+          {Math.round(row.pct * 100)}%
+        </span>
+        <span style={{ fontFamily: JB, fontSize: 8, color: "rgba(255,255,255,0.5)", whiteSpace: "nowrap" }}>
+          {row.hits}/{row.palpites}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Pointer-driven 3D
 // ---------------------------------------------------------------------------
@@ -474,6 +526,84 @@ export function StompBeat({
     <div aria-hidden style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}>
       {side(homeAccent, "left", left)}
       {side(awayAccent, "right", right)}
+      <Embers accent={homeAccent} from="left" hits={[STOMP_1, CLAP]} intensity={intensity} />
+      <Embers accent={awayAccent} from="right" hits={[STOMP_2, CLAP]} intensity={intensity} />
     </div>
+  );
+}
+
+/** Particles per side. Small enough to stay cheap, enough to read as a shower. */
+const EMBERS_PER_SIDE = 9;
+
+/**
+ * Embers thrown off the wall of light on every hit — each side in its own team
+ * colour, kicked up and inward as if the stomp knocked them loose.
+ *
+ * Nothing is spawned at runtime. Spawning on the beat would mean a timer, a state
+ * update and a React render every ~740ms, forever; instead a fixed set of
+ * particles each loops over one bar with its burst window positioned on the beat
+ * it belongs to. The DOM never changes after mount — only transforms and opacity,
+ * which the compositor owns.
+ *
+ * Placement is derived from the index rather than random, so the server and the
+ * client agree and there's no hydration mismatch.
+ */
+function Embers({
+  accent,
+  from,
+  hits,
+  intensity,
+}: {
+  accent: string;
+  from: "left" | "right";
+  hits: number[];
+  intensity: number;
+}) {
+  return (
+    <>
+      {Array.from({ length: EMBERS_PER_SIDE }, (_, i) => {
+        const hit = hits[i % hits.length];
+        // Deterministic spread: golden-ratio stepping keeps successive particles
+        // far apart vertically instead of banding.
+        const seed = ((i * 0.618034) % 1 + 1) % 1;
+        const top = 12 + seed * 76;
+        const size = 3 + ((i * 7) % 5);
+        const rise = 90 + ((i * 37) % 120);
+        const drift = (28 + ((i * 23) % 62)) * (from === "left" ? 1 : -1);
+        const startX = 2 + ((i * 13) % 16);
+        // A hair of jitter so the nine don't leave in perfect lockstep.
+        const at = Math.min(0.94, hit + ((i % 3) * 0.012));
+        const gone = Math.min(0.999, at + 0.3);
+        return (
+          <motion.span
+            key={`${from}-${i}`}
+            style={{
+              position: "absolute",
+              top: `${top}%`,
+              [from]: `${startX}%`,
+              width: size,
+              height: size,
+              borderRadius: "50%",
+              background: accent,
+              boxShadow: `0 0 ${size * 2.5}px ${accent}`,
+              willChange: "transform, opacity",
+            }}
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: [0, 0, 0.85 * intensity, 0, 0],
+              y: [0, 0, -rise * 0.15, -rise, -rise],
+              x: [0, 0, drift * 0.2, drift, drift],
+              scale: [0.4, 0.4, 1, 0.25, 0.25],
+            }}
+            transition={{
+              duration: BAR_SECONDS,
+              times: [0, Math.max(0, at - 0.01), at, gone, 1],
+              repeat: Infinity,
+              ease: "easeOut",
+            }}
+          />
+        );
+      })}
+    </>
   );
 }
