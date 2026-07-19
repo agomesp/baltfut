@@ -135,6 +135,36 @@ export function worstAccuracyRanking(
 }
 
 /**
+ * One sub's own hit rate — "sua % de acerto".
+ *
+ * Ungated on purpose: the shame/glory boards need a floor so a lone lucky guess
+ * can't top them, but showing someone THEIR number is not a ranking, and hiding
+ * it until their sixth palpite would just look broken. Null only when they have
+ * no graded palpites at all, since 0-of-0 has no percentage to state.
+ *
+ * Case-insensitive: nicknames arrive from chat and from the form, and the same
+ * person shouldn't read as two.
+ */
+export function userAccuracy(
+  entries: VoteEntry[],
+  byId: Record<string, MatchResult>,
+  username: string | null,
+): AccuracyRow | null {
+  if (!username) return null;
+  const want = username.trim().toLowerCase();
+  if (!want) return null;
+  let hits = 0;
+  let palpites = 0;
+  for (const { entry, home, away } of graded(entries, byId)) {
+    if (entry.username.trim().toLowerCase() !== want) continue;
+    if (entry.predHome === home && entry.predAway === away) hits += 1;
+    palpites += 1;
+  }
+  if (palpites === 0) return null;
+  return { username, hits, palpites, pct: hits / palpites };
+}
+
+/**
  * The mirror image: best hit RATE. Ties go to the bigger sample here too, for the
  * same reason read the other way — sustaining a rate over more palpites is the
  * better showing. The floor is lower than the shame board's (6 vs 10): being

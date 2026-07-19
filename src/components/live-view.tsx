@@ -16,6 +16,9 @@ import { RbStoreStrip } from "@/components/live/rb-store-strip";
 import { BfChipRail } from "@/components/live/bf-chip-rail";
 import { HeroWithCinematic } from "@/components/live/hero-with-cinematic";
 import { CommunityBar } from "@/components/live/community-bar";
+import { useMyName } from "@/lib/use-my-name";
+import { userAccuracy } from "@/lib/champions/rankings";
+import { buildResultMap } from "@/lib/use-sub-ranks";
 import { PalpiteBreakdown } from "@/components/live/palpite-breakdown";
 import { RankingSubs } from "@/components/live/ranking-subs";
 import type { BracketEntry } from "@/lib/bracket-votes";
@@ -120,6 +123,13 @@ function PlacarStage({
   const hs = match.homeScore ?? 0;
   const as = match.awayScore ?? 0;
   const final = phase === "post";
+  // The viewer's own hit rate for the badge beside the send button; null without
+  // a claimed nickname, so it simply doesn't render.
+  const myName = useMyName();
+  const myAccuracy = useMemo(
+    () => userAccuracy(allEntries, buildResultMap(matches, results), myName),
+    [allEntries, matches, results, myName],
+  );
   // Keyed on the PRIMITIVE score (hs/as), not a `current` object — so it stays
   // cached on idle 1s ticks but recomputes the instant a goal lands (the worker
   // replaces `matches` → a new score value flows in here). `consensus` depends
@@ -170,7 +180,7 @@ function PlacarStage({
             <>
               {formOpen ? (
                 <div style={{ borderRadius: 12, border: "1px solid rgba(200,255,45,0.16)", background: "rgba(255,255,255,0.02)", padding: "14px 16px", flex: "none" }}>
-                  <PalpiteForm match={match} entries={entries} closesAt={effectiveDeadline(match.startsAt, palpiteOpenUntil)} onVoted={onVoted} />
+                  <PalpiteForm match={match} entries={entries} closesAt={effectiveDeadline(match.startsAt, palpiteOpenUntil)} accuracy={myAccuracy} onVoted={onVoted} />
                 </div>
               ) : null}
               <PalpiteBreakdown breakdown={breakdown} homeCode={homeCode} awayCode={awayCode} total={entries.length} closed={phase !== "live"} penResult={matchShootout(match)} penVisible={penVisible} />

@@ -6,6 +6,7 @@ import {
   championsBoard,
   halfPointRanking,
   mostPalpitesRanking,
+  userAccuracy,
   worstAccuracyRanking,
 } from "@/lib/champions/rankings";
 
@@ -182,5 +183,37 @@ describe("championsBoard", () => {
 
   it("has no champion when nobody has scored", () => {
     expect(championsBoard([], 10).champion).toBeNull();
+  });
+});
+
+describe("userAccuracy", () => {
+  const byId: Record<string, MatchResult> = { m1: post(1, 0), m2: post(2, 2), m3: post(3, 1) };
+
+  it("reports the sub's own hits over their graded palpites", () => {
+    const row = userAccuracy(
+      [e("ana", "m1", 1, 0), e("ana", "m2", 9, 9), e("bob", "m1", 1, 0)],
+      byId,
+      "ana",
+    );
+    expect(row).toEqual({ username: "ana", hits: 1, palpites: 2, pct: 0.5 });
+  });
+
+  it("matches the nickname case-insensitively — chat and form spell it differently", () => {
+    const row = userAccuracy([e("AnA", "m1", 1, 0)], byId, "  ana ");
+    expect(row?.hits).toBe(1);
+    expect(row?.palpites).toBe(1);
+  });
+
+  it("is null with no name, so a visitor who never claimed one sees nothing", () => {
+    expect(userAccuracy([e("ana", "m1", 1, 0)], byId, null)).toBeNull();
+    expect(userAccuracy([e("ana", "m1", 1, 0)], byId, "   ")).toBeNull();
+  });
+
+  it("is null when they have no graded palpites — 0 of 0 has no percentage", () => {
+    expect(userAccuracy([e("bob", "m1", 1, 0)], byId, "ana")).toBeNull();
+  });
+
+  it("has NO minimum — one palpite still reports, unlike the ranked boards", () => {
+    expect(userAccuracy([e("ana", "m1", 1, 0)], byId, "ana")?.pct).toBe(1);
   });
 });
