@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { motion } from "framer-motion";
-import { AccuracyBadge, RollingNumber, Sheen, tapProps } from "@/components/live/fx";
+import { AccuracyBadge, Breathe, RollingNumber, Sheen, tapProps } from "@/components/live/fx";
 import type { AccuracyRow } from "@/lib/champions/rankings";
 import type { Match, Side } from "@/lib/espn";
 import { useNow } from "@/lib/use-now";
@@ -504,11 +504,13 @@ export function PalpiteForm({ match, entries, closesAt, released = true, hideCou
       {/* Send button, with the viewer's own hit rate alongside it — a running
           scoreline for the person about to add to it. */}
       <div style={{ display: "flex", alignItems: "stretch", gap: 9 }}>
-      <Sheen seconds={2.8} radius={10} tint={btnDisabled ? "transparent" : "rgba(255,255,255,0.5)"} style={{ flex: 1, minWidth: 0 }}>
+      <Breathe scale={btnDisabled ? 1 : 1.012} seconds={2.6} style={{ flex: 1, minWidth: 0 }}>
+      <Sheen seconds={2.8} radius={10} tint={btnDisabled ? "transparent" : "rgba(255,255,255,0.5)"}>
       <button type="button" onClick={onSubmit} disabled={btnDisabled} style={{ ...submitBtnStyle, ...(alreadySent ? { background: "rgba(255,255,255,0.05)", color: "#7d9a86", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "none", cursor: "not-allowed" } : blocked ? { opacity: 0.4, cursor: "not-allowed", boxShadow: "none" } : { opacity: submitting ? 0.7 : 1 }) }}>
         {submitting ? "ENVIANDO…" : alreadySent ? "PALPITE ENVIADO ✓" : "ENVIAR PALPITE →"}
       </button>
       </Sheen>
+      </Breathe>
       <AccuracyBadge row={accuracy} accent="var(--bf-lime)" />
       </div>
       <div style={{ fontFamily: JB, fontSize: 9, color: blocked ? "#caa94a" : "#6f8a78", textAlign: "center", letterSpacing: "0.04em" }}>

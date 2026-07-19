@@ -17,7 +17,7 @@ import { useNow } from "@/lib/use-now";
 import { isReservedName } from "@shared/name-claim";
 import { Countdown } from "@/components/countdown";
 import { motion } from "framer-motion";
-import { RollingNumber, IdleFloat, Parallax, PopIn, usePointer3D } from "@/components/live/fx";
+import { RollingNumber, IdleFloat, Parallax, PopIn, GlowPulse, Breathe, usePointer3D } from "@/components/live/fx";
 import { userAccuracy } from "@/lib/champions/rankings";
 import { buildResultMap } from "@/lib/use-sub-ranks";
 import { RankingSubs } from "@/components/live/ranking-subs";
@@ -180,7 +180,7 @@ function PreHero({ match, groupByTeam, consensus }: { match: Match; groupByTeam:
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(18px,2.2vw,26px)", letterSpacing: "-0.02em", color: homeAccent, whiteSpace: "nowrap" }}>{match.home.abbreviation}</span>
           {/* The two crests bob out of phase, so the hero never sits perfectly still. */}
-          <IdleFloat amount={4} seconds={5.2}><FlagCrest code={match.home.abbreviation} accent={homeAccent} size={50} /></IdleFloat>
+          <IdleFloat amount={4} seconds={5.2}><GlowPulse colour={homeAccent} size={1.9} seconds={3.4}><FlagCrest code={match.home.abbreviation} accent={homeAccent} size={50} /></GlowPulse></IdleFloat>
         </div>
         {/* Countdown sits nearest the viewer, so it swings hardest. */}
         <Parallax p3={p3} depth={1.5} style={{ flex: "none", textAlign: "center" }}>
@@ -193,12 +193,15 @@ function PreHero({ match, groupByTeam, consensus }: { match: Match; groupByTeam:
         </Parallax>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={{ fontFamily: BRIC, fontWeight: 800, fontSize: "clamp(18px,2.2vw,26px)", letterSpacing: "-0.02em", color: awayAccent, whiteSpace: "nowrap" }}>{match.away.abbreviation}</span>
-          <IdleFloat amount={4} seconds={5.2} delay={1.3}><FlagCrest code={match.away.abbreviation} accent={awayAccent} size={50} /></IdleFloat>
+          <IdleFloat amount={4} seconds={5.2} delay={1.3}><GlowPulse colour={awayAccent} size={1.9} seconds={3.4} delay={1.7}><FlagCrest code={match.away.abbreviation} accent={awayAccent} size={50} /></GlowPulse></IdleFloat>
         </div>
       </Parallax>
       <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: 14 }}>
         {/* The palpite deadline is folded into the open-palpites pill itself. */}
         <div style={{ display: "flex", justifyContent: "center" }}>
+          {/* The one element that says "you can still act" — so it stays alive. */}
+          <Breathe scale={1.035} seconds={2.9} style={{ display: "inline-flex" }}>
+          <GlowPulse colour="rgba(200,255,45,0.55)" size={1.35} seconds={2.9} strength={0.4}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 9, fontFamily: JB, fontSize: 10, color: "#cdeec0", background: "rgba(200,255,45,0.1)", border: "1px solid rgba(200,255,45,0.3)", borderRadius: 999, padding: "6px 15px", whiteSpace: "nowrap" }}>
             <BfPulse />
             <span>
@@ -206,6 +209,8 @@ function PreHero({ match, groupByTeam, consensus }: { match: Match; groupByTeam:
               <Countdown targetMs={palpiteDeadline(match.startsAt)} render={(ms) => <>{formatCountdown(Math.max(0, ms))}</>} />
             </span>
           </span>
+          </GlowPulse>
+          </Breathe>
         </div>
         <CommunityBar consensus={consensus} homeCode={match.home.abbreviation} awayCode={match.away.abbreviation} homeAccent={homeAccent} awayAccent={awayAccent} bare label="OS SUBS PALPITAM" />
       </div>

@@ -276,6 +276,62 @@ export function Sheen({
   );
 }
 
+/**
+ * A halo that swells and fades behind whatever it wraps.
+ *
+ * The glow is its own layer animating opacity + scale, NOT an animated
+ * `box-shadow` — a pulsing shadow repaints the element every frame, which is the
+ * pattern that already made this app's hero expensive. This one stays on the
+ * compositor. It sits behind the content and never takes pointer events, so it
+ * can be dropped around anything without touching layout.
+ */
+export function GlowPulse({
+  colour,
+  children,
+  size = 1.5,
+  seconds = 3.2,
+  delay = 0,
+  strength = 0.5,
+  style,
+}: {
+  colour: string;
+  children: ReactNode;
+  /** Halo diameter as a multiple of the content box. */
+  size?: number;
+  seconds?: number;
+  delay?: number;
+  strength?: number;
+  style?: CSSProperties;
+}) {
+  const ok = useMotionOk();
+  const pct = `${Math.round((size - 1) * 50)}%`;
+  return (
+    <span style={{ position: "relative", display: "inline-flex", ...style }}>
+      {ok ? (
+        <motion.span
+          aria-hidden
+          initial={{ opacity: strength * 0.45, scale: 0.92 }}
+          animate={{ opacity: [strength * 0.35, strength, strength * 0.35], scale: [0.92, 1.06, 0.92] }}
+          transition={{ duration: seconds, delay, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            position: "absolute",
+            top: `-${pct}`,
+            bottom: `-${pct}`,
+            left: `-${pct}`,
+            right: `-${pct}`,
+            borderRadius: "50%",
+            background: `radial-gradient(closest-side, ${colour}, transparent 72%)`,
+            pointerEvents: "none",
+            zIndex: 0,
+            willChange: "transform, opacity",
+          }}
+        />
+      ) : null}
+      <span style={{ position: "relative", zIndex: 1, display: "inline-flex" }}>{children}</span>
+    </span>
+  );
+}
+
 /** Lifts toward the viewer on hover. Spread onto any motion element. */
 export const hoverLift = {
   whileHover: { y: -3, scale: 1.014 },
