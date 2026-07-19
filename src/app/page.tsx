@@ -63,6 +63,14 @@ function withMockLive(matches: Match[]): Match[] {
   if (process.env.NODE_ENV === "production") return matches;
   if (typeof window === "undefined") return matches;
   const q = new URLSearchParams(window.location.search);
+  // `?ended` finishes the FINAL, which is how you meet the closing ceremony the
+  // way a late visitor does: land on the page and have it already be over.
+  if (q.has("ended")) {
+    const f = matches.findIndex((m) => m.stage === "final");
+    if (f < 0) return matches;
+    const done: Match = { ...matches[f], state: "post", isLive: false, statusDetail: "Encerrado", displayClock: null, homeScore: 2, awayScore: 1 };
+    return matches.map((x, k) => (k === f ? done : x));
+  }
   // `?live` aims at the FINAL specifically — that's the tie the live view is
   // dressed up for, and waiting for a real kickoff to look at it isn't an option.
   // `?mocklive` keeps its older, broader meaning of "whatever is up next".
