@@ -190,7 +190,7 @@ function PlacarStage({
         <div style={{ flex: narrow ? "none" : 0.82, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
           <IaVsVoce entries={allEntries} matches={matches} style={{ flex: "none" }} />
           <CommunityBar consensus={consensus} homeCode={homeCode} awayCode={awayCode} homeAccent={teamAccent(homeCode)} awayAccent={teamAccent(awayCode)} />
-          <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} variant={narrow ? "column" : "grid"} style={narrow ? { flex: "none" } : { flex: 1, minHeight: 0 }} />
+          <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} locked={phase !== "post"} variant={narrow ? "column" : "grid"} style={narrow ? { flex: "none" } : { flex: 1, minHeight: 0 }} />
         </div>
       </div>
       )}
@@ -227,7 +227,10 @@ function DuoStage({ games, allEntries, matches, results, brackets, groupByTeam, 
     );
   };
 
-  const ranking = <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} variant="column" style={{ flex: "none", width: narrow ? "100%" : 250 }} />;
+  // Covered until BOTH concurrent games are done — revealing while one is still
+  // running would spoil exactly what the cover exists to protect.
+  const rankingLocked = games.some((m) => m.state !== "post");
+  const ranking = <RankingSubs entries={allEntries} matches={matches} results={results} brackets={brackets} locked={rankingLocked} variant="column" style={{ flex: "none", width: narrow ? "100%" : 250 }} />;
 
   // Both live (or finished): the original inline layout, unchanged.
   if (!anyForm) {
