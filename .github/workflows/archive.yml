@@ -1,0 +1,52 @@
+name: Archive ESPN data
+
+# Snapshot the ESPN payloads the app renders (matches, group tables, lineups)
+# into Supabase. `results.yml` already protects the SCORES; this protects the
+# RECORD — team names, kickoff, venue, stage, scorers, cards, standings and XIs
+# are otherwise refetched from ESPN on every page load, keyed by an opaque event
+# id nothing in our database can resolve. ESPN is keyless and unofficial, so the
+# day it stops serving those ids the tournament becomes unreadable even though we
+# still own every palpite.
+#
+# Daily is plenty: a finished match's data never changes again, and the script
+# skips summaries it already has. No git commit → NO Pages deploy → open viewers
+# don't reload.
+#
+# Requires repo secrets:
+#   NEXT_PUBLIC_SUPABASE_URL      (already set)
+#   SUPABASE_SERVICE_ROLE_KEY     (same one the results/promos crons use)
+on:
+  schedule:
+    - cron: "41 4 * * *" # daily, off-peak
+  workflow_dispatch:
+    inputs:
+      league:
+        description: "ESPN league slug (e.g. fifa.world, bra.1)"
+        required: false
+        default: "fifa.world"
+      dates:
+        description: "ESPN dates range, e.g. 20260611-20260719"
+        required: false
+        default: "20260611-20260719"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archive
+  cancel-in-progress: true
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      LEAGUE: ${{ inputs.league || 'fifa.world' }}
+      DATES: ${{ inputs.dates || '20260611-20260719' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/espn-archive.mjs
