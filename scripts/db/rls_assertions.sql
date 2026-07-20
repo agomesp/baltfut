@@ -334,4 +334,76 @@ begin
   raise notice 'PASS Q2: service_role can execute set_ai_palpites';
 end $$;
 
+-- R) The ESPN archive (espn_matches / espn_standings / espn_summaries) is anon
+--    read-only. It holds no personal data — it is a public scoreboard — so the
+--    read is deliberately open; the point of these checks is that a browser can
+--    never rewrite the tournament's record. Only the archive cron (service_role)
+--    writes, through the SECURITY DEFINER RPCs.
+do $$
+declare n int;
+begin
+  set local role anon;
+  select count(*) into n from public.espn_matches;        -- anon CAN read (must not raise)
+  raise notice 'PASS R1: anon read espn_matches (% rows)', n;
+  select count(*) into n from public.espn_standings;
+  raise notice 'PASS R2: anon read espn_standings (% rows)', n;
+  select count(*) into n from public.espn_summaries;
+  raise notice 'PASS R3: anon read espn_summaries (% rows)', n;
+  begin
+    insert into public.espn_matches (match_id, league, raw) values ('rls_probe', 'fifa.world', '{}'::jsonb);
+    raise exception 'FAIL R4: anon inserted an archived match';
+  exception when insufficient_privilege then raise notice 'PASS R4: anon insert espn_matches denied';
+  end;
+  begin
+    update public.espn_matches set raw = '{}'::jsonb;
+    raise exception 'FAIL R5: anon rewrote an archived match';
+  exception when insufficient_privilege then raise notice 'PASS R5: anon update espn_matches denied';
+  end;
+  begin
+    delete from public.espn_matches;
+    raise exception 'FAIL R6: anon deleted the archive';
+  exception when insufficient_privilege then raise notice 'PASS R6: anon delete espn_matches denied';
+  end;
+  begin
+    update public.espn_standings set raw = '{}'::jsonb;
+    raise exception 'FAIL R7: anon rewrote archived standings';
+  exception when insufficient_privilege then raise notice 'PASS R7: anon update espn_standings denied';
+  end;
+  begin
+    delete from public.espn_summaries;
+    raise exception 'FAIL R8: anon deleted archived summaries';
+  exception when insufficient_privilege then raise notice 'PASS R8: anon delete espn_summaries denied';
+  end;
+end $$;
+
+-- S) The archive writer RPCs: anon must not execute them; service_role must.
+do $$
+begin
+  set local role anon;
+  begin
+    perform public.set_espn_matches('[]'::jsonb);
+    raise exception 'FAIL S1: anon executed set_espn_matches';
+  exception when insufficient_privilege then raise notice 'PASS S1: anon set_espn_matches execute denied';
+  end;
+  begin
+    perform public.set_espn_standings('fifa.world', '{}'::jsonb);
+    raise exception 'FAIL S2: anon executed set_espn_standings';
+  exception when insufficient_privilege then raise notice 'PASS S2: anon set_espn_standings execute denied';
+  end;
+  begin
+    perform public.set_espn_summaries('[]'::jsonb);
+    raise exception 'FAIL S3: anon executed set_espn_summaries';
+  exception when insufficient_privilege then raise notice 'PASS S3: anon set_espn_summaries execute denied';
+  end;
+end $$;
+do $$
+begin
+  set local role service_role;
+  perform public.set_espn_matches('[]'::jsonb);           -- execute grants intact (must not raise)
+  perform public.set_espn_standings('rls.probe', '{}'::jsonb);
+  perform public.set_espn_summaries('[]'::jsonb);
+  delete from public.espn_standings where league = 'rls.probe';
+  raise notice 'PASS S4: service_role can execute the archive RPCs';
+end $$;
+
 select 'ALL RLS CHECKS PASSED' as result;
