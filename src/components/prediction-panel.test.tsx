@@ -111,6 +111,27 @@ describe("PredictionPanel — reserved ChatGPT name", () => {
   });
 });
 
+describe("PredictionPanel — host (Rodrigo Baltar) name", () => {
+  it("paints the host's palpite name in RB-brand blue, overriding the row color", () => {
+    render(
+      <PredictionPanel
+        match={match}
+        entries={[entry("Rodrigo Baltar", 0, 0), entry("Ana", 1, 2)]}
+        current={{ home: 1, away: 2 }}
+        phase="post"
+        closesAt={Date.now() - 1000}
+        released={true}
+        onVoted={vi.fn()}
+        transport={vi.fn<CastVoteTransport>()}
+      />,
+    );
+    const host = screen.getByText("Rodrigo Baltar");
+    expect(host).toHaveStyle({ color: "#3b82f6" }); // blue, even though he lost
+    expect(host.style.backgroundImage).not.toContain("linear-gradient"); // not the bot rainbow
+    expect(screen.getByText("Ana")).not.toHaveStyle({ color: "#3b82f6" }); // a regular sub is untouched
+  });
+});
+
 describe("PredictionPanel — live/pre", () => {
   it("renders the submit form when the match is live", () => {
     render(

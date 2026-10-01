@@ -15,6 +15,7 @@ import {
 import type { ChipPhase } from "@/lib/chips";
 import { isPalpiteOpen, formatCountdown } from "@/lib/palpite";
 import { isReservedName } from "@shared/name-claim";
+import { isHostName, HOST_NAME_COLOR } from "@/lib/host-name";
 import { MONO } from "@/components/primitives";
 
 // The house bot's palpites render with a rainbow-gradient name so they read as
@@ -28,6 +29,10 @@ const rainbowNameStyle = {
   color: "#0a84ff",
   fontWeight: 600,
 } as const;
+
+// The stream host's palpites render in RB-brand blue (display-only — see
+// @/lib/host-name) so his official palpite reads apart from regular subs.
+const hostNameStyle = { color: HOST_NAME_COLOR, fontWeight: 600 } as const;
 
 export interface PredictionPanelProps {
   match: Match;
@@ -323,7 +328,7 @@ export function PredictionPanel({
             return (
               <div key={`${v.username}-${i}`} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "7px 8px 9px", borderRadius: 4, borderBottom: "1px solid var(--line)", background: d.rowBg }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <span style={{ fontSize: 13, ...(isReservedName(v.username) ? rainbowNameStyle : { color: d.nameColor }) }}>{v.username}</span>
+                  <span style={{ fontSize: 13, ...(isReservedName(v.username) ? rainbowNameStyle : isHostName(v.username) ? hostNameStyle : { color: d.nameColor }) }}>{v.username}</span>
                   {d.label ? <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: d.tagColor }}>{d.label}</span> : null}
                 </div>
                 <span style={{ fontFamily: MONO, fontSize: 13, color: d.nameColor === "var(--ink-3)" ? "var(--ink-3)" : "var(--ink-2)" }}>

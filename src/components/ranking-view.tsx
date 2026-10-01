@@ -1,6 +1,7 @@
 import type { Match } from "@/lib/espn";
 import type { VoteEntry } from "@/lib/votes";
 import { rankSubs } from "@/lib/ranking";
+import { isHostName, HOST_NAME_COLOR } from "@/lib/host-name";
 import { MONO, cardStyle } from "@/components/primitives";
 
 export interface RankingViewProps {
@@ -41,6 +42,7 @@ export function RankingView({ entries, matches }: RankingViewProps) {
             const total = r.wins + r.losses;
             const pct = total ? Math.round((r.wins / total) * 100) : 0;
             const top = i === 0;
+            const host = isHostName(r.username);
             return (
               <div
                 key={r.username}
@@ -54,7 +56,7 @@ export function RankingView({ entries, matches }: RankingViewProps) {
                 }}
               >
                 <span style={{ flex: "0 0 28px", textAlign: "right", fontFamily: MONO, fontSize: 13, fontWeight: top ? 500 : 400, color: i < 3 ? "var(--rank)" : "var(--ink-3)" }}>{i + 1}</span>
-                <span style={{ flex: "1 1 auto", fontSize: 14, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.username}</span>
+                <span style={{ flex: "1 1 auto", fontSize: 14, color: host ? HOST_NAME_COLOR : "var(--ink)", fontWeight: host ? 600 : undefined, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.username}</span>
                 <span style={{ flex: "0 0 40px", textAlign: "center", fontFamily: MONO, fontWeight: 500, fontSize: 14, color: "var(--signal-strong)" }}>{r.wins}</span>
                 <span style={{ flex: "0 0 40px", textAlign: "center", fontFamily: MONO, fontSize: 14, color: "var(--ink-3)" }}>{r.losses}</span>
                 <span style={{ flex: "0 0 52px", textAlign: "right", fontFamily: MONO, fontSize: 13, color: "var(--ink-2)" }}>{pct}%</span>

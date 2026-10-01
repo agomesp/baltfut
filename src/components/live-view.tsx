@@ -5,6 +5,7 @@ import type { ChipGame, ChipPhase } from "@/lib/chips";
 import { fmtTime } from "@/lib/format";
 import { palpiteDeadline, formatCountdownLong } from "@/lib/palpite";
 import { rankSubs } from "@/lib/ranking";
+import { isHostName, HOST_NAME_COLOR } from "@/lib/host-name";
 import { MONO, DISPLAY, cardStyle, PulseDot } from "@/components/primitives";
 import { PredictionPanel } from "@/components/prediction-panel";
 import { ChipCarousel } from "@/components/chip-carousel";
@@ -366,7 +367,10 @@ function RankingSidebar({ entries, matches, width }: { entries: VoteEntry[]; mat
         </div>
       ) : (
         <div style={{ overflowY: "auto", flex: 1, minHeight: 0 }}>
-          {ranks.map((r, i) => (
+          {ranks.map((r, i) => {
+            const host = isHostName(r.username); // RB-brand blue, host stands apart
+            const bot = r.username.toLowerCase() === "chatgpt"; // house-bot purple
+            return (
             <div
               key={r.username}
               style={{
@@ -379,13 +383,14 @@ function RankingSidebar({ entries, matches, width }: { entries: VoteEntry[]; mat
               }}
             >
               <span style={{ flex: "0 0 20px", textAlign: "right", fontFamily: MONO, fontSize: 12, color: i < 3 ? "var(--rank)" : "var(--ink-3)" }}>{i + 1}</span>
-              <span style={{ flex: "1 1 auto", fontSize: 13, fontWeight: r.username.toLowerCase() === "chatgpt" ? 600 : 400, color: r.username.toLowerCase() === "chatgpt" ? "#a78bfa" : "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.username}</span>
+              <span style={{ flex: "1 1 auto", fontSize: 13, fontWeight: host || bot ? 600 : 400, color: host ? HOST_NAME_COLOR : bot ? "#a78bfa" : "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.username}</span>
               <span style={{ flex: "0 0 auto", fontFamily: MONO, fontSize: 13, letterSpacing: "0.02em" }}>
                 <span style={{ color: "var(--signal-strong)", fontWeight: 500 }}>{r.wins}</span>
                 <span style={{ color: "var(--ink-3)" }}>–{r.losses}</span>
               </span>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

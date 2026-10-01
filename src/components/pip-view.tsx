@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PictureInPicture } from "lucide-react";
 import { MONO } from "@/components/primitives";
+import { isHostName } from "@/lib/host-name";
 import { fetchScoreboard, FIFA_WORLD_DATE_RANGE, type Match } from "@/lib/espn";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { fetchVoteEntries, rankPredictions, type RankedPrediction } from "@/lib/votes";
@@ -56,6 +57,7 @@ const PIP_CSS = `
 .pipwrap .pl{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;padding:3px 0;border-bottom:1px solid var(--line);}
 .pipwrap .pl:last-child{border-bottom:0;}
 .pipwrap .pl .nm{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pipwrap .ti .nm.host,.pipwrap .pl .nm.host{color:#3b82f6;font-weight:600;}
 .pipwrap .pl .pr{font-family:var(--mono);}
 .pipwrap .bar-stack{display:flex;flex-direction:column;height:100%;}
 .pipwrap .bar-score{flex:0 0 24px;display:flex;align-items:center;justify-content:center;gap:10px;font-family:var(--mono);padding:0 16px;}
@@ -133,7 +135,7 @@ function ticker(ranked: RankedPrediction[]) {
   const items = ranked
     .map((p) => {
       const [cls, label] = STATUS_TAG[p.status];
-      return `<span class="ti"><span class="nm">${esc(p.username)}</span> <span>${p.predHome}–${p.predAway}</span> <span class="tag ${cls}">${label}</span></span>`;
+      return `<span class="ti"><span class="nm${isHostName(p.username) ? " host" : ""}">${esc(p.username)}</span> <span>${p.predHome}–${p.predAway}</span> <span class="tag ${cls}">${label}</span></span>`;
     })
     .join("");
   return `<div class="ticker"><span class="tlbl">Palpites</span><div class="track">${items}${items}</div></div>`;
@@ -144,7 +146,7 @@ function palpitesList(ranked: RankedPrediction[]) {
   return ranked
     .map((p) => {
       const [cls, label] = STATUS_TAG[p.status];
-      return `<div class="pl"><span class="nm">${esc(p.username)}</span><span><span class="pr">${p.predHome}–${p.predAway}</span> <span class="tag ${cls}">${label}</span></span></div>`;
+      return `<div class="pl"><span class="nm${isHostName(p.username) ? " host" : ""}">${esc(p.username)}</span><span><span class="pr">${p.predHome}–${p.predAway}</span> <span class="tag ${cls}">${label}</span></span></div>`;
     })
     .join("");
 }
