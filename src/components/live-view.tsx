@@ -26,6 +26,8 @@ import { PalpiteForm, PenVote, NameField, useNameLock, type PenOverride } from "
 import { JB, LIME, teamAccent } from "@/components/live/bf-ui";
 import { decideConcurrent } from "@/lib/concurrent-games";
 import { useIsNarrow } from "@/lib/use-is-narrow";
+import { useDevTest } from "@/lib/dev-test"; // LOCAL-ONLY — do not commit
+import { Test1Body, Test2Body, Test3Body } from "@/components/dev/test-bodies"; // LOCAL-ONLY
 
 /** A match's display phase (pre / live / post). */
 function matchPhase(m: Match): ChipPhase {
@@ -268,6 +270,7 @@ export function LiveView({
 }: LiveViewProps) {
   const now = useNow(15_000);
   const wc = wcProgress(now);
+  const devTest = useDevTest(); // LOCAL-ONLY dev preview of the test1/2/3 redesigns
   const selected = chips.find((c) => c.match.id === selectedId) ?? chips[0];
 
   // Auto-decide 1 vs 2 concurrent games. Ticks with `now`, so the pair opens 10
@@ -282,6 +285,33 @@ export function LiveView({
     primary && selected && primary.id === selected.match.id
       ? entries
       : allEntries.filter((e) => e.matchId === primary?.id);
+
+  // LOCAL-ONLY dev preview: the popover can force the SELECTED match into a LIVE or
+  // a PRE-PÊNALTI (110') state so every screen is previewable on demand.
+  const devLive = devTest === "live" || devTest === "prepen";
+  const devMatch = useMemo<Match | null>(() => {
+    if (!primary || !devLive) return null;
+    if (devTest === "prepen") {
+      return { ...primary, state: "in", isLive: true, displayClock: "112'", statusDetail: "Overtime", homeScore: 1, awayScore: 1, stage: "quarterfinal" };
+    }
+    const kicked = new Date(now - 8 * 60_000).toISOString();
+    return { ...primary, state: "in", isLive: true, startsAt: kicked, displayClock: "8'", statusDetail: "1st Half", homeScore: 1, awayScore: 0 };
+  }, [primary, devTest, devLive, now]);
+  const devEntries = useMemo<VoteEntry[] | null>(() => {
+    if (!primary || !devLive) return null;
+    const src = (primaryEntries.length ? primaryEntries : allEntries.filter((e) => e.matchId === primary.id)).slice(0, 18);
+    const me = (e: VoteEntry) => e.username.trim().toLowerCase() === "agomesp";
+    if (devTest === "prepen") {
+      const withPen: VoteEntry[] = src.map((e, i) => ({ ...e, penWinner: i % 3 === 0 ? "home" : i % 3 === 1 ? "away" : null }));
+      if (!withPen.some(me)) {
+        withPen.unshift({ matchId: primary.id, league: primary.league, username: "agomesp", predHome: 1, predAway: 1, penWinner: null, createdAt: "2026-06-30T00:00:00.000Z" });
+      }
+      return withPen;
+    }
+    return src.some(me)
+      ? src
+      : [{ matchId: primary.id, league: primary.league, username: "agomesp", predHome: 1, predAway: 0, penWinner: null, createdAt: "2026-06-30T00:00:00.000Z" }, ...src];
+  }, [primary, devTest, devLive, primaryEntries, allEntries]);
 
   // Fill the viewport on wide screens so the stage is a fixed dense dashboard
   // (the design is height:100vh with internal scroll); narrow screens flow + scroll.
@@ -357,7 +387,17 @@ export function LiveView({
         {masthead}
 
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          {primaryPhase === "pre" ? (
+          {devTest === "test1" ? (
+            <Test1Body home={primary.home.abbreviation} away={primary.away.abbreviation} />
+          ) : devTest === "test2" ? (
+            <Test2Body home={primary.home.abbreviation} away={primary.away.abbreviation} />
+          ) : devTest === "test3" ? (
+            <Test3Body home={primary.home.abbreviation} away={primary.away.abbreviation} />
+          ) : devTest === "prepen" && devMatch ? (
+            <PreMatchPanel match={devMatch} pen second={null} entries={devEntries ?? primaryEntries} secondEntries={[]} allEntries={allEntries} matches={matches} groupByTeam={groupByTeam} releasedIds={releasedIds} palpiteOverrides={palpiteOverrides} onVoted={onVoted} />
+          ) : devLive && devMatch ? (
+            <PlacarStage match={devMatch} phase="live" entries={devEntries ?? primaryEntries} allEntries={allEntries} matches={matches} panel={panel} onPanel={onPanel} lineups={lineups} onVoted={onVoted} followCode={followCode} releasedIds={releasedIds} penOverride={devTest === "prepen" ? "open" : penOverride} palpiteOpenUntil={palpiteOverrides[devMatch.id] ?? null} />
+          ) : primaryPhase === "pre" ? (
             <PreMatchPanel
               match={primary}
               second={partner}

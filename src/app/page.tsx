@@ -25,6 +25,14 @@ import {
   fetchVoteCounts,
   type VoteEntry,
 } from "@/lib/votes";
+import {
+  DEV_FIXTURE,
+  DEV_FIXTURE_NAME,
+  fixtureVoteEntries,
+  fixtureAllEntries,
+  fixtureVoteCounts,
+} from "@/lib/dev-fixture"; // LOCAL-ONLY prod mirror — do not commit
+import { MY_NAME_EVENT } from "@/lib/use-my-name";
 import { buildChipGames, defaultChipId } from "@/lib/chips";
 import { releasedMatchIds } from "@/lib/palpite";
 import { teamNamePt } from "@/lib/team-names";
@@ -98,6 +106,21 @@ export default function Home() {
     }
   }, [follow]);
 
+  // LOCAL-ONLY: in the prod-mirror fixture, assume the viewer is `agomesp` so the
+  // "VOCÊ" tag + IA-vs-você duel render against the real prod palpites. Only sets
+  // a default — if you claim a different name via the form it wins (and persists).
+  useEffect(() => {
+    if (!DEV_FIXTURE) return;
+    try {
+      if (!localStorage.getItem("baltfut_name")) {
+        localStorage.setItem("baltfut_name", DEV_FIXTURE_NAME);
+        window.dispatchEvent(new Event(MY_NAME_EVENT));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   // ---- seamless reload: restore the tab, selected match, and last data --------
   // Modo Streamer reloads the page periodically; hydrating from a sessionStorage
   // snapshot means it comes back on the same tab/match with content already shown
@@ -149,6 +172,10 @@ export default function Home() {
 
   // ---- data: scoreboard + standings + vote counts -------------------------
   const loadCounts = useCallback(async () => {
+    if (DEV_FIXTURE) {
+      setVoteCounts(await fixtureVoteCounts());
+      return;
+    }
     const client = getSupabaseClient();
     if (!client) return;
     try {
@@ -293,6 +320,10 @@ export default function Home() {
 
   // ---- votes + lineups for the selected chip ------------------------------
   const loadEntries = useCallback(async (matchId: string) => {
+    if (DEV_FIXTURE) {
+      setEntries(await fixtureVoteEntries(matchId));
+      return;
+    }
     const client = getSupabaseClient();
     if (!client) {
       setEntries([]);
@@ -306,6 +337,10 @@ export default function Home() {
   }, []);
 
   const loadAllEntries = useCallback(async () => {
+    if (DEV_FIXTURE) {
+      setAllEntries(await fixtureAllEntries());
+      return;
+    }
     const client = getSupabaseClient();
     if (!client) {
       setAllEntries([]);

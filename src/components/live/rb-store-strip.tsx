@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { DEV_FIXTURE, fixturePromos } from "@/lib/dev-fixture"; // LOCAL-ONLY prod mirror
 import { ARCHIVO, BRIC, JB, LIME, SAIRA } from "@/components/live/bf-ui";
 
 /**
@@ -26,6 +27,13 @@ export function RbStoreStrip({ height = 64 }: { height?: number }) {
   const [fetched, setFetched] = useState<Promo[]>([]);
 
   useEffect(() => {
+    if (DEV_FIXTURE) {
+      let alive = true;
+      void fixturePromos().then((p) => {
+        if (alive) setFetched(p.filter((i) => i.product && i.link));
+      });
+      return () => { alive = false; };
+    }
     const client = getSupabaseClient();
     if (!client) return;
     let alive = true;

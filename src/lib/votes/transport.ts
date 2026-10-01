@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { DEV_FIXTURE } from "@/lib/dev-fixture"; // LOCAL-ONLY prod mirror
 import type { CastVoteTransport } from "@/lib/votes/submit";
 
 /**
@@ -28,6 +29,13 @@ function ownerToken(): string {
  * 409/422 handling in submitVote works.
  */
 export const supabaseCastVote: CastVoteTransport = async (body) => {
+  // LOCAL prod-mirror: the snapshot is read-only, so a local palpite is never
+  // written anywhere (prod stays untouched). Return a clear, honest message
+  // instead of a "not configured" error.
+  if (DEV_FIXTURE) {
+    return { status: 0, body: { error: "Local (espelho de prod): palpites não são salvos." } };
+  }
+
   const client = getSupabaseClient();
   if (!client) {
     return { status: 0, body: { error: "Votação não configurada." } };
